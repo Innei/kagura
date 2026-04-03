@@ -1,6 +1,6 @@
 # slack-cc-bot
 
-Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) natively in Slack — mention the bot in any channel or thread and get streamed, context-aware responses with real-time UI state.
+Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) natively in Slack — mention the bot in any channel or thread, route the session into the right repository, and get streamed, context-aware responses with real-time UI state.
 
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)
@@ -12,17 +12,20 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 
 ### How it works
 
-1. A user `@mentions` the bot in a Slack channel or thread
-2. The bot fetches the full thread history and normalizes it into a prompt
-3. Claude Agent SDK processes the conversation, streaming text back in real time
-4. A custom MCP server (`slack-ui`) lets Claude update Slack's assistant UI status
-5. Sessions are persisted in SQLite for multi-turn continuity
+1. A user `@mentions` the bot in a Slack channel/thread, or invokes the workspace Message Action on a Slack message
+2. The bot resolves the target repository/workdir from the message text or manual selection
+3. The bot fetches the full thread history and normalizes it into a prompt
+4. Claude Agent SDK runs with the resolved `cwd`, streaming text back in real time
+5. A custom MCP server (`slack-ui`) lets Claude update Slack's assistant UI status
+6. Sessions are persisted in SQLite with their bound workspace for multi-turn continuity
 
 ### Key features
 
 - **Streaming responses** via Slack's `chat.appendStream` API
 - **Thread-aware context** — full conversation history passed to Claude on every turn
 - **Session resumption** — conversations persist across bot restarts (SQLite + Drizzle ORM)
+- **Workspace-aware routing** — each Slack thread binds to a specific repo/workdir instead of the bot process `cwd`
+- **Message Action fallback** — manually choose a repo/path when automatic detection is missing or ambiguous
 - **UI state management** — Claude can set status text and loading indicators via a custom MCP tool
 - **Strict validation** — all external inputs (env, Slack events, tool calls) validated with Zod
 - **Secret redaction** in logs
@@ -33,7 +36,9 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 - [pnpm](https://pnpm.io/) >= 10.33.0
 - A [Slack app](https://api.slack.com/apps) configured with:
   - **Socket Mode** enabled
+  - **Interactivity** enabled
   - **Event Subscriptions** with `app_mention` scope
+  - A **Message Shortcut** configured with callback ID `workspace_message_action`
   - Bot token scopes: `app_mentions:read`, `chat:write`, `channels:history`, `groups:history`, `reactions:write`, `assistant:write`
 - An [Anthropic API key](https://console.anthropic.com/)
 
@@ -60,8 +65,11 @@ Fill in the required values:
 | `SLACK_BOT_TOKEN`      | Bot user OAuth token (`xoxb-...`)            |
 | `SLACK_APP_TOKEN`      | App-level token for Socket Mode (`xapp-...`) |
 | `SLACK_SIGNING_SECRET` | Request verification secret                  |
+| `REPO_ROOT_DIR`        | Root directory containing candidate repos    |
 
-See [`.env.example`](.env.example) for all available options including `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, and logging configuration.
+See [`.env.example`](.env.example) for all available options including `REPO_SCAN_DEPTH`, `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, and logging configuration.
+
+The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH` and binds each Slack thread to a concrete workspace path. It no longer falls back to the bot process `cwd` when no repo is identified.
 
 ### 3. Set up the database
 
@@ -90,9 +98,11 @@ src/
 ├── logger/                     # Structured logging with redaction
 ├── db/                         # SQLite database + Drizzle schema
 ├── session/                    # Session persistence (SQLite-backed)
+├── workspace/                  # Repo discovery and workspace resolution
 ├── slack/
 │   ├── app.ts                  # @slack/bolt initialization
-│   ├── ingress/                # @mention event handler
+│   ├── ingress/                # @mention / thread / assistant ingress
+│   ├── interactions/           # Message Action + modal handlers
 │   ├── context/                # Thread history loading & normalization
 │   └── render/                 # Streaming output & UI state rendering
 ├── claude/
@@ -107,7 +117,8 @@ src/
 | ------------------ | --------------------------- |
 | `pnpm dev`         | Run with tsx (development)  |
 | `pnpm build`       | Compile TypeScript          |
-| `pnpm e2e:live`    | Run real Slack live E2E     |
+| `pnpm e2e`         | Run real Slack live E2E     |
+| `pnpm test`        | Run Vitest test suite       |
 | `pnpm start`       | Run compiled output         |
 | `pnpm typecheck`   | Type-check without emitting |
 | `pnpm db:generate` | Generate Drizzle migrations |
@@ -123,6 +134,18 @@ Logger → Database → SessionStore → SlackApp → ClaudeExecutor
 ```
 
 All modules receive dependencies via function parameters (no global singletons). The Claude executor exposes a custom MCP server (`slack-ui`) with a single `publish_state` tool that lets the agent control Slack's assistant thread UI.
+
+## Workspace routing
+
+New threads try to infer the target repository from the incoming Slack message. Mention a repo name such as `slack-cc-bot`, a relative repo path such as `team/slack-cc-bot`, or an absolute path under `REPO_ROOT_DIR`.
+
+If the bot cannot determine the workspace confidently, use the Slack Message Action on the relevant message:
+
+1. Run the `workspace_message_action` shortcut.
+2. Accept the detected repo, or choose a repo/path manually in the modal.
+3. Decide whether to take over the current thread or start a new thread/session.
+
+Once a thread is bound, follow-up replies reuse the same workspace. If you switch the workspace for that thread, the bot starts a fresh Claude session instead of resuming the old one with the wrong `cwd`.
 
 > [!NOTE]
 > Detailed specifications for each subsystem are available in [`docs/specs/`](docs/specs/).
@@ -159,7 +182,7 @@ SLACK_E2E_TIMEOUT_MS=180000
 ### Run the live E2E
 
 ```bash
-pnpm e2e:live
+pnpm e2e
 ```
 
 The runner will:

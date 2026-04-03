@@ -1,12 +1,17 @@
 export interface SessionRecord {
-  bootstrapMessageTs?: string;
+  bootstrapMessageTs?: string | undefined;
   channelId: string;
-  claudeSessionId?: string;
+  claudeSessionId?: string | undefined;
   createdAt: string;
   rootMessageTs: string;
-  streamMessageTs?: string;
+  streamMessageTs?: string | undefined;
   threadTs: string;
   updatedAt: string;
+  workspaceLabel?: string | undefined;
+  workspacePath?: string | undefined;
+  workspaceRepoId?: string | undefined;
+  workspaceRepoPath?: string | undefined;
+  workspaceSource?: 'auto' | 'manual' | undefined;
 }
 
 export type SessionState = 'registered' | 'bootstrapped' | 'streaming' | 'completed' | 'failed';

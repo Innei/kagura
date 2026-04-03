@@ -4,6 +4,7 @@ import type { ClaudeExecutor } from '../claude/executor/types.js';
 import { env } from '../env/server.js';
 import type { AppLogger } from '../logger/index.js';
 import type { SessionStore } from '../session/types.js';
+import type { WorkspaceResolver } from '../workspace/resolver.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import {
   createAppMentionHandler,
@@ -11,6 +12,12 @@ import {
   createAssistantUserMessageHandler,
   createThreadReplyHandler,
 } from './ingress/app-mention-handler.js';
+import {
+  createWorkspaceMessageActionHandler,
+  createWorkspaceSelectionViewHandler,
+  WORKSPACE_MESSAGE_ACTION_CALLBACK_ID,
+  WORKSPACE_MODAL_CALLBACK_ID,
+} from './interactions/workspace-message-action.js';
 import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
@@ -19,6 +26,7 @@ export interface SlackApplicationDependencies {
   logger: AppLogger;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
+  workspaceResolver: WorkspaceResolver;
 }
 
 export function createSlackApp(deps: SlackApplicationDependencies): App {
@@ -37,6 +45,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     threadContextLoader,
     sessionStore: deps.sessionStore,
     claudeExecutor: deps.claudeExecutor,
+    workspaceResolver: deps.workspaceResolver,
   };
   const assistant = new Assistant({
     threadStarted: createAssistantThreadStartedHandler(ingressDeps),
@@ -45,6 +54,11 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
 
   app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
+  app.shortcut(
+    { callback_id: WORKSPACE_MESSAGE_ACTION_CALLBACK_ID, type: 'message_action' },
+    createWorkspaceMessageActionHandler(ingressDeps),
+  );
+  app.view(WORKSPACE_MODAL_CALLBACK_ID, createWorkspaceSelectionViewHandler(ingressDeps));
   app.assistant(assistant);
 
   app.error(async (error) => {

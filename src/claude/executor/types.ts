@@ -8,6 +8,9 @@ export interface ClaudeExecutionRequest {
   threadContext: NormalizedThreadContext;
   threadTs: string;
   userId: string;
+  workspaceLabel: string;
+  workspacePath: string;
+  workspaceRepoId: string;
 }
 
 export type ClaudeExecutionEvent =

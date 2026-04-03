@@ -15,13 +15,37 @@ export function createDatabase(dbPath: string) {
       bootstrap_message_ts TEXT,
       stream_message_ts TEXT,
       claude_session_id TEXT,
+      workspace_repo_id TEXT,
+      workspace_repo_path TEXT,
+      workspace_path TEXT,
+      workspace_label TEXT,
+      workspace_source TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
   `);
+
+  ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');
+  ensureSessionsColumn(sqlite, 'workspace_repo_path', 'TEXT');
+  ensureSessionsColumn(sqlite, 'workspace_path', 'TEXT');
+  ensureSessionsColumn(sqlite, 'workspace_label', 'TEXT');
+  ensureSessionsColumn(sqlite, 'workspace_source', 'TEXT');
 
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
 }
 
 export type AppDatabase = ReturnType<typeof createDatabase>['db'];
+
+function ensureSessionsColumn(
+  sqlite: Database.Database,
+  columnName: string,
+  columnDefinition: string,
+): void {
+  const columns = sqlite.prepare("PRAGMA table_info('sessions')").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+
+  sqlite.exec(`ALTER TABLE sessions ADD COLUMN ${columnName} ${columnDefinition}`);
+}

@@ -86,7 +86,7 @@ export class SlackApiClient {
         ? `https://slack.com/api/${method}?${searchParams.toString()}`
         : `https://slack.com/api/${method}`;
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: httpMethod,
       headers: {
         Authorization: `Bearer ${this.token}`,
@@ -108,4 +108,29 @@ export class SlackApiClient {
 
     return data;
   }
+
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await fetch(url, init);
+      } catch (error) {
+        lastError = error;
+        if (attempt === 3) {
+          break;
+        }
+
+        await delay(500 * attempt);
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

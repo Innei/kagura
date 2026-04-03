@@ -5,3 +5,4 @@ logs
 .env.local
 .DS_Store
 data/
+slack-live-e2e

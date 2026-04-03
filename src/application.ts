@@ -10,6 +10,7 @@ import { env, validateLiveE2EEnv } from './env/server.js';
 import { type AppLogger, createRootLogger } from './logger/index.js';
 import { SqliteSessionStore } from './session/sqlite-session-store.js';
 import { createSlackApp } from './slack/app.js';
+import { WorkspaceResolver } from './workspace/resolver.js';
 
 export interface RuntimeApplication {
   readonly logger: AppLogger;
@@ -25,6 +26,10 @@ export function createApplication(): RuntimeApplication {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
+  const workspaceResolver = new WorkspaceResolver({
+    repoRootDir: env.REPO_ROOT_DIR,
+    scanDepth: env.REPO_SCAN_DEPTH,
+  });
   const statusProbe = env.SLACK_E2E_ENABLED
     ? new FileSlackStatusProbe(env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
@@ -34,6 +39,7 @@ export function createApplication(): RuntimeApplication {
     logger,
     sessionStore,
     claudeExecutor,
+    workspaceResolver,
     ...(statusProbe ? { statusProbe } : {}),
   });
 

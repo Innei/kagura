@@ -91,12 +91,13 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
     const prompt = this.buildPrompt(request);
 
     this.logger.info(
-      'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s)',
+      'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s, cwd=%s)',
       request.threadTs,
       env.CLAUDE_MODEL ?? 'default',
       env.CLAUDE_MAX_TURNS,
       env.CLAUDE_PERMISSION_MODE,
       request.resumeSessionId ?? 'none',
+      request.workspacePath,
     );
 
     let session: ReturnType<typeof query>;
@@ -109,6 +110,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
           includeHookEvents: true,
           includePartialMessages: true,
           maxTurns: env.CLAUDE_MAX_TURNS,
+          cwd: request.workspacePath,
           systemPrompt: this.buildSystemPrompt(request),
           mcpServers: {
             'slack-ui': mcpServer,
@@ -447,7 +449,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
 
   private buildPrompt(request: ClaudeExecutionRequest): string {
     if (request.resumeSessionId) {
-      return request.mentionText;
+      return [`Current workspace: ${request.workspaceLabel}`, request.mentionText].join('\n\n');
     }
 
     const parts: string[] = [];
@@ -467,6 +469,8 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
     return [
       'You are a helpful assistant in a Slack workspace.',
       `You are responding in channel ${request.channelId}, thread ${request.threadTs}.`,
+      `Your working directory is ${request.workspacePath} (${request.workspaceLabel}, repo id ${request.workspaceRepoId}).`,
+      'Always treat that workspace as the canonical filesystem root for this Slack thread.',
       '',
       `You have access to the ${SLACK_UI_STATE_TOOL_NAME} tool to publish UI state updates to the Slack thread.`,
       'Use it to show progress indicators when performing long-running tasks.',

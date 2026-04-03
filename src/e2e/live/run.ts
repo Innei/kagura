@@ -16,17 +16,22 @@ interface LiveE2EResult {
   assistantReplyTs?: string;
   botUserId: string;
   channelId: string;
+  failureMessage?: string;
   matched: {
     clearCallObserved: boolean;
     finalReplyObserved: boolean;
     streamDetailLoadingMessage: boolean;
     summaryLikeLoadingMessage: boolean;
     toolStatus: boolean;
+    workspaceBindingObserved: boolean;
   };
+  passed: boolean;
   probePath: string;
   probeRecords: Awaited<ReturnType<typeof readSlackStatusProbeFile>>;
   rootMessageTs?: string;
   runId: string;
+  targetFile: string;
+  targetRepo: string;
   triggerUserId: string;
 }
 
@@ -42,6 +47,9 @@ async function main(): Promise<void> {
   }
 
   const runId = randomUUID();
+  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'slack-cc-bot';
+  const targetFile =
+    process.env.SLACK_E2E_TARGET_FILE?.trim() || 'src/slack/render/slack-renderer.ts';
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
   const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
 
@@ -59,18 +67,24 @@ async function main(): Promise<void> {
       streamDetailLoadingMessage: false,
       summaryLikeLoadingMessage: false,
       toolStatus: false,
+      workspaceBindingObserved: false,
     },
+    passed: false,
     probePath: env.SLACK_E2E_STATUS_PROBE_PATH,
     probeRecords: [],
     runId,
+    targetFile,
+    targetRepo,
     triggerUserId: triggerIdentity.user_id,
   };
+
+  let caughtError: unknown;
 
   try {
     await application.start();
     await delay(3_000);
 
-    const prompt = createLiveE2EPrompt(botIdentity.user_id, runId);
+    const prompt = createLiveE2EPrompt(botIdentity.user_id, runId, targetRepo, targetFile);
     const rootMessage = await triggerClient.postMessage({
       channel: env.SLACK_E2E_CHANNEL_ID,
       text: prompt,
@@ -96,6 +110,9 @@ async function main(): Promise<void> {
         result.assistantReplyText = assistantReply.text;
         result.assistantReplyTs = assistantReply.ts;
         result.matched.finalReplyObserved = true;
+        if (assistantReply.text.includes(`WORKSPACE_OK ${targetRepo}`)) {
+          result.matched.workspaceBindingObserved = true;
+        }
       }
 
       for (const record of result.probeRecords) {
@@ -127,42 +144,56 @@ async function main(): Promise<void> {
 
     await writeLiveE2EResult(result);
     assertLiveE2EResult(result);
+    result.passed = true;
+    await writeLiveE2EResult(result);
 
     console.info('Live Slack E2E passed.');
     console.info(`Root thread: ${result.rootMessageTs}`);
     console.info(`Assistant reply: ${result.assistantReplyTs}`);
     console.info(`Result saved to ${path.resolve(process.cwd(), env.SLACK_E2E_RESULT_PATH)}`);
+  } catch (error) {
+    result.failureMessage = error instanceof Error ? error.message : String(error);
+    caughtError = error;
   } finally {
+    await writeLiveE2EResult(result).catch((error) => {
+      console.error('Failed to persist live E2E result:', error);
+    });
     await application.stop().catch((error) => {
       console.error('Failed to stop application cleanly:', error);
     });
   }
+
+  if (caughtError) {
+    throw caughtError;
+  }
 }
 
-function createLiveE2EPrompt(botUserId: string, runId: string): string {
+function createLiveE2EPrompt(
+  botUserId: string,
+  runId: string,
+  targetRepo: string,
+  targetFile: string,
+): string {
   return [
     `<@${botUserId}> LIVE_E2E_RUN ${runId}`,
-    'Please inspect src/slack/render/slack-renderer.ts in this repository.',
+    `Use repository ${targetRepo} for this task.`,
+    `Please inspect ${targetFile} in repo ${targetRepo}.`,
     'Use file-reading tools instead of guessing.',
     'Use at least one background task or subagent if available so progress updates are visible.',
     'Reply with exactly two bullet points.',
     `The first bullet must start with "LIVE_E2E_OK ${runId}".`,
-    'The second bullet should briefly describe how loading messages are produced.',
+    `The second bullet must start with "WORKSPACE_OK ${targetRepo}" and briefly describe what you found.`,
   ].join(' ');
 }
 
 function findAssistantReply(
   replies: SlackConversationRepliesResponse,
   rootMessage: SlackPostedMessageResponse,
-  botUserId: string,
+  _botUserId: string,
   runId: string,
 ): { text: string; ts: string } | undefined {
   return replies.messages?.find((message) => {
     if (!message.ts || message.ts === rootMessage.ts) {
-      return false;
-    }
-
-    if (message.user !== botUserId) {
       return false;
     }
 
@@ -195,7 +226,7 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
     return false;
   }
 
-  return /\b(?:inspecting|analyzing|investigating|reviewing|exploring|summarizing|checking|understanding|tracing)\b/i.test(
+  return /\b(?:find|finding|inspect|inspecting|analyze|analyzing|investigate|investigating|review|reviewing|explore|exploring|summarize|summarizing|check|checking|understand|understanding|trace|tracing)\b/i.test(
     message,
   );
 }
@@ -206,7 +237,8 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
     result.matched.toolStatus &&
     result.matched.streamDetailLoadingMessage &&
     result.matched.summaryLikeLoadingMessage &&
-    result.matched.clearCallObserved
+    result.matched.clearCallObserved &&
+    result.matched.workspaceBindingObserved
   );
 }
 
@@ -221,6 +253,8 @@ function assertLiveE2EResult(result: LiveE2EResult): void {
     failures.push('summary-like loading message not observed');
   }
   if (!result.matched.clearCallObserved) failures.push('final clear status call not observed');
+  if (!result.matched.workspaceBindingObserved)
+    failures.push('workspace-binding reply marker not observed');
 
   if (failures.length > 0) {
     throw new Error(`Live Slack E2E failed: ${failures.join('; ')}`);

@@ -7,6 +7,11 @@ export const sessions = sqliteTable('sessions', {
   bootstrapMessageTs: text('bootstrap_message_ts'),
   streamMessageTs: text('stream_message_ts'),
   claudeSessionId: text('claude_session_id'),
+  workspaceRepoId: text('workspace_repo_id'),
+  workspaceRepoPath: text('workspace_repo_path'),
+  workspacePath: text('workspace_path'),
+  workspaceLabel: text('workspace_label'),
+  workspaceSource: text('workspace_source', { enum: ['auto', 'manual'] }),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

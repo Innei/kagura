@@ -27,6 +27,11 @@ export class SqliteSessionStore implements SessionStore {
         bootstrapMessageTs: record.bootstrapMessageTs ?? null,
         streamMessageTs: record.streamMessageTs ?? null,
         claudeSessionId: record.claudeSessionId ?? null,
+        workspaceRepoId: record.workspaceRepoId ?? null,
+        workspaceRepoPath: record.workspaceRepoPath ?? null,
+        workspacePath: record.workspacePath ?? null,
+        workspaceLabel: record.workspaceLabel ?? null,
+        workspaceSource: record.workspaceSource ?? null,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
       })
@@ -38,6 +43,11 @@ export class SqliteSessionStore implements SessionStore {
           bootstrapMessageTs: record.bootstrapMessageTs ?? null,
           streamMessageTs: record.streamMessageTs ?? null,
           claudeSessionId: record.claudeSessionId ?? null,
+          workspaceRepoId: record.workspaceRepoId ?? null,
+          workspaceRepoPath: record.workspaceRepoPath ?? null,
+          workspacePath: record.workspacePath ?? null,
+          workspaceLabel: record.workspaceLabel ?? null,
+          workspaceSource: record.workspaceSource ?? null,
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
         },
@@ -69,6 +79,11 @@ export class SqliteSessionStore implements SessionStore {
         bootstrapMessageTs: next.bootstrapMessageTs ?? null,
         streamMessageTs: next.streamMessageTs ?? null,
         claudeSessionId: next.claudeSessionId ?? null,
+        workspaceRepoId: next.workspaceRepoId ?? null,
+        workspaceRepoPath: next.workspaceRepoPath ?? null,
+        workspacePath: next.workspacePath ?? null,
+        workspaceLabel: next.workspaceLabel ?? null,
+        workspaceSource: next.workspaceSource ?? null,
         createdAt: next.createdAt,
         updatedAt: next.updatedAt,
       })
@@ -90,6 +105,11 @@ export class SqliteSessionStore implements SessionStore {
     if (row.bootstrapMessageTs !== null) record.bootstrapMessageTs = row.bootstrapMessageTs;
     if (row.claudeSessionId !== null) record.claudeSessionId = row.claudeSessionId;
     if (row.streamMessageTs !== null) record.streamMessageTs = row.streamMessageTs;
+    if (row.workspaceRepoId !== null) record.workspaceRepoId = row.workspaceRepoId;
+    if (row.workspaceRepoPath !== null) record.workspaceRepoPath = row.workspaceRepoPath;
+    if (row.workspacePath !== null) record.workspacePath = row.workspacePath;
+    if (row.workspaceLabel !== null) record.workspaceLabel = row.workspaceLabel;
+    if (row.workspaceSource !== null) record.workspaceSource = row.workspaceSource;
     return record;
   }
 }

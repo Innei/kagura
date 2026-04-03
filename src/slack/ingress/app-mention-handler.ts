@@ -6,17 +6,37 @@ import { redact } from '../../logger/redact.js';
 import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
 import { SlackAppMentionEventSchema } from '../../schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '../../schemas/slack/message.js';
-import type { SessionStore } from '../../session/types.js';
+import type { SessionRecord, SessionStore } from '../../session/types.js';
+import type { WorkspaceResolver } from '../../workspace/resolver.js';
+import type { ResolvedWorkspace, WorkspaceResolution } from '../../workspace/types.js';
 import type { SlackThreadContextLoader } from '../context/thread-context-loader.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
-interface AppMentionHandlerDependencies {
+export interface SlackIngressDependencies {
   claudeExecutor: ClaudeExecutor;
   logger: AppLogger;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
+  workspaceResolver: WorkspaceResolver;
+}
+
+export interface ThreadConversationMessage {
+  channel: string;
+  team: string;
+  text: string;
+  thread_ts?: string | undefined;
+  ts: string;
+  user: string;
+}
+
+interface ThreadConversationOptions {
+  addAcknowledgementReaction: boolean;
+  forceNewClaudeSession?: boolean;
+  logLabel: string;
+  rootMessageTs: string;
+  workspaceOverride?: ResolvedWorkspace;
 }
 
 const DEFAULT_ASSISTANT_PROMPTS = [
@@ -34,10 +54,10 @@ const DEFAULT_ASSISTANT_PROMPTS = [
   },
 ] as const;
 
-export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
-  return async (args: { client: SlackWebClientLike; event: unknown }): Promise<void> => {
+export function createAppMentionHandler(deps: SlackIngressDependencies) {
+  return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = SlackAppMentionEventSchema.parse(args.event);
-    await handleThreadConversation(args.client, mention, deps, {
+    await handleThreadConversation(args.client as SlackWebClientLike, mention, deps, {
       logLabel: 'app mention',
       addAcknowledgementReaction: true,
       rootMessageTs: mention.ts,
@@ -45,8 +65,8 @@ export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
   };
 }
 
-export function createThreadReplyHandler(deps: AppMentionHandlerDependencies) {
-  return async (args: { client: SlackWebClientLike; event: unknown }): Promise<void> => {
+export function createThreadReplyHandler(deps: SlackIngressDependencies) {
+  return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const parsed = SlackMessageSchema.safeParse(args.event);
     if (!parsed.success) {
       return;
@@ -80,7 +100,7 @@ export function createThreadReplyHandler(deps: AppMentionHandlerDependencies) {
     }
 
     await handleThreadConversation(
-      args.client,
+      args.client as SlackWebClientLike,
       {
         channel: channelId,
         team: teamId,
@@ -100,7 +120,7 @@ export function createThreadReplyHandler(deps: AppMentionHandlerDependencies) {
 }
 
 export function createAssistantThreadStartedHandler(
-  deps: AppMentionHandlerDependencies,
+  deps: SlackIngressDependencies,
 ): AssistantThreadStartedMiddleware {
   return async ({ logger, setSuggestedPrompts }) => {
     try {
@@ -121,7 +141,7 @@ export function createAssistantThreadStartedHandler(
 }
 
 export function createAssistantUserMessageHandler(
-  deps: AppMentionHandlerDependencies,
+  deps: SlackIngressDependencies,
 ): AssistantUserMessageMiddleware {
   return async (args) => {
     const parsed = SlackMessageSchema.safeParse(args.message);
@@ -165,7 +185,7 @@ export function createAssistantUserMessageHandler(
     }
 
     await handleThreadConversation(
-      args.client as SlackWebClientLike,
+      args.client as unknown as SlackWebClientLike,
       {
         channel: channelId,
         team: teamId,
@@ -184,22 +204,11 @@ export function createAssistantUserMessageHandler(
   };
 }
 
-async function handleThreadConversation(
+export async function handleThreadConversation(
   client: SlackWebClientLike,
-  message: {
-    channel: string;
-    team: string;
-    text: string;
-    thread_ts?: string | undefined;
-    ts: string;
-    user: string;
-  },
-  deps: AppMentionHandlerDependencies,
-  options: {
-    logLabel: string;
-    addAcknowledgementReaction: boolean;
-    rootMessageTs: string;
-  },
+  message: ThreadConversationMessage,
+  deps: SlackIngressDependencies,
+  options: ThreadConversationOptions,
 ): Promise<void> {
   const threadTs = message.thread_ts ?? message.ts;
 
@@ -213,15 +222,52 @@ async function handleThreadConversation(
   );
 
   const existingSession = deps.sessionStore.get(threadTs);
-  const resumeSessionId = existingSession?.claudeSessionId;
 
   if (options.addAcknowledgementReaction) {
     await deps.renderer.addAcknowledgementReaction(client, message.channel, message.ts);
   }
 
+  const workspaceResolution = resolveWorkspaceForConversation(
+    message.text,
+    existingSession,
+    deps.workspaceResolver,
+    options.workspaceOverride,
+  );
+
+  if (workspaceResolution.status !== 'unique') {
+    runtimeWarn(
+      deps.logger,
+      'Unable to resolve workspace for thread %s (%s)',
+      threadTs,
+      workspaceResolution.reason,
+    );
+    await deps.renderer.postThreadReply(
+      client,
+      message.channel,
+      threadTs,
+      buildWorkspaceResolutionMessage(workspaceResolution),
+    );
+    return;
+  }
+
+  const workspace = workspaceResolution.workspace;
+  const shouldResetClaudeSession =
+    options.forceNewClaudeSession === true ||
+    Boolean(
+      existingSession?.claudeSessionId && existingSession.workspacePath !== workspace.workspacePath,
+    );
+  const resumeSessionId = shouldResetClaudeSession ? undefined : existingSession?.claudeSessionId;
+
   if (existingSession) {
     deps.sessionStore.patch(threadTs, {
       channelId: message.channel,
+      rootMessageTs: options.rootMessageTs,
+      workspaceLabel: workspace.workspaceLabel,
+      workspacePath: workspace.workspacePath,
+      workspaceRepoId: workspace.repo.id,
+      workspaceRepoPath: workspace.repo.repoPath,
+      workspaceSource: workspace.source,
+      ...(shouldResetClaudeSession ? { claudeSessionId: undefined } : {}),
     });
   } else {
     deps.sessionStore.upsert({
@@ -230,6 +276,11 @@ async function handleThreadConversation(
       rootMessageTs: options.rootMessageTs,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      workspaceLabel: workspace.workspaceLabel,
+      workspacePath: workspace.workspacePath,
+      workspaceRepoId: workspace.repo.id,
+      workspaceRepoPath: workspace.repo.repoPath,
+      workspaceSource: workspace.source,
     });
   }
 
@@ -315,6 +366,9 @@ async function handleThreadConversation(
         userId: message.user,
         mentionText: message.text,
         threadContext,
+        workspaceLabel: workspace.workspaceLabel,
+        workspacePath: workspace.workspacePath,
+        workspaceRepoId: workspace.repo.id,
         ...(resumeSessionId ? { resumeSessionId } : {}),
       },
       sink,
@@ -352,6 +406,11 @@ function runtimeError(logger: AppLogger, message: string, ...args: unknown[]): v
   console.error(message, ...args);
 }
 
+function runtimeWarn(logger: AppLogger, message: string, ...args: unknown[]): void {
+  logger.warn(message, ...args);
+  console.warn(message, ...args);
+}
+
 function createDefaultThinkingUiState(threadTs: string): ClaudeUiState {
   return {
     threadTs,
@@ -363,4 +422,73 @@ function createDefaultThinkingUiState(threadTs: string): ClaudeUiState {
     ],
     clear: false,
   };
+}
+
+function resolveWorkspaceForConversation(
+  messageText: string,
+  existingSession: SessionRecord | undefined,
+  workspaceResolver: WorkspaceResolver,
+  workspaceOverride?: ResolvedWorkspace,
+): WorkspaceResolution {
+  if (workspaceOverride) {
+    return {
+      status: 'unique',
+      workspace: workspaceOverride,
+    };
+  }
+
+  if (
+    existingSession?.workspacePath &&
+    existingSession.workspaceRepoId &&
+    existingSession.workspaceRepoPath &&
+    existingSession.workspaceLabel
+  ) {
+    return {
+      status: 'unique',
+      workspace: {
+        input: existingSession.workspacePath,
+        matchKind:
+          existingSession.workspacePath === existingSession.workspaceRepoPath ? 'repo' : 'path',
+        repo: {
+          aliases: [],
+          id: existingSession.workspaceRepoId,
+          label: existingSession.workspaceRepoId,
+          name:
+            existingSession.workspaceRepoId.split('/').at(-1) ?? existingSession.workspaceRepoId,
+          repoPath: existingSession.workspaceRepoPath,
+          relativePath: existingSession.workspaceRepoId,
+        },
+        source: existingSession.workspaceSource ?? 'manual',
+        workspaceLabel: existingSession.workspaceLabel,
+        workspacePath: existingSession.workspacePath,
+      },
+    };
+  }
+
+  return workspaceResolver.resolveFromText(messageText, 'auto');
+}
+
+function buildWorkspaceResolutionMessage(
+  resolution: Exclude<WorkspaceResolution, { status: 'unique' }>,
+): string {
+  if (resolution.status === 'ambiguous') {
+    const candidates = resolution.candidates
+      .slice(0, 5)
+      .map((candidate) => `- \`${candidate.label}\``)
+      .join('\n');
+    return [
+      "I couldn't tell which repository to use for this thread.",
+      '',
+      'Matched multiple repositories:',
+      candidates,
+      '',
+      'Mention the repo/path more explicitly, or use the Slack Message Action to choose the workspace manually.',
+    ].join('\n');
+  }
+
+  return [
+    "I couldn't determine which repository to use for this thread.",
+    '',
+    'Mention the repo name or a path under the configured repo root, or use the Slack Message Action to choose the workspace manually.',
+  ].join('\n');
 }

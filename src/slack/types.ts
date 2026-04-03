@@ -76,9 +76,14 @@ export interface SlackChatApi {
   }) => Promise<unknown>;
 }
 
+export interface SlackViewsApi {
+  open: (args: { trigger_id: string; view: unknown }) => Promise<unknown>;
+}
+
 export interface SlackWebClientLike {
   assistant: SlackAssistantApi;
   chat: SlackChatApi;
   conversations: SlackConversationsApi;
   reactions: SlackReactionsApi;
+  views: SlackViewsApi;
 }
