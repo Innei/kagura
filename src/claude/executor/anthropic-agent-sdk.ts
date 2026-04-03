@@ -41,7 +41,8 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         includePartialMessages: true,
-        persistSession: false,
+        persistSession: true,
+        ...(request.resumeSessionId ? { resume: request.resumeSessionId } : {}),
       },
     });
 
@@ -187,6 +188,10 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
   }
 
   private buildPrompt(request: ClaudeExecutionRequest): string {
+    if (request.resumeSessionId) {
+      return request.mentionText;
+    }
+
     const parts: string[] = [];
 
     if (request.threadContext.messages.length > 0) {

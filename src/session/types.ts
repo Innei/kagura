@@ -9,6 +9,14 @@ export interface SessionRecord {
   updatedAt: string;
 }
 
+export type SessionState = 'registered' | 'bootstrapped' | 'streaming' | 'completed' | 'failed';
+
+export function getSessionState(record: SessionRecord): SessionState {
+  if (record.streamMessageTs) return 'streaming';
+  if (record.bootstrapMessageTs) return 'bootstrapped';
+  return 'registered';
+}
+
 export interface SessionStore {
   get: (threadTs: string) => SessionRecord | undefined;
   patch: (threadTs: string, patch: Partial<SessionRecord>) => SessionRecord | undefined;

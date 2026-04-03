@@ -26,6 +26,9 @@ export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
       threadTs,
     );
 
+    const existingSession = deps.sessionStore.get(threadTs);
+    const resumeSessionId = existingSession?.claudeSessionId;
+
     await deps.renderer.addAcknowledgementReaction(args.client, mention.channel, mention.ts);
 
     const bootstrapMessageTs = await deps.renderer.postBootstrapReply(
@@ -105,6 +108,7 @@ export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
           userId: mention.user,
           mentionText: mention.text,
           threadContext,
+          ...(resumeSessionId ? { resumeSessionId } : {}),
         },
         sink,
       );

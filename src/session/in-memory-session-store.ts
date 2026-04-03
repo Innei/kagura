@@ -7,13 +7,15 @@ export class InMemorySessionStore implements SessionStore {
   constructor(private readonly logger: AppLogger) {}
 
   get(threadTs: string): SessionRecord | undefined {
-    return this.store.get(threadTs);
+    const record = this.store.get(threadTs);
+    return record ? { ...record } : undefined;
   }
 
   upsert(record: SessionRecord): SessionRecord {
-    this.store.set(record.threadTs, record);
-    this.logger.debug('Upserted session record for thread %s', record.threadTs);
-    return record;
+    const stored: SessionRecord = { ...record };
+    this.store.set(stored.threadTs, stored);
+    this.logger.debug('Upserted session record for thread %s', stored.threadTs);
+    return { ...stored };
   }
 
   patch(threadTs: string, patch: Partial<SessionRecord>): SessionRecord | undefined {
@@ -30,6 +32,6 @@ export class InMemorySessionStore implements SessionStore {
 
     this.store.set(threadTs, next);
     this.logger.debug('Patched session record for thread %s', threadTs);
-    return next;
+    return { ...next };
   }
 }

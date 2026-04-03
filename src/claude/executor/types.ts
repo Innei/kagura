@@ -4,6 +4,7 @@ import type { NormalizedThreadContext } from '../../slack/context/thread-context
 export interface ClaudeExecutionRequest {
   channelId: string;
   mentionText: string;
+  resumeSessionId?: string;
   threadContext: NormalizedThreadContext;
   threadTs: string;
   userId: string;

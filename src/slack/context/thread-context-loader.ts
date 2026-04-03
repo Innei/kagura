@@ -41,7 +41,8 @@ export class SlackThreadContextLoader {
 }
 
 function renderThreadPrompt(messages: NormalizedThreadMessage[]): string {
-  const renderedLines = messages.flatMap((message, index) => {
+  const filtered = messages.filter((message) => message.text.trim() !== '');
+  const renderedLines = filtered.flatMap((message, index) => {
     const header = `Message ${index + 1} | ts=${message.ts} | author=${message.authorId ?? 'unknown'}`;
     return [header, message.text];
   });
