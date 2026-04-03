@@ -1,0 +1,17 @@
+dist
+build
+out
+coverage
+.next
+.turbo
+node_modules
+logs
+test-output
+*.log
+*.lock
+package-lock.json
+*.min.*
+public
+storybook-static
+CHANGELOG.md
+LICENSE

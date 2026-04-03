@@ -1,0 +1,65 @@
+{
+  "name": "slack-cc-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged",
+    "commit-msg": "pnpm exec commitlint --edit $1"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,yml,yaml}": [
+      "eslint --fix"
+    ],
+    "*": [
+      "prettier --write --ignore-unknown"
+    ],
+    "*.{css,less,scss}": [
+      "stylelint --fix"
+    ]
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.91",
+    "@innei/pretty-logger-core": "0.4.2",
+    "@slack/bolt": "4.6.0",
+    "@t3-oss/env-core": "0.13.11",
+    "dotenv": "17.4.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@lobehub/commitlint-config": "^2.1.5",
+    "@lobehub/eslint-config": "^2.1.5",
+    "@lobehub/prettier-config": "^2.1.5",
+    "@lobehub/stylelint-config": "^2.1.5",
+    "@types/node": "25.5.1",
+    "eslint": "^10.1.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-packagejson": "^3.0.2",
+    "prettier-plugin-sh": "^0.18.0",
+    "prettier-plugin-sort-json": "^4.2.0",
+    "simple-git-hooks": "^2.13.1",
+    "stylelint": "^16.26.1",
+    "tsx": "4.21.0",
+    "typescript": "^6.0.2"
+  },
+  "packageManager": "pnpm@10.18.1",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "simple-git-hooks",
+      "unrs-resolver"
+    ]
+  }
+}

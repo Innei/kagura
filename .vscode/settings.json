@@ -1,0 +1,32 @@
+{
+  "eslint.codeActionsOnSave.rules": [
+    "*",
+    "!perfectionist/sort-enums",
+    "!perfectionist/sort-interfaces",
+    "!simple-import-sort/imports",
+    "!simple-import-sort/exports",
+    "!unused-imports/no-unused-imports"
+  ],
+  "eslint.rules.customizations": [
+    {
+      "rule": "perfectionist/sort-enums",
+      "severity": "info"
+    },
+    {
+      "rule": "perfectionist/sort-interfaces",
+      "severity": "info"
+    },
+    {
+      "rule": "simple-import-sort/imports",
+      "severity": "info"
+    },
+    {
+      "rule": "simple-import-sort/exports",
+      "severity": "info"
+    },
+    {
+      "rule": "unused-imports/no-unused-imports",
+      "severity": "info"
+    }
+  ]
+}
