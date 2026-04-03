@@ -1,11 +1,8 @@
 import { env } from '../env/server.js';
 
-const SECRET_VALUES = [
-  env.SLACK_BOT_TOKEN,
-  env.SLACK_APP_TOKEN,
-  env.SLACK_SIGNING_SECRET,
-  env.ANTHROPIC_API_KEY,
-].filter((v): v is string => typeof v === 'string' && v.length >= 8);
+const SECRET_VALUES = [env.SLACK_BOT_TOKEN, env.SLACK_APP_TOKEN, env.SLACK_SIGNING_SECRET].filter(
+  (v): v is string => typeof v === 'string' && v.length >= 8,
+);
 
 export function redact(value: string): string {
   let result = value;

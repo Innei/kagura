@@ -74,7 +74,6 @@
 | `SLACK_APP_TOKEN`      | Yes      | Slack Socket Mode authentication  | Non-empty string            |
 | `SLACK_SIGNING_SECRET` | Yes      | Slack app integrity configuration | Non-empty string            |
 | `SLACK_REACTION_NAME`  | No       | Initial acknowledgement reaction  | Non-empty string            |
-| `ANTHROPIC_API_KEY`    | Yes      | Claude Agent SDK authentication   | Non-empty string            |
 | `CLAUDE_MODEL`         | No       | Optional model override           | Non-empty string if present |
 | `CLAUDE_MAX_TURNS`     | No       | Claude loop ceiling               | Positive integer            |
 | `LOG_LEVEL`            | No       | Logger verbosity                  | Enumerated string           |

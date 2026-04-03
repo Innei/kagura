@@ -23,7 +23,6 @@ export const redact = createRedactor([
   env.SLACK_BOT_TOKEN,
   env.SLACK_APP_TOKEN,
   env.SLACK_SIGNING_SECRET,
-  env.ANTHROPIC_API_KEY,
 ]);
 
 export type AppLogger = ConsolaInstance;

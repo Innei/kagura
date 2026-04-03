@@ -13,7 +13,6 @@ export const env = createEnv({
     SLACK_APP_TOKEN: z.string().min(1),
     SLACK_SIGNING_SECRET: z.string().min(1),
     SLACK_REACTION_NAME: z.string().min(1).default('eyes'),
-    ANTHROPIC_API_KEY: z.string().min(1),
     CLAUDE_MODEL: z.string().min(1).optional(),
     CLAUDE_MAX_TURNS: z.coerce.number().int().positive().default(24),
     CLAUDE_PERMISSION_MODE: z
@@ -31,7 +30,6 @@ export const env = createEnv({
     SLACK_APP_TOKEN: process.env.SLACK_APP_TOKEN,
     SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET,
     SLACK_REACTION_NAME: process.env.SLACK_REACTION_NAME,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     CLAUDE_MODEL: process.env.CLAUDE_MODEL,
     CLAUDE_MAX_TURNS: process.env.CLAUDE_MAX_TURNS,
     CLAUDE_PERMISSION_MODE: process.env.CLAUDE_PERMISSION_MODE,
