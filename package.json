@@ -11,8 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm exec lint-staged",
-    "commit-msg": "pnpm exec commitlint --edit $1"
+    "pre-commit": "pnpm exec lint-staged"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,yml,yaml}": [
@@ -20,9 +19,6 @@
     ],
     "*": [
       "prettier --write --ignore-unknown"
-    ],
-    "*.{css,less,scss}": [
-      "stylelint --fix"
     ]
   },
   "dependencies": {
@@ -30,15 +26,14 @@
     "@innei/pretty-logger-core": "0.4.2",
     "@slack/bolt": "4.6.0",
     "@t3-oss/env-core": "0.13.11",
+    "better-sqlite3": "^12.8.0",
     "dotenv": "17.4.0",
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.0",
-    "@lobehub/commitlint-config": "^2.1.5",
     "@lobehub/eslint-config": "^2.1.5",
     "@lobehub/prettier-config": "^2.1.5",
-    "@lobehub/stylelint-config": "^2.1.5",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "25.5.1",
     "eslint": "^10.1.0",
     "lint-staged": "^16.4.0",
@@ -47,11 +42,10 @@
     "prettier-plugin-sh": "^0.18.0",
     "prettier-plugin-sort-json": "^4.2.0",
     "simple-git-hooks": "^2.13.1",
-    "stylelint": "^16.26.1",
     "tsx": "4.21.0",
     "typescript": "^6.0.2"
   },
-  "packageManager": "pnpm@10.18.1",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -59,7 +53,8 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "simple-git-hooks",
-      "unrs-resolver"
+      "unrs-resolver",
+      "better-sqlite3"
     ]
   }
 }

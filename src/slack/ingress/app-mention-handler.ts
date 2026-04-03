@@ -1,5 +1,6 @@
 import type { ClaudeExecutionEvent, ClaudeExecutor } from '../../claude/executor/types.js';
 import type { AppLogger } from '../../logger/index.js';
+import { redact } from '../../logger/redact.js';
 import { SlackAppMentionEventSchema } from '../../schemas/slack/app-mention-event.js';
 import type { SessionStore } from '../../session/types.js';
 import type { SlackThreadContextLoader } from '../context/thread-context-loader.js';
@@ -90,11 +91,16 @@ export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
         }
 
         if (event.phase === 'failed') {
+          deps.logger.error(
+            'Execution failed for thread %s: %s',
+            threadTs,
+            redact(String(event.error ?? '')),
+          );
           await deps.renderer.appendText(
             args.client,
             mention.channel,
             streamTs,
-            `Execution failed: ${event.error}`,
+            'An error occurred while processing your request.',
           );
         }
       },
@@ -114,12 +120,12 @@ export function createAppMentionHandler(deps: AppMentionHandlerDependencies) {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      deps.logger.error('Claude execution failed for thread %s: %s', threadTs, message);
+      deps.logger.error('Claude execution failed for thread %s: %s', threadTs, redact(message));
       await deps.renderer.appendText(
         args.client,
         mention.channel,
         streamTs,
-        `Execution failed before completion: ${message}`,
+        'An error occurred while processing your request.',
       );
     } finally {
       await deps.renderer.clearUiState(args.client, mention.channel, threadTs);

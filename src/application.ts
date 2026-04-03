@@ -1,8 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { App } from '@slack/bolt';
 
 import { ClaudeAgentSdkExecutor } from './claude/executor/anthropic-agent-sdk.js';
+import { env } from './env/server.js';
 import { type AppLogger, createRootLogger } from './logger/index.js';
-import { InMemorySessionStore } from './session/in-memory-session-store.js';
+import { SqliteSessionStore } from './session/sqlite-session-store.js';
 import { createSlackApp } from './slack/app.js';
 
 export interface RuntimeApplication {
@@ -13,7 +17,11 @@ export interface RuntimeApplication {
 
 export function createApplication(): RuntimeApplication {
   const logger = createRootLogger().withTag('bootstrap');
-  const sessionStore = new InMemorySessionStore(logger.withTag('session'));
+
+  const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  const sessionStore = new SqliteSessionStore(dbPath, logger.withTag('session'));
+
   const claudeExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'));
   const slackApp: App = createSlackApp({
     logger,
@@ -29,6 +37,7 @@ export function createApplication(): RuntimeApplication {
     },
     async stop() {
       await slackApp.stop();
+      sessionStore.close();
       logger.info('Slack Socket Mode application stopped.');
     },
   };

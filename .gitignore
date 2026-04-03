@@ -4,3 +4,4 @@ logs
 .env
 .env.local
 .DS_Store
+data/

@@ -11,6 +11,7 @@ import { createSdkMcpServer, query, tool } from '@anthropic-ai/claude-agent-sdk'
 
 import { env } from '../../env/server.js';
 import type { AppLogger } from '../../logger/index.js';
+import { redact } from '../../logger/redact.js';
 import { ClaudeUiStateToolInputShape } from '../../schemas/claude/publish-state.js';
 import {
   parseSlackUiStateToolInput,
@@ -38,8 +39,10 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
         mcpServers: {
           'slack-ui': mcpServer,
         },
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
+        permissionMode: env.CLAUDE_PERMISSION_MODE,
+        ...(env.CLAUDE_PERMISSION_MODE === 'bypassPermissions'
+          ? { allowDangerouslySkipPermissions: true }
+          : {}),
         includePartialMessages: true,
         persistSession: true,
         ...(request.resumeSessionId ? { resume: request.resumeSessionId } : {}),
@@ -64,7 +67,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error('Claude Agent SDK execution failed: %s', errorMessage);
+      this.logger.error('Claude Agent SDK execution failed: %s', redact(errorMessage));
       await sink.onEvent({
         type: 'lifecycle',
         phase: 'failed',
