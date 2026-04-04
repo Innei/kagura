@@ -133,7 +133,7 @@ After creation, grab the **Bot Token** (`xoxb-...`), **App-Level Token** (`xapp-
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/innei-repo/slack-cc-bot.git
+git clone https://github.com/Innei/slack-cc-bot.git
 cd slack-cc-bot
 pnpm install
 ```

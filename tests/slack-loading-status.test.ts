@@ -131,8 +131,7 @@ describe('Slack loading status test', () => {
               index: 0,
               delta: {
                 type: 'input_json_delta',
-                partial_json:
-                  '{"path":"/Users/innei/git/innei-repo/slack-cc-bot/src/slack/render/slack-renderer.ts"}',
+                partial_json: '{"path":"/tmp/slack-cc-bot/src/slack/render/slack-renderer.ts"}',
               },
             },
             parent_tool_use_id: null,
