@@ -15,6 +15,12 @@ export interface SlackAssistantApi {
   threads: SlackAssistantThreadsApi;
 }
 
+export interface SlackAuthApi {
+  test: () => Promise<{
+    user_id?: string;
+  }>;
+}
+
 export interface SlackConversationsApi {
   replies: (args: {
     channel: string;
@@ -129,6 +135,7 @@ export interface SlackViewsApi {
 
 export interface SlackWebClientLike {
   assistant: SlackAssistantApi;
+  auth?: SlackAuthApi;
   chat: SlackChatApi;
   conversations: SlackConversationsApi;
   reactions: SlackReactionsApi;

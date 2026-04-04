@@ -12,6 +12,7 @@
     "dev": "nodemon",
     "e2e": "tsx src/e2e/live/run.ts",
     "e2e:commands": "tsx src/e2e/live/run-slash-commands.ts",
+    "e2e:foreign-mention": "tsx src/e2e/live/run-thread-foreign-mention-ignore.ts",
     "e2e:no-workspace": "tsx src/e2e/live/run-no-workspace-chat.ts",
     "e2e:picker": "tsx src/e2e/live/run-workspace-picker.ts",
     "start": "node dist/index.js",

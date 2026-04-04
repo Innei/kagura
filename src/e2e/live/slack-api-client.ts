@@ -57,6 +57,7 @@ export class SlackApiClient {
   async postMessage(args: {
     channel: string;
     text: string;
+    thread_ts?: string;
     unfurl_links?: boolean;
     unfurl_media?: boolean;
   }): Promise<SlackPostedMessageResponse> {

@@ -26,6 +26,8 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 - **Session resumption** — conversations persist across bot restarts (SQLite + Drizzle ORM)
 - **Workspace-aware routing** — each Slack thread binds to a specific repo/workdir instead of the bot process `cwd`
 - **Message Action fallback** — manually choose a repo/path when automatic detection is missing or ambiguous
+- **Slash commands** — `/usage`, `/workspace`, `/memory`, `/session` for bot introspection and management
+- **Auto-provisioning** — slash commands are automatically registered to the Slack App manifest on startup
 - **UI state management** — Claude can set status text and loading indicators via a custom MCP tool
 - **Strict validation** — all external inputs (env, Slack events, tool calls) validated with Zod
 - **Secret redaction** in logs
@@ -39,7 +41,7 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
   - **Interactivity** enabled
   - **Event Subscriptions** with `app_mention` scope
   - A **Message Shortcut** configured with callback ID `workspace_message_action`
-  - Bot token scopes: `app_mentions:read`, `chat:write`, `channels:history`, `groups:history`, `reactions:write`, `assistant:write`
+  - Bot token scopes: `app_mentions:read`, `chat:write`, `channels:history`, `groups:history`, `reactions:write`, `assistant:write`, `commands`
 - An [Anthropic API key](https://console.anthropic.com/)
 
 ## Getting started
@@ -66,6 +68,14 @@ Fill in the required values:
 | `SLACK_APP_TOKEN`      | App-level token for Socket Mode (`xapp-...`) |
 | `SLACK_SIGNING_SECRET` | Request verification secret                  |
 | `REPO_ROOT_DIR`        | Root directory containing candidate repos    |
+
+Optional — for automatic slash command registration:
+
+| Variable                     | Description                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `SLACK_APP_ID`               | Your Slack App ID (from Basic Information)                      |
+| `SLACK_CONFIG_REFRESH_TOKEN` | Configuration refresh token (`xoxe-...`) for automatic rotation |
+| `SLACK_CONFIG_TOKEN`         | Configuration access token (fallback, expires every 12h)        |
 
 See [`.env.example`](.env.example) for all available options including `REPO_SCAN_DEPTH`, `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, and logging configuration.
 
@@ -101,6 +111,7 @@ src/
 ├── workspace/                  # Repo discovery and workspace resolution
 ├── slack/
 │   ├── app.ts                  # @slack/bolt initialization
+│   ├── commands/               # Slash command handlers + manifest sync
 │   ├── ingress/                # @mention / thread / assistant ingress
 │   ├── interactions/           # Message Action + modal handlers
 │   ├── context/                # Thread history loading & normalization
@@ -113,17 +124,20 @@ src/
 
 ## Scripts
 
-| Command            | Description                 |
-| ------------------ | --------------------------- |
-| `pnpm dev`         | Run with tsx (development)  |
-| `pnpm build`       | Compile TypeScript          |
-| `pnpm e2e`         | Run real Slack live E2E     |
-| `pnpm test`        | Run Vitest test suite       |
-| `pnpm start`       | Run compiled output         |
-| `pnpm typecheck`   | Type-check without emitting |
-| `pnpm db:generate` | Generate Drizzle migrations |
-| `pnpm db:migrate`  | Apply migrations            |
-| `pnpm db:studio`   | Open Drizzle Studio         |
+| Command                 | Description                    |
+| ----------------------- | ------------------------------ |
+| `pnpm dev`              | Run with tsx (development)     |
+| `pnpm build`            | Compile TypeScript             |
+| `pnpm test`             | Run Vitest test suite          |
+| `pnpm start`            | Run compiled output            |
+| `pnpm typecheck`        | Type-check without emitting    |
+| `pnpm e2e`              | Run real Slack live E2E        |
+| `pnpm e2e:commands`     | Run slash commands live E2E    |
+| `pnpm e2e:picker`       | Run workspace picker live E2E  |
+| `pnpm e2e:no-workspace` | Run no-workspace chat live E2E |
+| `pnpm db:generate`      | Generate Drizzle migrations    |
+| `pnpm db:migrate`       | Apply migrations               |
+| `pnpm db:studio`        | Open Drizzle Studio            |
 
 ## Architecture
 
@@ -149,6 +163,38 @@ Once a thread is bound, follow-up replies reuse the same workspace. If you switc
 
 > [!NOTE]
 > Detailed specifications for each subsystem are available in [`docs/specs/`](docs/specs/).
+
+## Slash commands
+
+The bot registers four slash commands for introspection and management:
+
+| Command                | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `/usage`               | Show bot stats — session count, memory count, repos, uptime   |
+| `/workspace`           | List all available workspaces                                 |
+| `/workspace <name>`    | Look up a specific workspace (path, aliases, memory count)    |
+| `/memory`              | Show help for memory subcommands                              |
+| `/memory list <repo>`  | List recent memories for a repo                               |
+| `/memory count <repo>` | Show total memory count for a repo                            |
+| `/memory clear <repo>` | Clear expired memories for a repo                             |
+| `/session`             | Show total session count                                      |
+| `/session <thread_ts>` | Inspect a specific session (workspace, Claude session, state) |
+
+All responses are **ephemeral** (only visible to the invoking user).
+
+### Automatic manifest sync
+
+When `SLACK_APP_ID` is set along with `SLACK_CONFIG_REFRESH_TOKEN` (or `SLACK_CONFIG_TOKEN`), the bot automatically registers any missing slash commands to the Slack App manifest on startup via the [App Manifest API](https://api.slack.com/reference/manifests). No manual configuration in the Slack dashboard is needed.
+
+**Token rotation:** Slack configuration tokens expire every 12 hours. If you provide `SLACK_CONFIG_REFRESH_TOKEN`, the bot calls [`tooling.tokens.rotate`](https://api.slack.com/methods/tooling.tokens.rotate) on each startup and persists the new token pair to `data/slack-config-tokens.json`. This means you only need to set the refresh token once.
+
+To generate the tokens:
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Scroll to **"Your App Configuration Tokens"** (below your app list)
+3. Click **Generate Token** → select your workspace → **Generate**
+4. Copy the **Refresh Token** (`xoxe-...`) into `SLACK_CONFIG_REFRESH_TOKEN`
+5. Copy the **App ID** from your app's Basic Information page into `SLACK_APP_ID`
 
 ## Live E2E
 

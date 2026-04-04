@@ -57,6 +57,8 @@ const DEFAULT_ASSISTANT_PROMPTS = [
   },
 ] as const;
 
+const SLACK_USER_MENTION_PATTERN = /<@([\dA-Z]+)>/g;
+
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = SlackAppMentionEventSchema.parse(args.event);
@@ -69,6 +71,8 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
 }
 
 export function createThreadReplyHandler(deps: SlackIngressDependencies) {
+  const getBotUserId = createBotUserIdResolver(deps.logger);
+
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const parsed = SlackMessageSchema.safeParse(args.event);
     if (!parsed.success) {
@@ -77,12 +81,9 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
 
     const message = parsed.data;
     const threadTs = message.thread_ts;
+    const client = args.client as SlackWebClientLike;
 
     if (!threadTs) {
-      return;
-    }
-
-    if (!message.user || message.bot_id || message.subtype) {
       return;
     }
 
@@ -102,15 +103,37 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       return;
     }
 
+    const botUserId = await getBotUserId(client);
+    const senderId = message.user?.trim() || message.bot_id?.trim();
+    if (!senderId) {
+      return;
+    }
+
+    if (shouldSkipBotAuthoredMessage(deps.logger, 'thread reply', threadTs, message, botUserId)) {
+      return;
+    }
+
+    if (
+      shouldSkipMessageForForeignMention(
+        deps.logger,
+        'thread reply',
+        threadTs,
+        message.text,
+        botUserId,
+      )
+    ) {
+      return;
+    }
+
     await handleThreadConversation(
-      args.client as SlackWebClientLike,
+      client,
       {
         channel: channelId,
         team: teamId,
         text: message.text,
         thread_ts: threadTs,
         ts: message.ts,
-        user: message.user,
+        user: senderId,
       },
       deps,
       {
@@ -146,6 +169,8 @@ export function createAssistantThreadStartedHandler(
 export function createAssistantUserMessageHandler(
   deps: SlackIngressDependencies,
 ): AssistantUserMessageMiddleware {
+  const getBotUserId = createBotUserIdResolver(deps.logger);
+
   return async (args) => {
     const parsed = SlackMessageSchema.safeParse(args.message);
     if (!parsed.success) {
@@ -180,6 +205,20 @@ export function createAssistantUserMessageHandler(
       return;
     }
 
+    const client = args.client as unknown as SlackWebClientLike;
+    const botUserId = await getBotUserId(client);
+    if (
+      shouldSkipMessageForForeignMention(
+        deps.logger,
+        'assistant user message',
+        threadTs,
+        message.text,
+        botUserId,
+      )
+    ) {
+      return;
+    }
+
     const existingSession = deps.sessionStore.get(threadTs);
     if (!existingSession) {
       await args.setTitle(message.text).catch((error: unknown) => {
@@ -188,7 +227,7 @@ export function createAssistantUserMessageHandler(
     }
 
     await handleThreadConversation(
-      args.client as unknown as SlackWebClientLike,
+      client,
       {
         channel: channelId,
         team: teamId,
@@ -578,6 +617,127 @@ function truncateForMemory(value: string, maxLength = 500): string {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function createBotUserIdResolver(
+  logger: AppLogger,
+): (client: SlackWebClientLike) => Promise<string | undefined> {
+  let cachedBotUserId: Promise<string | undefined> | undefined;
+
+  return async (client: SlackWebClientLike): Promise<string | undefined> => {
+    if (!cachedBotUserId) {
+      cachedBotUserId = resolveBotUserId(client, logger);
+    }
+
+    return cachedBotUserId;
+  };
+}
+
+async function resolveBotUserId(
+  client: SlackWebClientLike,
+  logger: AppLogger,
+): Promise<string | undefined> {
+  if (!client.auth?.test) {
+    runtimeWarn(logger, 'Slack client does not expose auth.test; mention filtering disabled');
+    return undefined;
+  }
+
+  try {
+    const identity = await client.auth.test();
+    const botUserId = identity.user_id?.trim();
+    if (!botUserId) {
+      runtimeWarn(
+        logger,
+        'Slack auth.test did not return a bot user id; mention filtering disabled',
+      );
+      return undefined;
+    }
+
+    return botUserId;
+  } catch (error) {
+    runtimeWarn(logger, 'Failed to resolve bot user id for mention filtering: %s', String(error));
+    return undefined;
+  }
+}
+
+function shouldSkipBotAuthoredMessage(
+  logger: AppLogger,
+  logLabel: string,
+  threadTs: string,
+  message: {
+    bot_id?: string | undefined;
+    subtype?: string | undefined;
+    text: string;
+    user?: string | undefined;
+  },
+  botUserId: string | undefined,
+): boolean {
+  if (message.subtype && message.subtype !== 'bot_message') {
+    return true;
+  }
+
+  const botAuthored =
+    Boolean(message.bot_id) || message.subtype === 'bot_message' || message.user === botUserId;
+  if (!botAuthored) {
+    return false;
+  }
+
+  if (mentionsUser(message.text, botUserId)) {
+    return false;
+  }
+
+  runtimeInfo(
+    logger,
+    'Skipping %s for thread %s because bot-authored message does not mention this app',
+    logLabel,
+    threadTs,
+  );
+  return true;
+}
+
+function shouldSkipMessageForForeignMention(
+  logger: AppLogger,
+  logLabel: string,
+  threadTs: string,
+  messageText: string,
+  botUserId: string | undefined,
+): boolean {
+  if (!messageText.includes('<@') || !botUserId) {
+    return false;
+  }
+
+  const foreignMentionedUserId = getForeignMentionedUserId(messageText, botUserId);
+  if (!foreignMentionedUserId) {
+    return false;
+  }
+
+  runtimeInfo(
+    logger,
+    'Skipping %s for thread %s because mention targets another user: %s',
+    logLabel,
+    threadTs,
+    foreignMentionedUserId,
+  );
+  return true;
+}
+
+function getForeignMentionedUserId(messageText: string, botUserId: string): string | undefined {
+  for (const match of messageText.matchAll(SLACK_USER_MENTION_PATTERN)) {
+    const mentionedUserId = match[1]?.trim();
+    if (mentionedUserId && mentionedUserId !== botUserId) {
+      return mentionedUserId;
+    }
+  }
+
+  return undefined;
+}
+
+function mentionsUser(messageText: string, userId: string | undefined): boolean {
+  if (!userId) {
+    return false;
+  }
+
+  return messageText.includes(`<@${userId}>`);
 }
 
 function resolveWorkspaceForConversation(
