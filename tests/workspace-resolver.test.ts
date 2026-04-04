@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { WorkspaceResolver } from '../src/workspace/resolver.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 describe('WorkspaceResolver', () => {
   it('discovers repositories and resolves repo names from text', () => {

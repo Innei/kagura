@@ -1,4 +1,5 @@
-import type { AppLogger } from '../../logger/index.js';
+import type { AppLogger } from '~/logger/index.js';
+
 import type { SlackWebClientLike } from '../types.js';
 import { type NormalizedThreadMessage, normalizeThreadMessages } from './message-normalizer.js';
 

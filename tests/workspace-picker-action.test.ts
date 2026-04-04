@@ -4,21 +4,21 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeAgentSdkExecutor } from '../src/claude/executor/anthropic-agent-sdk.js';
-import type { AppLogger } from '../src/logger/index.js';
-import type { MemoryStore } from '../src/memory/types.js';
-import type { SessionRecord, SessionStore } from '../src/session/types.js';
-import { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
+import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import {
   createAppMentionHandler,
   WORKSPACE_PICKER_ACTION_ID,
-} from '../src/slack/ingress/app-mention-handler.js';
-import { WORKSPACE_MODAL_CALLBACK_ID } from '../src/slack/interactions/workspace-message-action.js';
-import { createWorkspacePickerActionHandler } from '../src/slack/interactions/workspace-picker-action.js';
-import { encodeWorkspacePickerButtonValue } from '../src/slack/interactions/workspace-picker-payload.js';
-import { SlackRenderer } from '../src/slack/render/slack-renderer.js';
-import type { SlackBlock, SlackWebClientLike } from '../src/slack/types.js';
-import { WorkspaceResolver } from '../src/workspace/resolver.js';
+} from '~/slack/ingress/app-mention-handler.js';
+import { WORKSPACE_MODAL_CALLBACK_ID } from '~/slack/interactions/workspace-message-action.js';
+import { createWorkspacePickerActionHandler } from '~/slack/interactions/workspace-picker-action.js';
+import { encodeWorkspacePickerButtonValue } from '~/slack/interactions/workspace-picker-payload.js';
+import { SlackRenderer } from '~/slack/render/slack-renderer.js';
+import type { SlackBlock, SlackWebClientLike } from '~/slack/types.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 const sdkMocks = vi.hoisted(() => ({
   env: (() => {
@@ -71,7 +71,7 @@ describe('Workspace picker action test', () => {
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 3 });
-    const executor = new ClaudeAgentSdkExecutor(logger);
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const deps = {
       claudeExecutor: executor,
       logger,
@@ -101,7 +101,7 @@ describe('Workspace picker action test', () => {
     expect(sdkMocks.query).not.toHaveBeenCalled();
     expect(postMessageCalls).toHaveLength(1);
 
-    const pickerMessage = postMessageCalls[0];
+    const pickerMessage = postMessageCalls[0]!;
     expect(pickerMessage.thread_ts).toBe('1712345678.000100');
     expect(pickerMessage.text).toContain("couldn't tell which repository");
     expect(pickerMessage.text).toContain('org1/my-app');
@@ -113,7 +113,8 @@ describe('Workspace picker action test', () => {
     expect(actionsBlock).toBeDefined();
     expect(actionsBlock!.type).toBe('actions');
 
-    const elements = (actionsBlock as { elements: Array<Record<string, unknown>> }).elements;
+    const elements = (actionsBlock as unknown as { elements: Array<Record<string, unknown>> })
+      .elements;
     expect(elements).toHaveLength(1);
     expect(elements[0]).toMatchObject({
       action_id: WORKSPACE_PICKER_ACTION_ID,
@@ -147,12 +148,13 @@ describe('Workspace picker action test', () => {
 
     expect(ackCalls).toContain('picker');
     expect(viewOpenCalls).toHaveLength(1);
-    expect(viewOpenCalls[0].trigger_id).toBe('trigger-picker-1');
-    expect((viewOpenCalls[0].view as { callback_id?: string }).callback_id).toBe(
+    const openedPickerView = viewOpenCalls[0]!;
+    expect(openedPickerView.trigger_id).toBe('trigger-picker-1');
+    expect((openedPickerView.view as { callback_id?: string }).callback_id).toBe(
       WORKSPACE_MODAL_CALLBACK_ID,
     );
 
-    const modalView = viewOpenCalls[0].view as { blocks?: unknown[]; private_metadata?: string };
+    const modalView = openedPickerView.view as { blocks?: unknown[]; private_metadata?: string };
     expect(modalView.private_metadata).toBeDefined();
     const metadata = JSON.parse(modalView.private_metadata!);
     expect(metadata.channelId).toBe('C123');
@@ -182,7 +184,7 @@ describe('Workspace picker action test', () => {
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger);
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
       claudeExecutor: executor,
       logger,
@@ -208,7 +210,9 @@ describe('Workspace picker action test', () => {
 
     expect(sdkMocks.query).toHaveBeenCalledTimes(1);
 
-    const queryArgs = sdkMocks.query.mock.calls[0][0];
+    const firstQueryCall = sdkMocks.query.mock.calls[0];
+    expect(firstQueryCall).toBeDefined();
+    const queryArgs = firstQueryCall![0] as { options: { cwd?: string } };
     expect(queryArgs.options.cwd).toBeUndefined();
 
     const replyMessages = postMessageCalls.filter((msg) => !msg.text.includes("couldn't"));
@@ -237,6 +241,7 @@ function createMemorySessionStore(): SessionStore {
   const records = new Map<string, SessionRecord>();
 
   return {
+    countAll: () => records.size,
     get: (threadTs) => {
       const existing = records.get(threadTs);
       return existing ? { ...existing } : undefined;
@@ -266,12 +271,16 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    countAll: () => 0,
     delete: () => false,
+    deleteAll: () => 0,
     listRecent: () => [],
+    listForContext: () => ({ global: [], workspace: [] }),
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
       ...input,
+      scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),
       id: 'memory-1',
     }),

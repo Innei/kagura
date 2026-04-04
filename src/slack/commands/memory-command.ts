@@ -15,8 +15,12 @@ export function handleMemoryCommand(
       text: [
         '*Memory Commands*',
         '',
+        '• `/memory list global` — show recent global memories',
         '• `/memory list <repo>` — show recent memories for a repo',
+        '• `/memory count` — show total memory count',
+        '• `/memory count global` — show global memory count',
         '• `/memory count <repo>` — show memory count for a repo',
+        '• `/memory clear global` — clear all global memories',
         '• `/memory clear <repo>` — clear all memories for a repo',
       ].join('\n'),
     };
@@ -38,11 +42,34 @@ export function handleMemoryCommand(
 }
 
 function listMemories(repoQuery: string, deps: SlashCommandDependencies): SlashCommandResponse {
+  const trimmed = repoQuery.trim().toLowerCase();
+
+  if (trimmed === 'global' || trimmed === '') {
+    const memories = deps.memoryStore.listRecent(undefined, MAX_DISPLAY_MEMORIES);
+    if (memories.length === 0) {
+      return {
+        response_type: 'ephemeral',
+        text: 'No global memories found.',
+      };
+    }
+
+    const lines = [
+      `*Recent Global Memories* (${memories.length})`,
+      '',
+      ...memories.map((m) => {
+        const truncated = m.content.length > 120 ? `${m.content.slice(0, 117)}...` : m.content;
+        return `• [${m.category}] ${truncated}`;
+      }),
+    ];
+
+    return { response_type: 'ephemeral', text: lines.join('\n') };
+  }
+
   const repoId = resolveRepoId(repoQuery, deps);
   if (!repoId) {
     return {
       response_type: 'ephemeral',
-      text: `No workspace found matching \`${repoQuery}\`. Use \`/workspace list\` to see available repos.`,
+      text: `No workspace found matching \`${repoQuery}\`. Use \`/workspace list\` to see available repos, or \`/memory list global\` for global memories.`,
     };
   }
 
@@ -71,6 +98,17 @@ function listMemories(repoQuery: string, deps: SlashCommandDependencies): SlashC
 }
 
 function countMemories(repoQuery: string, deps: SlashCommandDependencies): SlashCommandResponse {
+  const trimmed = repoQuery.trim().toLowerCase();
+
+  if (trimmed === '' || trimmed === 'global') {
+    const total = deps.memoryStore.countAll();
+    const globalCount = deps.memoryStore.listRecent(undefined, 50).length;
+    return {
+      response_type: 'ephemeral',
+      text: `Total memories: *${total}* (global: *${globalCount}*)`,
+    };
+  }
+
   const repoId = resolveRepoId(repoQuery, deps);
   if (!repoId) {
     return {
@@ -87,6 +125,23 @@ function countMemories(repoQuery: string, deps: SlashCommandDependencies): Slash
 }
 
 function clearMemories(repoQuery: string, deps: SlashCommandDependencies): SlashCommandResponse {
+  const trimmed = repoQuery.trim().toLowerCase();
+
+  if (trimmed === 'global') {
+    const deleted = deps.memoryStore.deleteAll(null);
+    return {
+      response_type: 'ephemeral',
+      text: `Cleared *${deleted}* global memories.`,
+    };
+  }
+
+  if (!trimmed) {
+    return {
+      response_type: 'ephemeral',
+      text: 'Please specify a repo or `global`. Example: `/memory clear global` or `/memory clear my-repo`.',
+    };
+  }
+
   const repoId = resolveRepoId(repoQuery, deps);
   if (!repoId) {
     return {
@@ -95,10 +150,10 @@ function clearMemories(repoQuery: string, deps: SlashCommandDependencies): Slash
     };
   }
 
-  const pruned = deps.memoryStore.prune(repoId);
+  const deleted = deps.memoryStore.deleteAll(repoId);
   return {
     response_type: 'ephemeral',
-    text: `Cleared *${pruned}* expired memories for \`${repoId}\`.`,
+    text: `Cleared *${deleted}* memories for \`${repoId}\`.`,
   };
 }
 

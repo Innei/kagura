@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterScenarios, parseArgs, resolveByIds } from '../src/e2e/live/cli-utils.js';
-import type { LiveE2EScenario } from '../src/e2e/live/scenario.js';
+import { filterScenarios, parseArgs, resolveByIds } from '~/e2e/live/cli-utils.js';
+import type { LiveE2EScenario } from '~/e2e/live/scenario.js';
 
 function makeScenario(overrides: Partial<LiveE2EScenario> & { id: string }): LiveE2EScenario {
   return {

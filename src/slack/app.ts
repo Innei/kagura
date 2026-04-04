@@ -1,11 +1,12 @@
 import { App, Assistant } from '@slack/bolt';
 
-import type { ClaudeExecutor } from '../claude/executor/types.js';
-import { env } from '../env/server.js';
-import type { AppLogger } from '../logger/index.js';
-import type { MemoryStore } from '../memory/types.js';
-import type { SessionStore } from '../session/types.js';
-import type { WorkspaceResolver } from '../workspace/resolver.js';
+import type { ClaudeExecutor } from '~/claude/executor/types.js';
+import { env } from '~/env/server.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { SessionStore } from '~/session/types.js';
+import type { WorkspaceResolver } from '~/workspace/resolver.js';
+
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import {

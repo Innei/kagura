@@ -1,8 +1,9 @@
 import { count, eq } from 'drizzle-orm';
 
-import type { AppDatabase } from '../db/index.js';
-import { sessions } from '../db/schema.js';
-import type { AppLogger } from '../logger/index.js';
+import type { AppDatabase } from '~/db/index.js';
+import { sessions } from '~/db/schema.js';
+import type { AppLogger } from '~/logger/index.js';
+
 import type { SessionRecord, SessionStore } from './types.js';
 
 export class SqliteSessionStore implements SessionStore {

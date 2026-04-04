@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ClaudeExecutor } from '../src/claude/executor/types.js';
-import type { AppLogger } from '../src/logger/index.js';
-import type { MemoryStore } from '../src/memory/types.js';
-import type { SessionRecord, SessionStore } from '../src/session/types.js';
-import type { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
-import { createThreadReplyHandler } from '../src/slack/ingress/app-mention-handler.js';
-import type { SlackRenderer } from '../src/slack/render/slack-renderer.js';
-import type { SlackWebClientLike } from '../src/slack/types.js';
-import type { WorkspaceResolver } from '../src/workspace/resolver.js';
+import type { ClaudeExecutor } from '~/claude/executor/types.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
+import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
+import type { SlackWebClientLike } from '~/slack/types.js';
+import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
 describe('thread reply ingress', () => {
   it('ignores thread replies that mention another user instead of the bot', async () => {
@@ -264,12 +264,16 @@ function createMemorySessionStore(records: SessionRecord[] = []): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    countAll: vi.fn().mockReturnValue(0),
     delete: vi.fn().mockReturnValue(false),
+    deleteAll: vi.fn().mockReturnValue(0),
     listRecent: vi.fn().mockReturnValue([]),
+    listForContext: vi.fn().mockReturnValue({ global: [], workspace: [] }),
     prune: vi.fn().mockReturnValue(0),
     pruneAll: vi.fn().mockReturnValue(0),
     save: vi.fn().mockImplementation((input) => ({
       ...input,
+      scope: input.repoId ? 'workspace' : 'global',
       createdAt: new Date().toISOString(),
       id: 'memory-1',
     })),

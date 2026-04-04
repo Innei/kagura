@@ -6,7 +6,7 @@ import type {
   SlackStatusProbeProgressRecord,
   SlackStatusProbeRecord,
   SlackStatusProbeStatusRecord,
-} from '../../slack/render/status-probe.js';
+} from '~/slack/render/status-probe.js';
 
 export class FileSlackStatusProbe implements SlackStatusProbe {
   constructor(private readonly outputPath: string) {}

@@ -4,15 +4,15 @@ import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AppLogger } from '../src/logger/index.js';
-import type { MemoryRecord, MemoryStore } from '../src/memory/types.js';
-import type { SessionRecord, SessionStore } from '../src/session/types.js';
-import { handleMemoryCommand } from '../src/slack/commands/memory-command.js';
-import { handleSessionCommand } from '../src/slack/commands/session-command.js';
-import type { SlashCommandDependencies } from '../src/slack/commands/types.js';
-import { handleUsageCommand } from '../src/slack/commands/usage-command.js';
-import { handleWorkspaceCommand } from '../src/slack/commands/workspace-command.js';
-import { WorkspaceResolver } from '../src/workspace/resolver.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
+import { handleSessionCommand } from '~/slack/commands/session-command.js';
+import type { SlashCommandDependencies } from '~/slack/commands/types.js';
+import { handleUsageCommand } from '~/slack/commands/usage-command.js';
+import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 function createTestLogger(): AppLogger {
   const logger = {
@@ -70,11 +70,49 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
       }
       return false;
     },
+    deleteAll: (repoId?: string | null) => {
+      if (repoId === null) {
+        const before = records.length;
+        const toRemove = records.filter((r) => !r.repoId);
+        for (const r of toRemove) {
+          const idx = records.indexOf(r);
+          if (idx >= 0) records.splice(idx, 1);
+        }
+        return before - records.length;
+      }
+      if (repoId) {
+        const before = records.length;
+        const toRemove = records.filter((r) => r.repoId === repoId);
+        for (const r of toRemove) {
+          const idx = records.indexOf(r);
+          if (idx >= 0) records.splice(idx, 1);
+        }
+        return before - records.length;
+      }
+      const count = records.length;
+      records.length = 0;
+      return count;
+    },
     listRecent: (repoId, limit = 10) =>
       records
-        .filter((r) => r.repoId === repoId)
+        .filter((r) => (repoId ? r.repoId === repoId : !r.repoId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit),
+    listForContext: (repoId, limits) => {
+      const globalLimit = limits?.global ?? 5;
+      const workspaceLimit = limits?.workspace ?? 10;
+      const global = records
+        .filter((r) => !r.repoId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, globalLimit);
+      const workspace = repoId
+        ? records
+            .filter((r) => r.repoId === repoId)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+            .slice(0, workspaceLimit)
+        : [];
+      return { global, workspace };
+    },
     prune: (repoId) => {
       const before = records.length;
       const now = new Date().toISOString();
@@ -91,6 +129,7 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
     save: (input) => {
       const record: MemoryRecord = {
         ...input,
+        scope: input.repoId ? 'workspace' : 'global',
         createdAt: new Date().toISOString(),
         id: `mem-${records.length + 1}`,
       };
@@ -137,6 +176,7 @@ function makeMemory(
     createdAt: new Date().toISOString(),
     id: `mem-${Math.random().toString(36).slice(2)}`,
     repoId,
+    scope: 'workspace',
     ...overrides,
   };
 }

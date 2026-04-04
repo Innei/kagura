@@ -1,4 +1,4 @@
-import { type SlackMessage, SlackMessageSchema } from '../../schemas/slack/message.js';
+import { type SlackMessage, SlackMessageSchema } from '~/schemas/slack/message.js';
 
 export interface NormalizedThreadMessage {
   authorId: string | null;

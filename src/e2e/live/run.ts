@@ -6,9 +6,10 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
-import { createApplication } from '../../application.js';
-import { env } from '../../env/server.js';
-import type { SlackStatusProbeRecord } from '../../slack/render/status-probe.js';
+import { createApplication } from '~/application.js';
+import { env } from '~/env/server.js';
+import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
+
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';

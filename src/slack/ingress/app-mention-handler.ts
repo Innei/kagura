@@ -1,15 +1,16 @@
 import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware } from '@slack/bolt';
 
-import type { ClaudeExecutionEvent, ClaudeExecutor } from '../../claude/executor/types.js';
-import type { AppLogger } from '../../logger/index.js';
-import { redact } from '../../logger/redact.js';
-import type { MemoryStore } from '../../memory/types.js';
-import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
-import { SlackAppMentionEventSchema } from '../../schemas/slack/app-mention-event.js';
-import { SlackMessageSchema } from '../../schemas/slack/message.js';
-import type { SessionRecord, SessionStore } from '../../session/types.js';
-import type { WorkspaceResolver } from '../../workspace/resolver.js';
-import type { ResolvedWorkspace, WorkspaceResolution } from '../../workspace/types.js';
+import type { ClaudeExecutionEvent, ClaudeExecutor } from '~/claude/executor/types.js';
+import type { AppLogger } from '~/logger/index.js';
+import { redact } from '~/logger/redact.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
+import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
+import { SlackMessageSchema } from '~/schemas/slack/message.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import type { WorkspaceResolver } from '~/workspace/resolver.js';
+import type { ResolvedWorkspace, WorkspaceResolution } from '~/workspace/types.js';
+
 import type { SlackThreadContextLoader } from '../context/thread-context-loader.js';
 import { encodeWorkspacePickerButtonValue } from '../interactions/workspace-picker-payload.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
@@ -369,10 +370,9 @@ export async function handleThreadConversation(
     threadContext.messages.length,
   );
 
-  const recentMemories = workspace ? deps.memoryStore.listRecent(workspace.repo.id, 15) : [];
+  const contextMemories = deps.memoryStore.listForContext(workspace?.repo.id);
 
   let lastUiStateKey: string | undefined;
-  let lastAssistantMessage: string | undefined;
   const defaultThinkingUiState = createDefaultThinkingUiState(threadTs);
   const defaultThinkingUiStateKey = JSON.stringify(defaultThinkingUiState);
   const isMeaningfulRuntimeUiState = (state: ClaudeUiState): boolean => {
@@ -433,7 +433,6 @@ export async function handleThreadConversation(
   const sink = {
     onEvent: async (event: ClaudeExecutionEvent): Promise<void> => {
       if (event.type === 'assistant-message') {
-        lastAssistantMessage = event.text;
         await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text);
         if (progressMessageActive && progressMessageTs) {
           await deps.renderer
@@ -503,14 +502,6 @@ export async function handleThreadConversation(
       }
 
       if (event.phase === 'completed') {
-        if (workspace && lastAssistantMessage?.trim()) {
-          deps.memoryStore.save({
-            repoId: workspace.repo.id,
-            threadTs,
-            category: 'task_completed',
-            content: truncateForMemory(lastAssistantMessage),
-          });
-        }
         return;
       }
 
@@ -541,7 +532,7 @@ export async function handleThreadConversation(
         userId: message.user,
         mentionText: message.text,
         threadContext,
-        recentMemories,
+        contextMemories,
         ...(workspace
           ? {
               workspaceLabel: workspace.workspaceLabel,
@@ -609,14 +600,6 @@ function createDefaultThinkingUiState(threadTs: string): ClaudeUiState {
     ],
     clear: false,
   };
-}
-
-function truncateForMemory(value: string, maxLength = 500): string {
-  const normalized = value.trim().replaceAll(/\s+/g, ' ');
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function createBotUserIdResolver(

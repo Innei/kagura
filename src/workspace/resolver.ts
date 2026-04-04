@@ -418,7 +418,7 @@ function matchRepoReference(
     return undefined;
   }
 
-  const boundaryPattern = `(^|[^a-z0-9._/-])${escapeRegExp(normalizedReference)}(?:/(?<suffix>[a-z0-9._/-]+))?(?=$|[^a-z0-9._/-])`;
+  const boundaryPattern = `(^|[^a-z0-9_/-])${escapeRegExp(normalizedReference)}(?:/(?<suffix>[a-z0-9_/-]+))?(?=$|[^a-z0-9_/-])`;
   const match = normalizedText.match(new RegExp(boundaryPattern));
   if (!match) {
     return undefined;
@@ -434,7 +434,7 @@ function matchesWholeToken(normalizedText: string, reference: string): boolean {
     return false;
   }
 
-  const boundaryPattern = `(^|[^a-z0-9._/-])${escapeRegExp(normalizedReference)}(?=$|[^a-z0-9._/-])`;
+  const boundaryPattern = `(^|[^a-z0-9_/-])${escapeRegExp(normalizedReference)}(?=$|[^a-z0-9_/-])`;
   return new RegExp(boundaryPattern).test(normalizedText);
 }
 

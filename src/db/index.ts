@@ -28,7 +28,7 @@ export function createDatabase(dbPath: string) {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS memories (
       id TEXT PRIMARY KEY,
-      repo_id TEXT NOT NULL,
+      repo_id TEXT,
       thread_ts TEXT,
       category TEXT NOT NULL,
       content TEXT NOT NULL,
@@ -37,6 +37,8 @@ export function createDatabase(dbPath: string) {
       expires_at TEXT
     )
   `);
+
+  migrateMemoriesRepoIdNullable(sqlite);
 
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');
   ensureSessionsColumn(sqlite, 'workspace_repo_path', 'TEXT');
@@ -61,4 +63,31 @@ function ensureSessionsColumn(
   }
 
   sqlite.exec(`ALTER TABLE sessions ADD COLUMN ${columnName} ${columnDefinition}`);
+}
+
+function migrateMemoriesRepoIdNullable(sqlite: Database.Database): void {
+  const columns = sqlite.prepare("PRAGMA table_info('memories')").all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  const repoIdCol = columns.find((c) => c.name === 'repo_id');
+  if (!repoIdCol || repoIdCol.notnull === 0) {
+    return;
+  }
+
+  sqlite.exec(`
+    ALTER TABLE memories RENAME TO memories_old;
+    CREATE TABLE memories (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT,
+      thread_ts TEXT,
+      category TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT
+    );
+    INSERT INTO memories SELECT * FROM memories_old;
+    DROP TABLE memories_old;
+  `);
 }

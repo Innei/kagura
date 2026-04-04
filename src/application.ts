@@ -3,16 +3,16 @@ import path from 'node:path';
 
 import type { App } from '@slack/bolt';
 
-import { ClaudeAgentSdkExecutor } from './claude/executor/anthropic-agent-sdk.js';
-import { createDatabase } from './db/index.js';
-import { FileSlackStatusProbe } from './e2e/live/file-slack-status-probe.js';
-import { env, validateLiveE2EEnv } from './env/server.js';
-import { type AppLogger, createRootLogger } from './logger/index.js';
-import { SqliteMemoryStore } from './memory/memory-store.js';
-import { SqliteSessionStore } from './session/sqlite-session-store.js';
-import { createSlackApp } from './slack/app.js';
-import { syncSlashCommands } from './slack/commands/manifest-sync.js';
-import { WorkspaceResolver } from './workspace/resolver.js';
+import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import { createDatabase } from '~/db/index.js';
+import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
+import { env, validateLiveE2EEnv } from '~/env/server.js';
+import { type AppLogger, createRootLogger } from '~/logger/index.js';
+import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
+import { createSlackApp } from '~/slack/app.js';
+import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
   readonly logger: AppLogger;

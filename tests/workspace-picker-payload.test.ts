@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeWorkspacePickerButtonValue,
   encodeWorkspacePickerButtonValue,
-} from '../src/slack/interactions/workspace-picker-payload.js';
+} from '~/slack/interactions/workspace-picker-payload.js';
 
 describe('workspace-picker-payload', () => {
   it('round-trips short text', () => {

@@ -1,4 +1,4 @@
-import { env } from '../env/server.js';
+import { env } from '~/env/server.js';
 
 const SECRET_VALUES = [env.SLACK_BOT_TOKEN, env.SLACK_APP_TOKEN, env.SLACK_SIGNING_SECRET].filter(
   (v): v is string => typeof v === 'string' && v.length >= 8,

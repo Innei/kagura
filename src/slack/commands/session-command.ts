@@ -1,4 +1,5 @@
-import { getSessionState } from '../../session/types.js';
+import { getSessionState } from '~/session/types.js';
+
 import type { SlashCommandDependencies, SlashCommandResponse } from './types.js';
 
 export function handleSessionCommand(

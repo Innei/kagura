@@ -18,7 +18,7 @@ export const sessions = sqliteTable('sessions', {
 
 export const memories = sqliteTable('memories', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id'),
   threadTs: text('thread_ts'),
   category: text('category', {
     enum: ['task_completed', 'decision', 'context', 'observation'],

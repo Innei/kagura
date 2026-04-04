@@ -1,11 +1,11 @@
-import type { MemoryRecord } from '../../memory/types.js';
-import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
-import type { NormalizedThreadContext } from '../../slack/context/thread-context-loader.js';
+import type { ContextMemories } from '~/memory/types.js';
+import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
+import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
 
 export interface ClaudeExecutionRequest {
   channelId: string;
+  contextMemories?: ContextMemories;
   mentionText: string;
-  recentMemories?: MemoryRecord[];
   resumeSessionId?: string;
   threadContext: NormalizedThreadContext;
   threadTs: string;

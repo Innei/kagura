@@ -2,6 +2,8 @@ export const MEMORY_CATEGORIES = ['task_completed', 'decision', 'context', 'obse
 
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
+export type MemoryScope = 'global' | 'workspace';
+
 export interface MemoryRecord {
   category: MemoryCategory;
   content: string;
@@ -9,7 +11,8 @@ export interface MemoryRecord {
   expiresAt?: string | undefined;
   id: string;
   metadata?: Record<string, unknown> | undefined;
-  repoId: string;
+  repoId?: string | undefined;
+  scope: MemoryScope;
   threadTs?: string | undefined;
 }
 
@@ -18,7 +21,7 @@ export interface SaveMemoryInput {
   content: string;
   expiresAt?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
-  repoId: string;
+  repoId?: string | undefined;
   threadTs?: string | undefined;
 }
 
@@ -28,12 +31,22 @@ export interface MemorySearchOptions {
   query?: string | undefined;
 }
 
+export interface ContextMemories {
+  global: MemoryRecord[];
+  workspace: MemoryRecord[];
+}
+
 export interface MemoryStore {
   countAll: (repoId?: string) => number;
   delete: (id: string) => boolean;
-  listRecent: (repoId: string, limit?: number) => MemoryRecord[];
-  prune: (repoId: string) => number;
+  deleteAll: (repoId?: string | null) => number;
+  listForContext: (
+    repoId: string | undefined,
+    limits?: { global?: number; workspace?: number },
+  ) => ContextMemories;
+  listRecent: (repoId: string | undefined, limit?: number) => MemoryRecord[];
+  prune: (repoId?: string | null) => number;
   pruneAll: () => number;
   save: (input: SaveMemoryInput) => MemoryRecord;
-  search: (repoId: string, options?: MemorySearchOptions) => MemoryRecord[];
+  search: (repoId: string | undefined, options?: MemorySearchOptions) => MemoryRecord[];
 }

@@ -18,16 +18,17 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import { createSdkMcpServer, query, tool } from '@anthropic-ai/claude-agent-sdk';
 
-import { env } from '../../env/server.js';
-import type { AppLogger } from '../../logger/index.js';
-import { redact } from '../../logger/redact.js';
-import type { MemoryStore } from '../../memory/types.js';
+import { env } from '~/env/server.js';
+import type { AppLogger } from '~/logger/index.js';
+import { redact } from '~/logger/redact.js';
+import type { MemoryStore } from '~/memory/types.js';
 import {
   RecallMemoryToolInputSchema,
   SaveMemoryToolInputSchema,
-} from '../../schemas/claude/memory-tools.js';
-import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
-import { ClaudeUiStateToolInputShape } from '../../schemas/claude/publish-state.js';
+} from '~/schemas/claude/memory-tools.js';
+import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
+import { ClaudeUiStateToolInputShape } from '~/schemas/claude/publish-state.js';
+
 import {
   parseSlackUiStateToolInput,
   SLACK_UI_STATE_TOOL_DESCRIPTION,
@@ -488,29 +489,37 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
           RECALL_MEMORY_TOOL_DESCRIPTION,
           RecallMemoryToolInputSchema.shape,
           async (args) => {
-            if (!request.workspaceRepoId) {
-              return {
-                content: [
-                  {
-                    type: 'text' as const,
-                    text: 'No workspace is set for this conversation. Memory recall requires a workspace.',
-                  },
-                ],
-              };
-            }
-
             try {
               const input = parseRecallMemoryToolInput(args);
-              const records = this.memoryStore.search(request.workspaceRepoId, input);
+              const resolvedScope =
+                input.scope ?? (request.workspaceRepoId ? 'workspace' : 'global');
+              const searchRepoId =
+                resolvedScope === 'workspace' ? request.workspaceRepoId : undefined;
+
+              if (resolvedScope === 'workspace' && !request.workspaceRepoId) {
+                return {
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: 'No workspace is set. Use scope "global" to search global memories, or mention a repository to set a workspace.',
+                    },
+                  ],
+                };
+              }
+
+              const records = this.memoryStore.search(searchRepoId, input);
               if (records.length === 0) {
                 return {
-                  content: [{ type: 'text' as const, text: 'No matching memories found.' }],
+                  content: [
+                    { type: 'text' as const, text: `No matching ${resolvedScope} memories found.` },
+                  ],
                 };
               }
 
               const body = records
                 .map((record, index) => {
-                  const header = `${index + 1}. [${record.category}] ${record.createdAt}`;
+                  const scopeLabel = record.scope === 'global' ? '🌐' : '📁';
+                  const header = `${index + 1}. ${scopeLabel} [${record.category}] ${record.createdAt}`;
                   const metadata = record.metadata
                     ? `\n   metadata: ${JSON.stringify(record.metadata)}`
                     : '';
@@ -536,21 +545,25 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
           SAVE_MEMORY_TOOL_DESCRIPTION,
           SaveMemoryToolInputSchema.shape,
           async (args) => {
-            if (!request.workspaceRepoId) {
-              return {
-                content: [
-                  {
-                    type: 'text' as const,
-                    text: 'No workspace is set for this conversation. Memory save requires a workspace.',
-                  },
-                ],
-              };
-            }
-
             try {
               const input = parseSaveMemoryToolInput(args);
+              const resolvedScope =
+                input.scope ?? (request.workspaceRepoId ? 'workspace' : 'global');
+              const repoId = resolvedScope === 'workspace' ? request.workspaceRepoId : undefined;
+
+              if (resolvedScope === 'workspace' && !request.workspaceRepoId) {
+                return {
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: 'No workspace is set. Use scope "global" to save a global memory, or mention a repository to set a workspace.',
+                    },
+                  ],
+                };
+              }
+
               const saved = this.memoryStore.save({
-                repoId: request.workspaceRepoId,
+                repoId,
                 threadTs: request.threadTs,
                 category: input.category,
                 content: input.content,
@@ -559,7 +572,9 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
               });
 
               return {
-                content: [{ type: 'text' as const, text: `Memory saved: ${saved.id}` }],
+                content: [
+                  { type: 'text' as const, text: `Memory saved (${resolvedScope}): ${saved.id}` },
+                ],
               };
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
@@ -626,29 +641,46 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       ...this.buildMemoryContext(request),
       'Available tools:',
       `- ${SLACK_UI_STATE_TOOL_NAME}: publish status/loading state updates to Slack UI.`,
-      `- ${RECALL_MEMORY_TOOL_NAME}: recall prior workspace memories from previous sessions.`,
-      `- ${SAVE_MEMORY_TOOL_NAME}: save important decisions/results for future sessions.`,
+      `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
+      `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       '',
-      'Use save_memory when you complete significant work that future sessions should remember.',
+      'CONVERSATION MEMORY — CRITICAL INSTRUCTIONS:',
+      'Before you finish responding to the user, you MUST call save_memory to save a brief conversation summary.',
+      'The summary should capture: what the user asked, what you did or concluded, and any key decisions.',
+      'Keep it concise (1-3 sentences). Use category "context" for conversation summaries.',
+      'If no workspace is set, save with scope "global". If a workspace is set, decide: use "workspace" for project-specific context, "global" for cross-project knowledge or user preferences.',
+      'This is how you maintain continuity across conversations — without it, the next session starts from zero.',
     ].join('\n');
   }
 
   private buildMemoryContext(request: ClaudeExecutionRequest): string[] {
-    if (!request.recentMemories || request.recentMemories.length === 0) {
-      return [];
+    const ctx = request.contextMemories;
+    if (!ctx || (ctx.global.length === 0 && ctx.workspace.length === 0)) {
+      return ['No memories from previous sessions.', ''];
     }
 
-    const lines = request.recentMemories.map(
-      (memory, index) =>
-        `[${index + 1}] (${memory.category}, ${memory.createdAt}) ${memory.content}`,
-    );
+    const lines: string[] = [];
 
-    return [
-      '--- Workspace Memory (from previous sessions) ---',
-      ...lines,
-      '--- End Workspace Memory ---',
-      '',
-    ];
+    if (ctx.global.length > 0) {
+      lines.push('--- Global Memory (across all workspaces) ---');
+      lines.push(
+        ...ctx.global.map((m, i) => `[${i + 1}] (${m.category}, ${m.createdAt}) ${m.content}`),
+      );
+      lines.push('--- End Global Memory ---');
+      lines.push('');
+    }
+
+    if (ctx.workspace.length > 0) {
+      const label = request.workspaceRepoId ?? 'unknown';
+      lines.push(`--- Workspace Memory: ${label} ---`);
+      lines.push(
+        ...ctx.workspace.map((m, i) => `[${i + 1}] (${m.category}, ${m.createdAt}) ${m.content}`),
+      );
+      lines.push(`--- End Workspace Memory ---`);
+      lines.push('');
+    }
+
+    return lines;
   }
 
   private createRuntimeUiStateTracker(): RuntimeUiStateTracker {

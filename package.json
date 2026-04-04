@@ -5,7 +5,7 @@
   "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsdown",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -15,7 +15,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
@@ -52,6 +52,7 @@
     "prettier-plugin-sh": "^0.18.0",
     "prettier-plugin-sort-json": "^4.2.0",
     "simple-git-hooks": "^2.13.1",
+    "tsdown": "0.21.7",
     "tsx": "4.21.0",
     "typescript": "^6.0.2",
     "vitest": "4.1.2"

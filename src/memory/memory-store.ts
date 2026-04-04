@@ -2,13 +2,22 @@ import { randomUUID } from 'node:crypto';
 
 import { and, count, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 
-import type { AppDatabase } from '../db/index.js';
-import { memories } from '../db/schema.js';
-import type { AppLogger } from '../logger/index.js';
-import type { MemoryRecord, MemorySearchOptions, MemoryStore, SaveMemoryInput } from './types.js';
+import type { AppDatabase } from '~/db/index.js';
+import { memories } from '~/db/schema.js';
+import type { AppLogger } from '~/logger/index.js';
+
+import type {
+  ContextMemories,
+  MemoryRecord,
+  MemorySearchOptions,
+  MemoryStore,
+  SaveMemoryInput,
+} from './types.js';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
+const DEFAULT_GLOBAL_LIMIT = 5;
+const DEFAULT_WORKSPACE_LIMIT = 10;
 
 export class SqliteMemoryStore implements MemoryStore {
   constructor(
@@ -37,7 +46,7 @@ export class SqliteMemoryStore implements MemoryStore {
       .insert(memories)
       .values({
         id,
-        repoId: input.repoId,
+        repoId: input.repoId ?? null,
         threadTs: input.threadTs ?? null,
         category: input.category,
         content: input.content,
@@ -47,11 +56,13 @@ export class SqliteMemoryStore implements MemoryStore {
       })
       .run();
 
-    this.logger.debug('Saved memory record %s for repo %s', id, input.repoId);
+    const scope = input.repoId ? 'workspace' : 'global';
+    this.logger.debug('Saved %s memory record %s (repo: %s)', scope, id, input.repoId ?? 'global');
 
     return {
       id,
-      repoId: input.repoId,
+      scope,
+      ...(input.repoId ? { repoId: input.repoId } : {}),
       ...(input.threadTs ? { threadTs: input.threadTs } : {}),
       category: input.category,
       content: input.content,
@@ -61,14 +72,16 @@ export class SqliteMemoryStore implements MemoryStore {
     };
   }
 
-  search(repoId: string, options: MemorySearchOptions = {}): MemoryRecord[] {
+  search(repoId: string | undefined, options: MemorySearchOptions = {}): MemoryRecord[] {
     const nowIso = new Date().toISOString();
     const safeLimit = normalizeLimit(options.limit);
     const query = options.query?.trim();
     const escapedQuery = query ? escapeLike(query.toLowerCase()) : undefined;
 
+    const repoCondition = repoId ? eq(memories.repoId, repoId) : isNull(memories.repoId);
+
     const conditions: Array<Parameters<typeof and>[number]> = [
-      eq(memories.repoId, repoId),
+      repoCondition,
       or(isNull(memories.expiresAt), gt(memories.expiresAt, nowIso)),
       ...(options.category ? [eq(memories.category, options.category)] : []),
       ...(escapedQuery
@@ -87,8 +100,21 @@ export class SqliteMemoryStore implements MemoryStore {
     return rows.map((row) => rowToRecord(row));
   }
 
-  listRecent(repoId: string, limit = DEFAULT_LIMIT): MemoryRecord[] {
+  listRecent(repoId: string | undefined, limit = DEFAULT_LIMIT): MemoryRecord[] {
     return this.search(repoId, { limit });
+  }
+
+  listForContext(
+    repoId: string | undefined,
+    limits?: { global?: number; workspace?: number },
+  ): ContextMemories {
+    const globalLimit = limits?.global ?? DEFAULT_GLOBAL_LIMIT;
+    const workspaceLimit = limits?.workspace ?? DEFAULT_WORKSPACE_LIMIT;
+
+    const global = this.search(undefined, { limit: globalLimit });
+    const workspace = repoId ? this.search(repoId, { limit: workspaceLimit }) : [];
+
+    return { global, workspace };
   }
 
   delete(id: string): boolean {
@@ -96,16 +122,53 @@ export class SqliteMemoryStore implements MemoryStore {
     return result.changes > 0;
   }
 
-  prune(repoId: string): number {
-    const nowIso = new Date().toISOString();
-    const result = this.db
-      .delete(memories)
-      .where(and(eq(memories.repoId, repoId), lte(memories.expiresAt, nowIso)))
-      .run();
+  deleteAll(repoId?: string | null): number {
+    if (repoId === null) {
+      const result = this.db.delete(memories).where(isNull(memories.repoId)).run();
+      if (result.changes > 0) {
+        this.logger.debug('Deleted %d global memory records', result.changes);
+      }
+      return result.changes;
+    }
+
+    if (repoId) {
+      const result = this.db.delete(memories).where(eq(memories.repoId, repoId)).run();
+      if (result.changes > 0) {
+        this.logger.debug('Deleted %d memory records for repo %s', result.changes, repoId);
+      }
+      return result.changes;
+    }
+
+    const result = this.db.delete(memories).run();
     if (result.changes > 0) {
-      this.logger.debug('Pruned %d expired memory records for repo %s', result.changes, repoId);
+      this.logger.debug('Deleted all %d memory records', result.changes);
     }
     return result.changes;
+  }
+
+  prune(repoId?: string | null): number {
+    const nowIso = new Date().toISOString();
+
+    if (repoId === null) {
+      const result = this.db
+        .delete(memories)
+        .where(and(isNull(memories.repoId), lte(memories.expiresAt, nowIso)))
+        .run();
+      return result.changes;
+    }
+
+    if (repoId) {
+      const result = this.db
+        .delete(memories)
+        .where(and(eq(memories.repoId, repoId), lte(memories.expiresAt, nowIso)))
+        .run();
+      if (result.changes > 0) {
+        this.logger.debug('Pruned %d expired memory records for repo %s', result.changes, repoId);
+      }
+      return result.changes;
+    }
+
+    return this.pruneAll();
   }
 
   pruneAll(): number {
@@ -133,7 +196,8 @@ function rowToRecord(row: typeof memories.$inferSelect): MemoryRecord {
   const parsedMetadata = row.metadata ? parseMetadata(row.metadata) : undefined;
   return {
     id: row.id,
-    repoId: row.repoId,
+    scope: row.repoId ? 'workspace' : 'global',
+    ...(row.repoId ? { repoId: row.repoId } : {}),
     ...(row.threadTs ? { threadTs: row.threadTs } : {}),
     category: row.category,
     content: row.content,

@@ -4,15 +4,15 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeAgentSdkExecutor } from '../src/claude/executor/anthropic-agent-sdk.js';
-import type { AppLogger } from '../src/logger/index.js';
-import type { MemoryStore } from '../src/memory/types.js';
-import type { SessionRecord, SessionStore } from '../src/session/types.js';
-import { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
-import { createAppMentionHandler } from '../src/slack/ingress/app-mention-handler.js';
-import { SlackRenderer } from '../src/slack/render/slack-renderer.js';
-import type { SlackBlock, SlackWebClientLike } from '../src/slack/types.js';
-import { WorkspaceResolver } from '../src/workspace/resolver.js';
+import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createAppMentionHandler } from '~/slack/ingress/app-mention-handler.js';
+import { SlackRenderer } from '~/slack/render/slack-renderer.js';
+import type { SlackBlock, SlackWebClientLike } from '~/slack/types.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 const sdkMocks = vi.hoisted(() => ({
   env: (() => {
@@ -63,7 +63,7 @@ describe('Slack loading status test', () => {
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger);
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
       claudeExecutor: executor,
       logger,
@@ -76,105 +76,106 @@ describe('Slack loading status test', () => {
     const { client, deleteCalls, postMessageCalls, reactionCalls, statusCalls, updateCalls } =
       createSlackClientFixture({ threadTs });
 
-    sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
-      createMessageStream([
-        {
-          type: 'system',
-          subtype: 'init',
-          cwd: repoPath,
-          model: 'claude-sonnet-test',
-          session_id: 'session-1',
-        },
-        {
-          type: 'system',
-          subtype: 'session_state_changed',
-          state: 'running',
-        },
-        {
-          type: 'system',
-          subtype: 'task_started',
-          task_id: 'task-1',
-          description: 'Inspect the Slack loading flow',
-        },
-        {
-          type: 'system',
-          subtype: 'task_progress',
-          task_id: 'task-1',
-          description: 'Inspect the Slack loading flow',
-          last_tool_name: 'ReadFile',
-          summary: 'Inspecting Slack renderer status handling',
-          usage: {
-            duration_ms: 900,
-            tool_uses: 1,
-            total_tokens: 42,
+    sdkMocks.query.mockImplementation(
+      (_request: { prompt: string; options: Record<string, unknown> }) =>
+        createMessageStream([
+          {
+            type: 'system',
+            subtype: 'init',
+            cwd: repoPath,
+            model: 'claude-sonnet-test',
+            session_id: 'session-1',
           },
-        },
-        {
-          type: 'stream_event',
-          event: {
-            type: 'content_block_start',
-            index: 0,
-            content_block: {
-              type: 'tool_use',
-              name: 'ReadFile',
+          {
+            type: 'system',
+            subtype: 'session_state_changed',
+            state: 'running',
+          },
+          {
+            type: 'system',
+            subtype: 'task_started',
+            task_id: 'task-1',
+            description: 'Inspect the Slack loading flow',
+          },
+          {
+            type: 'system',
+            subtype: 'task_progress',
+            task_id: 'task-1',
+            description: 'Inspect the Slack loading flow',
+            last_tool_name: 'ReadFile',
+            summary: 'Inspecting Slack renderer status handling',
+            usage: {
+              duration_ms: 900,
+              tool_uses: 1,
+              total_tokens: 42,
             },
           },
-          parent_tool_use_id: null,
-          session_id: 'session-1',
-          uuid: 'event-1',
-        },
-        {
-          type: 'stream_event',
-          event: {
-            type: 'content_block_delta',
-            index: 0,
-            delta: {
-              type: 'input_json_delta',
-              partial_json:
-                '{"path":"/Users/innei/git/innei-repo/slack-cc-bot/src/slack/render/slack-renderer.ts"}',
+          {
+            type: 'stream_event',
+            event: {
+              type: 'content_block_start',
+              index: 0,
+              content_block: {
+                type: 'tool_use',
+                name: 'ReadFile',
+              },
             },
+            parent_tool_use_id: null,
+            session_id: 'session-1',
+            uuid: 'event-1',
           },
-          parent_tool_use_id: null,
-          session_id: 'session-1',
-          uuid: 'event-2',
-        },
-        {
-          type: 'tool_progress',
-          elapsed_time_seconds: 1.2,
-          parent_tool_use_id: null,
-          session_id: 'session-1',
-          task_id: 'task-1',
-          tool_name: 'ReadFile',
-          tool_use_id: 'tool-1',
-          uuid: 'tool-progress-1',
-        },
-        {
-          type: 'stream_event',
-          event: {
-            type: 'content_block_stop',
-            index: 0,
+          {
+            type: 'stream_event',
+            event: {
+              type: 'content_block_delta',
+              index: 0,
+              delta: {
+                type: 'input_json_delta',
+                partial_json:
+                  '{"path":"/Users/innei/git/innei-repo/slack-cc-bot/src/slack/render/slack-renderer.ts"}',
+              },
+            },
+            parent_tool_use_id: null,
+            session_id: 'session-1',
+            uuid: 'event-2',
           },
-          parent_tool_use_id: null,
-          session_id: 'session-1',
-          uuid: 'event-3',
-        },
-        {
-          type: 'assistant',
-          error: undefined,
-          message: {
-            content: [{ type: 'text', text: 'Updated loading messages.' }],
+          {
+            type: 'tool_progress',
+            elapsed_time_seconds: 1.2,
+            parent_tool_use_id: null,
+            session_id: 'session-1',
+            task_id: 'task-1',
+            tool_name: 'ReadFile',
+            tool_use_id: 'tool-1',
+            uuid: 'tool-progress-1',
           },
-          parent_tool_use_id: null,
-          session_id: 'session-1',
-          uuid: 'assistant-1',
-        },
-        {
-          type: 'result',
-          subtype: 'success',
-          duration_ms: 1450,
-          total_cost_usd: 0.0012,
-        },
-      ]),
+          {
+            type: 'stream_event',
+            event: {
+              type: 'content_block_stop',
+              index: 0,
+            },
+            parent_tool_use_id: null,
+            session_id: 'session-1',
+            uuid: 'event-3',
+          },
+          {
+            type: 'assistant',
+            error: undefined,
+            message: {
+              content: [{ type: 'text', text: 'Updated loading messages.' }],
+            },
+            parent_tool_use_id: null,
+            session_id: 'session-1',
+            uuid: 'assistant-1',
+          },
+          {
+            type: 'result',
+            subtype: 'success',
+            duration_ms: 1450,
+            total_cost_usd: 0.0012,
+          },
+        ]),
     );
 
     await handler({
@@ -234,12 +235,13 @@ describe('Slack loading status test', () => {
     );
 
     expect(postMessageCalls).toHaveLength(2);
-    expect(postMessageCalls[0]).toMatchObject({
+    const firstPost = postMessageCalls[0]!;
+    expect(firstPost).toMatchObject({
       channel: 'C123',
       thread_ts: threadTs,
     });
-    expect(postMessageCalls[0].text).not.toBe('Thinking... — Thinking...');
-    expect(postMessageCalls[0].blocks).toEqual(
+    expect(firstPost.text).not.toBe('Thinking... — Thinking...');
+    expect(firstPost.blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'section',
@@ -307,7 +309,7 @@ describe('Slack loading status test', () => {
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger);
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
       claudeExecutor: executor,
       logger,
@@ -320,38 +322,39 @@ describe('Slack loading status test', () => {
     const { client, deleteCalls, postMessageCalls, statusCalls, updateCalls } =
       createSlackClientFixture({ threadTs });
 
-    sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
-      createFailingMessageStream(
-        [
-          {
-            type: 'system',
-            subtype: 'init',
-            cwd: repoPath,
-            model: 'claude-sonnet-test',
-            session_id: 'session-2',
-          },
-          {
-            type: 'system',
-            subtype: 'task_started',
-            task_id: 'task-2',
-            description: 'Inspect failure cleanup',
-          },
-          {
-            type: 'system',
-            subtype: 'task_progress',
-            task_id: 'task-2',
-            description: 'Inspect failure cleanup',
-            last_tool_name: 'ReadFile',
-            summary: 'Inspecting failure cleanup handling',
-            usage: {
-              duration_ms: 600,
-              tool_uses: 1,
-              total_tokens: 24,
+    sdkMocks.query.mockImplementation(
+      (_request: { prompt: string; options: Record<string, unknown> }) =>
+        createFailingMessageStream(
+          [
+            {
+              type: 'system',
+              subtype: 'init',
+              cwd: repoPath,
+              model: 'claude-sonnet-test',
+              session_id: 'session-2',
             },
-          },
-        ],
-        new Error('boom'),
-      ),
+            {
+              type: 'system',
+              subtype: 'task_started',
+              task_id: 'task-2',
+              description: 'Inspect failure cleanup',
+            },
+            {
+              type: 'system',
+              subtype: 'task_progress',
+              task_id: 'task-2',
+              description: 'Inspect failure cleanup',
+              last_tool_name: 'ReadFile',
+              summary: 'Inspecting failure cleanup handling',
+              usage: {
+                duration_ms: 600,
+                tool_uses: 1,
+                total_tokens: 24,
+              },
+            },
+          ],
+          new Error('boom'),
+        ),
     );
 
     await handler({
@@ -433,6 +436,7 @@ function createMemorySessionStore(): SessionStore {
   const records = new Map<string, SessionRecord>();
 
   return {
+    countAll: () => records.size,
     get: (threadTs) => {
       const existing = records.get(threadTs);
       return existing ? { ...existing } : undefined;
@@ -462,12 +466,16 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    countAll: () => 0,
     delete: () => false,
+    deleteAll: () => 0,
     listRecent: () => [],
+    listForContext: () => ({ global: [], workspace: [] }),
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
       ...input,
+      scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),
       id: 'memory-1',
     }),

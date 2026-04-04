@@ -4,19 +4,19 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeAgentSdkExecutor } from '../src/claude/executor/anthropic-agent-sdk.js';
-import type { AppLogger } from '../src/logger/index.js';
-import type { MemoryStore } from '../src/memory/types.js';
-import type { SessionRecord, SessionStore } from '../src/session/types.js';
-import { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
+import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import type { AppLogger } from '~/logger/index.js';
+import type { MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
+import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
   WORKSPACE_MODAL_CALLBACK_ID,
-} from '../src/slack/interactions/workspace-message-action.js';
-import { SlackRenderer } from '../src/slack/render/slack-renderer.js';
-import type { SlackWebClientLike } from '../src/slack/types.js';
-import { WorkspaceResolver } from '../src/workspace/resolver.js';
+} from '~/slack/interactions/workspace-message-action.js';
+import { SlackRenderer } from '~/slack/render/slack-renderer.js';
+import type { SlackWebClientLike } from '~/slack/types.js';
+import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 const sdkMocks = vi.hoisted(() => ({
   env: (() => {
@@ -67,7 +67,7 @@ describe('Workspace message action test', () => {
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger);
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const deps = {
       claudeExecutor: executor,
       logger,
@@ -82,32 +82,33 @@ describe('Workspace message action test', () => {
     const { ackCalls, client, postMessageCalls, statusCalls, viewOpenCalls } =
       createSlackClientFixture();
 
-    sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
-      createMessageStream([
-        {
-          type: 'system',
-          subtype: 'init',
-          cwd: repoPath,
-          model: 'claude-sonnet-test',
-          session_id: 'session-message-action',
-        },
-        {
-          type: 'assistant',
-          error: undefined,
-          message: {
-            content: [{ type: 'text', text: 'Workspace action completed.' }],
+    sdkMocks.query.mockImplementation(
+      (_request: { prompt: string; options: Record<string, unknown> }) =>
+        createMessageStream([
+          {
+            type: 'system',
+            subtype: 'init',
+            cwd: repoPath,
+            model: 'claude-sonnet-test',
+            session_id: 'session-message-action',
           },
-          parent_tool_use_id: null,
-          session_id: 'session-message-action',
-          uuid: 'assistant-1',
-        },
-        {
-          type: 'result',
-          subtype: 'success',
-          duration_ms: 800,
-          total_cost_usd: 0.0007,
-        },
-      ]),
+          {
+            type: 'assistant',
+            error: undefined,
+            message: {
+              content: [{ type: 'text', text: 'Workspace action completed.' }],
+            },
+            parent_tool_use_id: null,
+            session_id: 'session-message-action',
+            uuid: 'assistant-1',
+          },
+          {
+            type: 'result',
+            subtype: 'success',
+            duration_ms: 800,
+            total_cost_usd: 0.0007,
+          },
+        ]),
     );
 
     await actionHandler({
@@ -130,7 +131,7 @@ describe('Workspace message action test', () => {
     });
 
     expect(viewOpenCalls).toHaveLength(1);
-    const openedView = viewOpenCalls[0];
+    const openedView = viewOpenCalls[0]!;
     expect(openedView.trigger_id).toBe('trigger-1');
     expect((openedView.view as { callback_id?: string }).callback_id).toBe(
       WORKSPACE_MODAL_CALLBACK_ID,
@@ -244,6 +245,7 @@ function createMemorySessionStore(): SessionStore {
   const records = new Map<string, SessionRecord>();
 
   return {
+    countAll: () => records.size,
     get: (threadTs) => {
       const existing = records.get(threadTs);
       return existing ? { ...existing } : undefined;
@@ -273,12 +275,16 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    countAll: () => 0,
     delete: () => false,
+    deleteAll: () => 0,
     listRecent: () => [],
+    listForContext: () => ({ global: [], workspace: [] }),
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
       ...input,
+      scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),
       id: 'memory-1',
     }),

@@ -1,5 +1,6 @@
-import { SlackMessageActionShortcutSchema } from '../../schemas/slack/message-action-shortcut.js';
-import type { ResolvedWorkspace } from '../../workspace/types.js';
+import { SlackMessageActionShortcutSchema } from '~/schemas/slack/message-action-shortcut.js';
+import type { ResolvedWorkspace } from '~/workspace/types.js';
+
 import {
   handleThreadConversation,
   type SlackIngressDependencies,

@@ -4,8 +4,8 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppLogger } from '../src/logger/index.js';
-import { rotateToken, syncSlashCommands } from '../src/slack/commands/manifest-sync.js';
+import type { AppLogger } from '~/logger/index.js';
+import { rotateToken, syncSlashCommands } from '~/slack/commands/manifest-sync.js';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -38,6 +38,17 @@ function slackError(error: string): Response {
   });
 }
 
+function fetchAuthBearer(init: RequestInit): string | undefined {
+  const headers = init.headers;
+  if (!headers) return undefined;
+  if (headers instanceof Headers) return headers.get('Authorization') ?? undefined;
+  if (Array.isArray(headers)) {
+    const pair = headers.find(([k]) => k.toLowerCase() === 'authorization');
+    return pair?.[1];
+  }
+  return (headers as Record<string, string>).Authorization;
+}
+
 afterEach(() => {
   fetchMock.mockReset();
 });
@@ -60,7 +71,9 @@ describe('rotateToken', () => {
     expect(result!.refresh_token).toBe('xoxe-new-refresh');
     expect(fetchMock).toHaveBeenCalledOnce();
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const firstFetch = fetchMock.mock.calls[0];
+    expect(firstFetch).toBeDefined();
+    const [url, init] = firstFetch as [string, RequestInit];
     expect(url).toBe('https://slack.com/api/tooling.tokens.rotate');
     expect(JSON.parse(init.body as string)).toEqual({ refresh_token: 'xoxe-old-refresh' });
   });
@@ -119,8 +132,10 @@ describe('syncSlashCommands with token rotation', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers.Authorization).toBe('Bearer xoxe.xoxp-persisted');
+    const persistedCall = fetchMock.mock.calls[0];
+    expect(persistedCall).toBeDefined();
+    const [, init] = persistedCall as [string, RequestInit];
+    expect(fetchAuthBearer(init)).toBe('Bearer xoxe.xoxp-persisted');
   });
 
   it('rotates token when persisted token is expired', async () => {
@@ -170,11 +185,15 @@ describe('syncSlashCommands with token rotation', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const [rotateUrl] = fetchMock.mock.calls[0];
+    const rotateCall = fetchMock.mock.calls[0];
+    expect(rotateCall).toBeDefined();
+    const [rotateUrl] = rotateCall as [string, RequestInit];
     expect(rotateUrl).toBe('https://slack.com/api/tooling.tokens.rotate');
 
-    const [, manifestInit] = fetchMock.mock.calls[1];
-    expect(manifestInit.headers.Authorization).toBe('Bearer xoxe.xoxp-rotated');
+    const manifestCall = fetchMock.mock.calls[1];
+    expect(manifestCall).toBeDefined();
+    const [, manifestInit] = manifestCall as [string, RequestInit];
+    expect(fetchAuthBearer(manifestInit)).toBe('Bearer xoxe.xoxp-rotated');
 
     const updated = JSON.parse(fs.readFileSync(tokenStorePath, 'utf8'));
     expect(updated.accessToken).toBe('xoxe.xoxp-rotated');
@@ -207,7 +226,9 @@ describe('syncSlashCommands with token rotation', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const [updateUrl, updateInit] = fetchMock.mock.calls[1];
+    const updateCall = fetchMock.mock.calls[1];
+    expect(updateCall).toBeDefined();
+    const [updateUrl, updateInit] = updateCall as [string, RequestInit];
     expect(updateUrl).toBe('https://slack.com/api/apps.manifest.update');
 
     const body = JSON.parse(updateInit.body as string);

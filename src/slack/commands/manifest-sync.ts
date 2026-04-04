@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { AppLogger } from '../../logger/index.js';
+import type { AppLogger } from '~/logger/index.js';
 
 interface SlackManifestSlashCommand {
   command: string;

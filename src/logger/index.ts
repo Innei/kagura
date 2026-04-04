@@ -2,7 +2,8 @@ import path from 'node:path';
 
 import { type ConsolaInstance, createLoggerConsola } from '@innei/pretty-logger-core';
 
-import { env } from '../env/server.js';
+import { env } from '~/env/server.js';
+
 import { createRedactor } from './redact.js';
 
 export function createRootLogger() {

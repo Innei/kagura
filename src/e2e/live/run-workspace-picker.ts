@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '../../application.js';
-import { env } from '../../env/server.js';
-import { decodeWorkspacePickerButtonValue } from '../../slack/interactions/workspace-picker-payload.js';
+import { createApplication } from '~/application.js';
+import { env } from '~/env/server.js';
+import { decodeWorkspacePickerButtonValue } from '~/slack/interactions/workspace-picker-payload.js';
+
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
