@@ -27,7 +27,7 @@ interface LiveE2EResult {
     crossSessionRecallObserved: boolean;
     finalReplyObserved: boolean;
     fallbackStatusObserved: boolean;
-    memorySaved: boolean;
+    explicitMemoryPersisted: boolean;
     progressMessageDeleted: boolean;
     progressMessagePosted: boolean;
     progressMessageUpdated: boolean;
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
       crossSessionRecallObserved: false,
       finalReplyObserved: false,
       fallbackStatusObserved: false,
-      memorySaved: false,
+      explicitMemoryPersisted: false,
       progressMessageDeleted: false,
       progressMessagePosted: false,
       progressMessageUpdated: false,
@@ -108,6 +108,7 @@ async function main(): Promise<void> {
     await runPhaseOne({
       botClient,
       botUserId: botIdentity.user_id,
+      recallMarker,
       result,
       targetFile,
       targetRepo,
@@ -158,6 +159,7 @@ async function main(): Promise<void> {
 async function runPhaseOne(input: {
   botClient: SlackApiClient;
   botUserId: string;
+  recallMarker: string;
   result: LiveE2EResult;
   targetFile: string;
   targetRepo: string;
@@ -166,6 +168,7 @@ async function runPhaseOne(input: {
   const prompt = createLiveE2EPrompt(
     input.botUserId,
     input.result.runId,
+    input.recallMarker,
     input.targetRepo,
     input.targetFile,
   );
@@ -212,12 +215,12 @@ async function runPhaseOne(input: {
       if (workspaceRepoId) {
         input.result.workspaceRepoId = workspaceRepoId;
       }
-      const matchingMemories = readThreadCompletionMemories({
+      const matchingMemories = readExplicitSavedMemories({
         repoId: workspaceRepoId ?? input.targetRepo,
-        threadTs: rootMessage.ts,
+        marker: input.result.recallMarker,
       });
       if (matchingMemories.length > 0) {
-        input.result.matched.memorySaved = true;
+        input.result.matched.explicitMemoryPersisted = true;
       }
     }
 
@@ -239,12 +242,6 @@ async function runPhaseTwo(input: {
   triggerClient: SlackApiClient;
 }): Promise<void> {
   const workspaceRepoId = input.result.workspaceRepoId ?? input.targetRepo;
-  insertExplicitRecallMarkerMemory({
-    marker: input.recallMarker,
-    repoId: workspaceRepoId,
-    ...(input.result.rootMessageTs ? { threadTs: input.result.rootMessageTs } : {}),
-  });
-
   const recallPrompt = createCrossSessionRecallPrompt(
     input.botUserId,
     input.runId,
@@ -285,6 +282,7 @@ async function runPhaseTwo(input: {
 function createLiveE2EPrompt(
   botUserId: string,
   runId: string,
+  recallMarker: string,
   targetRepo: string,
   targetFile: string,
 ): string {
@@ -294,6 +292,8 @@ function createLiveE2EPrompt(
     `Please inspect ${targetFile} in repo ${targetRepo}.`,
     'Use file-reading tools instead of guessing.',
     'Use at least one background task or subagent if available so progress updates are visible.',
+    `Before your final reply, call save_memory with category "decision" and content exactly "${recallMarker}".`,
+    'Do not paraphrase that saved memory content.',
     'Reply with exactly two bullet points.',
     `The first bullet must start with "LIVE_E2E_OK ${runId}".`,
     `The second bullet must start with "WORKSPACE_OK ${targetRepo}" and briefly describe what you found.`,
@@ -451,7 +451,7 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
     result.matched.progressMessageUpdated &&
     result.matched.progressMessageDeleted &&
     result.matched.workspaceBindingObserved &&
-    result.matched.memorySaved
+    result.matched.explicitMemoryPersisted
   );
 }
 
@@ -472,8 +472,8 @@ function assertLiveE2EResult(result: LiveE2EResult): void {
   if (!result.matched.progressMessageDeleted) failures.push('progress message delete not observed');
   if (!result.matched.workspaceBindingObserved)
     failures.push('workspace-binding reply marker not observed');
-  if (!result.matched.memorySaved)
-    failures.push('completion memory was not saved for this thread/repo');
+  if (!result.matched.explicitMemoryPersisted)
+    failures.push('explicit save_memory marker was not persisted for this repo');
 
   if (failures.length > 0) {
     throw new Error(`Live Slack E2E failed: ${failures.join('; ')}`);
@@ -498,9 +498,9 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-function readThreadCompletionMemories(input: {
+function readExplicitSavedMemories(input: {
   repoId: string;
-  threadTs: string;
+  marker: string;
 }): Array<{ id: string }> {
   const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
   const sqlite = new Database(dbPath, { readonly: true });
@@ -509,14 +509,14 @@ function readThreadCompletionMemories(input: {
       SELECT id
       FROM memories
       WHERE repo_id = @repoId
-        AND thread_ts = @threadTs
-        AND category = 'task_completed'
+        AND category = 'decision'
+        AND content = @marker
       ORDER BY created_at DESC
       LIMIT 5
     `);
     const rows = statement.all({
       repoId: input.repoId,
-      threadTs: input.threadTs,
+      marker: input.marker,
     }) as Array<{ id: string }>;
     return rows;
   } catch {
@@ -541,30 +541,6 @@ function readWorkspaceRepoIdForThread(threadTs: string): string | undefined {
     return value || undefined;
   } catch {
     return undefined;
-  } finally {
-    sqlite.close();
-  }
-}
-
-function insertExplicitRecallMarkerMemory(input: {
-  marker: string;
-  repoId: string;
-  threadTs?: string | undefined;
-}): void {
-  const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
-  const sqlite = new Database(dbPath);
-  try {
-    const statement = sqlite.prepare(`
-      INSERT INTO memories (id, repo_id, thread_ts, category, content, metadata, created_at, expires_at)
-      VALUES (@id, @repoId, @threadTs, 'decision', @content, NULL, @createdAt, NULL)
-    `);
-    statement.run({
-      id: randomUUID(),
-      repoId: input.repoId,
-      threadTs: input.threadTs ?? null,
-      content: input.marker,
-      createdAt: new Date().toISOString(),
-    });
   } finally {
     sqlite.close();
   }
