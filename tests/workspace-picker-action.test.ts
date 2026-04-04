@@ -160,10 +160,21 @@ describe('Workspace picker action test', () => {
     expect(metadata.userId).toBe('U123');
   });
 
-  it('posts a green button for missing resolution', async () => {
+  it('proceeds without workspace when resolution is missing', async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-picker-missing-'));
     const repoPath = path.join(repoRoot, 'actual-repo');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+
+    sdkMocks.query.mockReturnValue(
+      (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'ses-1', model: 'test', cwd: '/tmp' };
+        yield {
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: 'Hello! How can I help?' }] },
+        };
+        yield { type: 'result', subtype: 'success', duration_ms: 100, total_cost_usd: 0 };
+      })(),
+    );
 
     const logger = createTestLogger();
     const memoryStore = createMemoryStore();
@@ -188,30 +199,21 @@ describe('Workspace picker action test', () => {
       event: {
         channel: 'C123',
         team: 'T123',
-        text: '<@U_BOT> work on nonexistent-repo',
+        text: '<@U_BOT> hello, how are you?',
         ts: '1712345678.000100',
         type: 'app_mention',
         user: 'U123',
       },
     });
 
-    expect(sdkMocks.query).not.toHaveBeenCalled();
-    expect(postMessageCalls).toHaveLength(1);
+    expect(sdkMocks.query).toHaveBeenCalledTimes(1);
 
-    const message = postMessageCalls[0];
-    expect(message.text).toContain("couldn't determine which repository");
+    const queryArgs = sdkMocks.query.mock.calls[0][0];
+    expect(queryArgs.options.cwd).toBeUndefined();
 
-    const actionsBlock = message.blocks?.find((block: SlackBlock) => block.type === 'actions');
-    expect(actionsBlock).toBeDefined();
-
-    const elements = (actionsBlock as { elements: Array<Record<string, unknown>> }).elements;
-    expect(elements).toHaveLength(1);
-    expect(elements[0]).toMatchObject({
-      action_id: WORKSPACE_PICKER_ACTION_ID,
-      style: 'primary',
-      type: 'button',
-      value: encodeWorkspacePickerButtonValue('<@U_BOT> work on nonexistent-repo'),
-    });
+    const replyMessages = postMessageCalls.filter((msg) => !msg.text.includes("couldn't"));
+    expect(replyMessages.length).toBeGreaterThanOrEqual(1);
+    expect(replyMessages.some((msg) => msg.text.includes('Hello! How can I help?'))).toBe(true);
   });
 });
 

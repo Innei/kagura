@@ -237,10 +237,10 @@ export async function handleThreadConversation(
     options.workspaceOverride,
   );
 
-  if (workspaceResolution.status !== 'unique') {
+  if (workspaceResolution.status === 'ambiguous') {
     runtimeWarn(
       deps.logger,
-      'Unable to resolve workspace for thread %s (%s)',
+      'Ambiguous workspace for thread %s (%s)',
       threadTs,
       workspaceResolution.reason,
     );
@@ -254,11 +254,24 @@ export async function handleThreadConversation(
     return;
   }
 
-  const workspace = workspaceResolution.workspace;
+  const workspace =
+    workspaceResolution.status === 'unique' ? workspaceResolution.workspace : undefined;
+
+  if (workspaceResolution.status === 'missing') {
+    runtimeInfo(
+      deps.logger,
+      'No workspace detected for thread %s — proceeding without workspace (%s)',
+      threadTs,
+      workspaceResolution.reason,
+    );
+  }
+
   const shouldResetClaudeSession =
     options.forceNewClaudeSession === true ||
     Boolean(
-      existingSession?.claudeSessionId && existingSession.workspacePath !== workspace.workspacePath,
+      workspace &&
+      existingSession?.claudeSessionId &&
+      existingSession.workspacePath !== workspace.workspacePath,
     );
   const resumeSessionId = shouldResetClaudeSession ? undefined : existingSession?.claudeSessionId;
 
@@ -266,11 +279,15 @@ export async function handleThreadConversation(
     deps.sessionStore.patch(threadTs, {
       channelId: message.channel,
       rootMessageTs: options.rootMessageTs,
-      workspaceLabel: workspace.workspaceLabel,
-      workspacePath: workspace.workspacePath,
-      workspaceRepoId: workspace.repo.id,
-      workspaceRepoPath: workspace.repo.repoPath,
-      workspaceSource: workspace.source,
+      ...(workspace
+        ? {
+            workspaceLabel: workspace.workspaceLabel,
+            workspacePath: workspace.workspacePath,
+            workspaceRepoId: workspace.repo.id,
+            workspaceRepoPath: workspace.repo.repoPath,
+            workspaceSource: workspace.source,
+          }
+        : {}),
       ...(shouldResetClaudeSession ? { claudeSessionId: undefined } : {}),
     });
   } else {
@@ -280,11 +297,15 @@ export async function handleThreadConversation(
       rootMessageTs: options.rootMessageTs,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      workspaceLabel: workspace.workspaceLabel,
-      workspacePath: workspace.workspacePath,
-      workspaceRepoId: workspace.repo.id,
-      workspaceRepoPath: workspace.repo.repoPath,
-      workspaceSource: workspace.source,
+      ...(workspace
+        ? {
+            workspaceLabel: workspace.workspaceLabel,
+            workspacePath: workspace.workspacePath,
+            workspaceRepoId: workspace.repo.id,
+            workspaceRepoPath: workspace.repo.repoPath,
+            workspaceSource: workspace.source,
+          }
+        : {}),
     });
   }
 
@@ -309,7 +330,7 @@ export async function handleThreadConversation(
     threadContext.messages.length,
   );
 
-  const recentMemories = deps.memoryStore.listRecent(workspace.repo.id, 15);
+  const recentMemories = workspace ? deps.memoryStore.listRecent(workspace.repo.id, 15) : [];
 
   let lastUiStateKey: string | undefined;
   let lastAssistantMessage: string | undefined;
@@ -443,7 +464,7 @@ export async function handleThreadConversation(
       }
 
       if (event.phase === 'completed') {
-        if (lastAssistantMessage?.trim()) {
+        if (workspace && lastAssistantMessage?.trim()) {
           deps.memoryStore.save({
             repoId: workspace.repo.id,
             threadTs,
@@ -482,9 +503,13 @@ export async function handleThreadConversation(
         mentionText: message.text,
         threadContext,
         recentMemories,
-        workspaceLabel: workspace.workspaceLabel,
-        workspacePath: workspace.workspacePath,
-        workspaceRepoId: workspace.repo.id,
+        ...(workspace
+          ? {
+              workspaceLabel: workspace.workspaceLabel,
+              workspacePath: workspace.workspacePath,
+              workspaceRepoId: workspace.repo.id,
+            }
+          : {}),
         ...(resumeSessionId ? { resumeSessionId } : {}),
       },
       sink,
@@ -602,20 +627,14 @@ function resolveWorkspaceForConversation(
 export const WORKSPACE_PICKER_ACTION_ID = 'workspace_picker_open_modal';
 
 function buildWorkspaceResolutionBlocks(
-  resolution: Exclude<WorkspaceResolution, { status: 'unique' }>,
+  resolution: Extract<WorkspaceResolution, { status: 'ambiguous' }>,
   originalMessageText: string,
 ): { blocks: SlackBlock[]; text: string } {
-  let text: string;
-
-  if (resolution.status === 'ambiguous') {
-    const labels = resolution.candidates
-      .slice(0, 5)
-      .map((candidate) => `\`${candidate.label}\``)
-      .join(', ');
-    text = `I couldn't tell which repository to use — matched: ${labels}`;
-  } else {
-    text = "I couldn't determine which repository to use for this thread.";
-  }
+  const labels = resolution.candidates
+    .slice(0, 5)
+    .map((candidate) => `\`${candidate.label}\``)
+    .join(', ');
+  const text = `I couldn't tell which repository to use — matched: ${labels}`;
 
   return {
     blocks: [
