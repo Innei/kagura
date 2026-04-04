@@ -92,7 +92,8 @@ describe('thread reply ingress', () => {
     expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
     expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
-    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
     expect(request).toMatchObject({
       channelId: 'C123',
       mentionText: '<@U_BOT> please continue the thread',

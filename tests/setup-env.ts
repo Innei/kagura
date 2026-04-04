@@ -10,5 +10,6 @@ Object.assign(process.env, {
   LOG_LEVEL: 'error',
   LOG_TO_FILE: 'false',
   PORT: '3000',
+  REPO_ROOT_DIR: './',
   SESSION_DB_PATH: './data/test-sessions.db',
 });

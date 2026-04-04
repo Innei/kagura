@@ -30,7 +30,7 @@
     ]
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.91",
+    "@anthropic-ai/claude-agent-sdk": "0.2.92",
     "@innei/pretty-logger-core": "0.4.2",
     "@slack/bolt": "4.6.0",
     "@t3-oss/env-core": "0.13.11",
@@ -43,9 +43,9 @@
     "@lobehub/eslint-config": "^2.1.5",
     "@lobehub/prettier-config": "^2.1.5",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "25.5.1",
+    "@types/node": "25.5.2",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.1.0",
+    "eslint": "^10.2.0",
     "lint-staged": "^16.4.0",
     "nodemon": "3.1.14",
     "prettier": "^3.8.1",
