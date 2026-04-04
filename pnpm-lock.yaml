@@ -84,6 +84,25 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@types/node@25.5.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.5.1)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
+  packages/live-cli:
+    dependencies:
+      '@clack/prompts':
+        specifier: ^0.10.0
+        version: 0.10.1
+      commander:
+        specifier: ^13.0.0
+        version: 13.1.0
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+    devDependencies:
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(typescript@6.0.2)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
 packages:
   '@anthropic-ai/claude-agent-sdk@0.2.91':
     resolution:
@@ -326,6 +345,18 @@ packages:
         integrity: sha512-mOm5ZrYmphGfqVWoH5YYMTITb3cDXsFgmvFlvkvWDMsR9X8RFnt7a0Wb6yNIdoFsiMO9WjYLq+U/FMtqIYAF8Q==,
       }
     engines: { node: ^20.19.0 || >=22.12.0 }
+
+  '@clack/core@0.4.2':
+    resolution:
+      {
+        integrity: sha512-NYQfcEy8MWIxrT5Fj8nIVchfRFA26yYKJcvBS7WlUIlw2OmQOY9DhGGXMovyI5J5PpxrCPGkgUi207EBrjpBvg==,
+      }
+
+  '@clack/prompts@0.10.1':
+    resolution:
+      {
+        integrity: sha512-Q0T02vx8ZM9XSv9/Yde0jTmmBQufZhPJfYAg2XrrrxWWaZgq1rr8nU8Hv710BQ1dhoP8rtY7YUdpGej2Qza/cw==,
+      }
 
   '@drizzle-team/brocli@0.10.2':
     resolution:
@@ -2572,6 +2603,13 @@ packages:
         integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==,
       }
     engines: { node: '>= 0.8' }
+
+  commander@13.1.0:
+    resolution:
+      {
+        integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==,
+      }
+    engines: { node: '>=18' }
 
   commander@14.0.3:
     resolution:
@@ -5403,6 +5441,12 @@ packages:
       }
     engines: { node: '>=10' }
 
+  sisteransi@1.0.5:
+    resolution:
+      {
+        integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==,
+      }
+
   slice-ansi@7.1.2:
     resolution:
       {
@@ -6316,6 +6360,17 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 8.0.0-rc.3
       '@babel/helper-validator-identifier': 8.0.0-rc.3
+
+  '@clack/core@0.4.2':
+    dependencies:
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
+
+  '@clack/prompts@0.10.1':
+    dependencies:
+      '@clack/core': 0.4.2
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -7552,6 +7607,8 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
+
+  commander@13.1.0: {}
 
   commander@14.0.3: {}
 
@@ -9424,6 +9481,8 @@ snapshots:
   simple-update-notifier@2.0.0:
     dependencies:
       semver: 7.7.4
+
+  sisteransi@1.0.5: {}
 
   slice-ansi@7.1.2:
     dependencies:

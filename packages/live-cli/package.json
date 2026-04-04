@@ -1,0 +1,23 @@
+{
+  "name": "@slack-cc-bot/live-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive CLI runner for Slack live E2E scenarios",
+  "type": "module",
+  "bin": {
+    "live-e2e": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.10.0",
+    "commander": "^13.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "tsdown": "0.21.7",
+    "typescript": "^6.0.2"
+  }
+}

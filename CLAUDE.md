@@ -16,6 +16,7 @@ Project conventions and guidelines for AI-assisted development on **slack-cc-bot
 | `pnpm e2e -- -i`        | Interactive scenario picker |
 | `pnpm e2e -- -l`        | List all discovered cases   |
 | `pnpm e2e -- -s <term>` | Search/filter by keyword    |
+| `pnpm e2e:list`         | List all discovered cases   |
 
 ## Development workflow
 
@@ -75,6 +76,15 @@ src/
 │   ├── executor/               # Agent SDK wrapper + MCP server
 │   └── tools/                  # MCP tool definitions
 └── schemas/                    # Zod schemas
+
+packages/
+└── live-cli/                   # Standalone E2E CLI (commander + @clack/prompts)
+    └── src/
+        ├── cli.ts              # Entry point, commander program definition
+        ├── discovery.ts        # Scenario discovery + filtering
+        ├── prompt.ts           # Interactive multi-select via @clack/prompts
+        ├── runner.ts           # Serial execution + summary formatting
+        └── types.ts            # LiveE2EScenario interface
 ```
 
 ## Testing patterns
@@ -89,8 +99,8 @@ src/
 ### Live E2E tests (`src/e2e/live/`)
 
 - Each scenario is a standalone `run-*.ts` file that exports a `scenario` object with `id`, `title`, `description`, `keywords`, and `run`.
-- The unified CLI (`src/e2e/live/cli.ts`) auto-discovers all scenarios and supports serial all-run, interactive selection, keyword search, and direct id-based execution.
+- The CLI lives in `packages/live-cli/` and is built with `commander` + `@clack/prompts`. It auto-discovers scenarios from `src/e2e/live/` and supports serial all-run, interactive multi-select, keyword search, and direct id-based execution.
 - Uses `SlackApiClient` to post real messages and poll for replies.
 - Follows the pattern: start app → post trigger message → poll until assertions pass or timeout → write result JSON → assert.
 - Run a specific scenario: `pnpm e2e -- <scenario-id>`.
-- List all scenarios: `pnpm e2e -- --list`.
+- List all scenarios: `pnpm e2e:list` or `pnpm e2e -- --list`.
