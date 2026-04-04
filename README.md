@@ -36,13 +36,97 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 
 - [Node.js](https://nodejs.org/) >= 22.0.0
 - [pnpm](https://pnpm.io/) >= 10.33.0
-- A [Slack app](https://api.slack.com/apps) configured with:
-  - **Socket Mode** enabled
-  - **Interactivity** enabled
-  - **Event Subscriptions** with `app_mention` scope
-  - A **Message Shortcut** configured with callback ID `workspace_message_action`
-  - Bot token scopes: `app_mentions:read`, `chat:write`, `channels:history`, `groups:history`, `reactions:write`, `assistant:write`, `commands`
+- A [Slack app](https://api.slack.com/apps) with **Socket Mode** and **Interactivity** enabled (see [Slack app manifest](#slack-app-manifest) below)
+- A **Message Shortcut** configured with callback ID `workspace_message_action` (included in the manifest)
 - An [Anthropic API key](https://console.anthropic.com/)
+
+## Slack app manifest
+
+Create a new Slack app at <https://api.slack.com/apps> → **From a manifest**, then paste the JSON below. Adjust `name` / `display_name` as needed.
+
+<details>
+<summary>Click to expand manifest</summary>
+
+```json
+{
+  "display_information": {
+    "name": "cc-001"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "cc-001",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "user": [
+        "canvases:read",
+        "canvases:write",
+        "channels:history",
+        "chat:write",
+        "groups:history",
+        "im:history",
+        "mpim:history",
+        "search:read.files",
+        "search:read.im",
+        "search:read.mpim",
+        "search:read.private",
+        "search:read.public",
+        "search:read.users",
+        "users:read",
+        "users:read.email"
+      ],
+      "user_optional": [
+        "canvases:read",
+        "canvases:write",
+        "groups:history",
+        "im:history",
+        "mpim:history",
+        "search:read.files",
+        "search:read.im",
+        "search:read.mpim",
+        "search:read.private"
+      ],
+      "bot": [
+        "commands",
+        "app_mentions:read",
+        "assistant:write",
+        "channels:history",
+        "chat:write",
+        "files:read",
+        "files:write",
+        "groups:history",
+        "im:history",
+        "reactions:read",
+        "reactions:write",
+        "users:read"
+      ]
+    },
+    "pkce_enabled": false
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": ["app_mention", "message.channels", "message.im"]
+    },
+    "interactivity": {
+      "is_enabled": true
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}
+```
+
+</details>
+
+After creation, grab the **Bot Token** (`xoxb-...`), **App-Level Token** (`xapp-...`, with `connections:write`), and **Signing Secret** from the app settings page.
 
 ## Getting started
 
