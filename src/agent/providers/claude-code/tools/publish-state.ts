@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import { ClaudeUiStateSchema } from '~/schemas/claude/publish-state.js';
+import { ClaudeUiStateSchema } from '../schemas/publish-state.js';
 
 export const SLACK_UI_STATE_TOOL_NAME = 'publish_state';
 export const SLACK_UI_STATE_TOOL_DESCRIPTION =

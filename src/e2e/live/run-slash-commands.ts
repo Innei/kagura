@@ -3,6 +3,8 @@ import './load-e2e-env.js';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
+import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
+import { createProviderRegistry } from '~/agent/registry.js';
 import { createApplication } from '~/application.js';
 import { createDatabase } from '~/db/index.js';
 import { env } from '~/env/server.js';
@@ -94,10 +96,13 @@ function buildCommandDeps(): SlashCommandDependencies {
   const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
   const { db } = createDatabase(dbPath);
   const logger = createRootLogger().withTag('e2e:commands');
+  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  const ccExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
 
   return {
     logger,
-    memoryStore: new SqliteMemoryStore(db, logger.withTag('memory')),
+    memoryStore,
+    providerRegistry: createProviderRegistry('claude-code', new Map([['claude-code', ccExecutor]])),
     sessionStore: new SqliteSessionStore(db, logger.withTag('session')),
     workspaceResolver: new WorkspaceResolver({
       repoRootDir: env.REPO_ROOT_DIR,

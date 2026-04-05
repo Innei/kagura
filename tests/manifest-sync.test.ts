@@ -131,6 +131,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/workspace', description: 'test' },
               { command: '/memory', description: 'test' },
               { command: '/session', description: 'test' },
+              { command: '/provider', description: 'test' },
             ],
           },
         },
@@ -183,6 +184,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/workspace', description: 'test' },
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
+                { command: '/provider', description: 'test' },
               ],
             },
           },
@@ -300,9 +302,9 @@ describe('syncSlashCommands with token rotation', () => {
 
     const body = JSON.parse(updateInit.body as string);
     const commands = body.manifest.features.slash_commands;
-    expect(commands).toHaveLength(4);
+    expect(commands).toHaveLength(5);
     expect(commands.map((c: { command: string }) => c.command)).toEqual(
-      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session']),
+      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session', '/provider']),
     );
   });
 
@@ -319,6 +321,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/workspace', description: 'x' },
               { command: '/memory', description: 'x' },
               { command: '/session', description: 'x' },
+              { command: '/provider', description: 'x' },
             ],
           },
         },

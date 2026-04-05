@@ -2,10 +2,17 @@ import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks'
 
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
-import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
 
 import type { SlackBlock, SlackMrkdwnTextObject, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
+
+interface RendererUiState {
+  clear: boolean;
+  composing?: boolean | undefined;
+  loadingMessages?: string[] | undefined;
+  status?: string | undefined;
+  threadTs: string;
+}
 
 const DEFAULT_LOADING_MESSAGES = [
   'Reading the thread context...',
@@ -52,7 +59,7 @@ export class SlackRenderer {
   async setUiState(
     client: SlackWebClientLike,
     channelId: string,
-    state: ClaudeUiState,
+    state: RendererUiState,
   ): Promise<void> {
     if (state.clear) {
       await this.clearUiState(client, channelId, state.threadTs);
@@ -100,7 +107,7 @@ export class SlackRenderer {
     client: SlackWebClientLike,
     channelId: string,
     threadTs: string,
-    state: ClaudeUiState,
+    state: RendererUiState,
     progressMessageTs?: string,
   ): Promise<string | undefined> {
     if (state.clear) {
@@ -247,14 +254,14 @@ export class SlackRenderer {
     return lastTs;
   }
 
-  private buildProgressMessageText(state: ClaudeUiState): string {
+  private buildProgressMessageText(state: RendererUiState): string {
     const status = (state.status ?? '').trim() || DEFAULT_PROGRESS_STATUS;
     const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
 
     return detail && detail !== status ? `${status} — ${detail}` : status;
   }
 
-  private buildProgressMessageBlocks(state: ClaudeUiState): SlackBlock[] {
+  private buildProgressMessageBlocks(state: RendererUiState): SlackBlock[] {
     const status = this.buildProgressStatusLine(state.status);
     const contextElements = this.buildProgressContextElements(state.loadingMessages, status);
 

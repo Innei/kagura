@@ -1,6 +1,6 @@
 import { App, Assistant } from '@slack/bolt';
 
-import type { ClaudeExecutor } from '~/claude/executor/types.js';
+import type { AgentProviderRegistry } from '~/agent/registry.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
@@ -27,9 +27,9 @@ import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
 export interface SlackApplicationDependencies {
-  claudeExecutor: ClaudeExecutor;
   logger: AppLogger;
   memoryStore: MemoryStore;
+  providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   workspaceResolver: WorkspaceResolver;
@@ -45,13 +45,17 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
 
   const renderer = new SlackRenderer(deps.logger.withTag('slack:render'), deps.statusProbe);
   const threadContextLoader = new SlackThreadContextLoader(deps.logger.withTag('slack:context'));
+  const defaultExecutor = deps.providerRegistry.getExecutor(
+    deps.providerRegistry.defaultProviderId,
+  );
   const ingressDeps = {
     logger: deps.logger.withTag('slack:ingress'),
     memoryStore: deps.memoryStore,
     renderer,
     threadContextLoader,
     sessionStore: deps.sessionStore,
-    claudeExecutor: deps.claudeExecutor,
+    claudeExecutor: defaultExecutor,
+    providerRegistry: deps.providerRegistry,
     workspaceResolver: deps.workspaceResolver,
   };
   const assistant = new Assistant({
@@ -64,6 +68,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   registerSlashCommands(app, {
     logger: deps.logger.withTag('slack:commands'),
     memoryStore: deps.memoryStore,
+    providerRegistry: deps.providerRegistry,
     sessionStore: deps.sessionStore,
     workspaceResolver: deps.workspaceResolver,
   });

@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';

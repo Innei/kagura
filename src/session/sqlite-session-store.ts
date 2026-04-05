@@ -33,6 +33,7 @@ export class SqliteSessionStore implements SessionStore {
         bootstrapMessageTs: record.bootstrapMessageTs ?? null,
         streamMessageTs: record.streamMessageTs ?? null,
         claudeSessionId: record.claudeSessionId ?? null,
+        agentProvider: record.agentProvider ?? null,
         workspaceRepoId: record.workspaceRepoId ?? null,
         workspaceRepoPath: record.workspaceRepoPath ?? null,
         workspacePath: record.workspacePath ?? null,
@@ -49,6 +50,7 @@ export class SqliteSessionStore implements SessionStore {
           bootstrapMessageTs: record.bootstrapMessageTs ?? null,
           streamMessageTs: record.streamMessageTs ?? null,
           claudeSessionId: record.claudeSessionId ?? null,
+          agentProvider: record.agentProvider ?? null,
           workspaceRepoId: record.workspaceRepoId ?? null,
           workspaceRepoPath: record.workspaceRepoPath ?? null,
           workspacePath: record.workspacePath ?? null,
@@ -85,6 +87,7 @@ export class SqliteSessionStore implements SessionStore {
         bootstrapMessageTs: next.bootstrapMessageTs ?? null,
         streamMessageTs: next.streamMessageTs ?? null,
         claudeSessionId: next.claudeSessionId ?? null,
+        agentProvider: next.agentProvider ?? null,
         workspaceRepoId: next.workspaceRepoId ?? null,
         workspaceRepoPath: next.workspaceRepoPath ?? null,
         workspacePath: next.workspacePath ?? null,
@@ -116,6 +119,7 @@ export class SqliteSessionStore implements SessionStore {
     if (row.workspacePath !== null) record.workspacePath = row.workspacePath;
     if (row.workspaceLabel !== null) record.workspaceLabel = row.workspaceLabel;
     if (row.workspaceSource !== null) record.workspaceSource = row.workspaceSource;
+    if (row.agentProvider !== null) record.agentProvider = row.agentProvider;
     return record;
   }
 }

@@ -62,6 +62,11 @@ const DESIRED_COMMANDS: SlackManifestSlashCommand[] = [
     description: 'View session overview or inspect a specific session',
     usage_hint: '[thread_ts]',
   },
+  {
+    command: '/provider',
+    description: 'View or switch the AI provider for this thread',
+    usage_hint: '[list|reset|<provider-id>]',
+  },
 ];
 
 export interface ManifestSyncOptions {

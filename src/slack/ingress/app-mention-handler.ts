@@ -1,10 +1,10 @@
 import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware } from '@slack/bolt';
 
-import type { ClaudeExecutionEvent, ClaudeExecutor } from '~/claude/executor/types.js';
+import type { AgentProviderRegistry } from '~/agent/registry.js';
+import type { AgentActivityState, AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import type { MemoryStore } from '~/memory/types.js';
-import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -17,9 +17,10 @@ import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackBlock, SlackWebClientLike } from '../types.js';
 
 export interface SlackIngressDependencies {
-  claudeExecutor: ClaudeExecutor;
+  claudeExecutor: AgentExecutor;
   logger: AppLogger;
   memoryStore: MemoryStore;
+  providerRegistry?: AgentProviderRegistry;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
@@ -37,7 +38,7 @@ export interface ThreadConversationMessage {
 
 interface ThreadConversationOptions {
   addAcknowledgementReaction: boolean;
-  forceNewClaudeSession?: boolean;
+  forceNewSession?: boolean;
   logLabel: string;
   rootMessageTs: string;
   workspaceOverride?: ResolvedWorkspace;
@@ -306,14 +307,14 @@ export async function handleThreadConversation(
     );
   }
 
-  const shouldResetClaudeSession =
-    options.forceNewClaudeSession === true ||
+  const shouldResetSession =
+    options.forceNewSession === true ||
     Boolean(
       workspace &&
       existingSession?.claudeSessionId &&
       existingSession.workspacePath !== workspace.workspacePath,
     );
-  const resumeSessionId = shouldResetClaudeSession ? undefined : existingSession?.claudeSessionId;
+  const resumeHandle = shouldResetSession ? undefined : existingSession?.claudeSessionId;
 
   if (existingSession) {
     deps.sessionStore.patch(threadTs, {
@@ -328,7 +329,7 @@ export async function handleThreadConversation(
             workspaceSource: workspace.source,
           }
         : {}),
-      ...(shouldResetClaudeSession ? { claudeSessionId: undefined } : {}),
+      ...(shouldResetSession ? { claudeSessionId: undefined } : {}),
     });
   } else {
     deps.sessionStore.upsert({
@@ -349,7 +350,7 @@ export async function handleThreadConversation(
     });
   }
 
-  let activeUiState: ClaudeUiState | undefined = createDefaultThinkingUiState(threadTs);
+  let activeActivityState: AgentActivityState | undefined = createDefaultThinkingState(threadTs);
   let progressMessageTs: string | undefined;
   let progressMessageActive = false;
   const toolActivityLog: string[] = [];
@@ -373,49 +374,58 @@ export async function handleThreadConversation(
 
   const contextMemories = deps.memoryStore.listForContext(workspace?.repo.id);
 
-  let lastUiStateKey: string | undefined;
-  const defaultThinkingUiState = createDefaultThinkingUiState(threadTs);
-  const defaultThinkingUiStateKey = JSON.stringify(defaultThinkingUiState);
-  const isMeaningfulRuntimeUiState = (state: ClaudeUiState): boolean => {
+  let lastStateKey: string | undefined;
+  const defaultThinkingState = createDefaultThinkingState(threadTs);
+  const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
+  const isMeaningfulActivityState = (state: AgentActivityState): boolean => {
     if (state.clear) {
       return false;
     }
 
-    if (JSON.stringify(state) === defaultThinkingUiStateKey) {
+    if (JSON.stringify(state) === defaultThinkingStateKey) {
       return false;
     }
 
     const normalizedStatus = state.status?.trim();
-    if (normalizedStatus && normalizedStatus !== defaultThinkingUiState.status) {
+    if (normalizedStatus && normalizedStatus !== defaultThinkingState.status) {
       return true;
     }
 
-    const meaningfulLoadingMessage = state.loadingMessages?.some((message) => {
-      const normalizedMessage = message.trim();
+    const meaningfulActivity = state.activities?.some((activity) => {
+      const normalizedActivity = activity.trim();
       return (
-        normalizedMessage.length > 0 &&
-        normalizedMessage !== normalizedStatus &&
-        !(defaultThinkingUiState.loadingMessages ?? []).includes(normalizedMessage)
+        normalizedActivity.length > 0 &&
+        normalizedActivity !== normalizedStatus &&
+        !(defaultThinkingState.activities ?? []).includes(normalizedActivity)
       );
     });
 
-    return meaningfulLoadingMessage === true;
+    return meaningfulActivity === true;
   };
-  const updateInFlightIndicator = async (state: ClaudeUiState): Promise<void> => {
+
+  const toRendererState = (state: AgentActivityState) => ({
+    threadTs: state.threadTs,
+    ...(state.status != null ? { status: state.status } : {}),
+    ...(state.activities != null ? { loadingMessages: state.activities } : {}),
+    ...(state.composing != null ? { composing: state.composing } : {}),
+    clear: state.clear ?? false,
+  });
+
+  const updateInFlightIndicator = async (state: AgentActivityState): Promise<void> => {
     if (progressMessageActive) {
       progressMessageTs = await deps.renderer.upsertThreadProgressMessage(
         client,
         message.channel,
         threadTs,
-        state,
+        toRendererState(state),
         progressMessageTs,
       );
       return;
     }
 
-    await deps.renderer.setUiState(client, message.channel, state);
+    await deps.renderer.setUiState(client, message.channel, toRendererState(state));
   };
-  const activateProgressMessage = async (state: ClaudeUiState): Promise<void> => {
+  const activateProgressMessage = async (state: AgentActivityState): Promise<void> => {
     if (!progressMessageActive) {
       progressMessageActive = true;
       await deps.renderer.clearUiState(client, message.channel, threadTs).catch((error) => {
@@ -427,12 +437,12 @@ export async function handleThreadConversation(
       client,
       message.channel,
       threadTs,
-      state,
+      toRendererState(state),
       progressMessageTs,
     );
   };
   const sink = {
-    onEvent: async (event: ClaudeExecutionEvent): Promise<void> => {
+    onEvent: async (event: AgentExecutionEvent): Promise<void> => {
       if (event.type === 'assistant-message') {
         await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text, {
           ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
@@ -455,21 +465,21 @@ export async function handleThreadConversation(
           progressMessageTs = undefined;
           progressMessageActive = false;
         }
-        activeUiState = undefined;
-        lastUiStateKey = undefined;
+        activeActivityState = undefined;
+        lastStateKey = undefined;
         await deps.renderer.clearUiState(client, message.channel, threadTs).catch((error) => {
           deps.logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
         });
         return;
       }
 
-      if (event.type === 'ui-state') {
-        const nextUiStateKey = JSON.stringify(event.state);
-        if (nextUiStateKey === lastUiStateKey) {
+      if (event.type === 'activity-state') {
+        const nextStateKey = JSON.stringify(event.state);
+        if (nextStateKey === lastStateKey) {
           return;
         }
-        lastUiStateKey = nextUiStateKey;
-        activeUiState = event.state.clear ? undefined : event.state;
+        lastStateKey = nextStateKey;
+        activeActivityState = event.state.clear ? undefined : event.state;
 
         if (!event.state.clear) {
           collectToolActivity(event.state, toolActivityLog);
@@ -523,7 +533,7 @@ export async function handleThreadConversation(
           return;
         }
 
-        if (!progressMessageActive && isMeaningfulRuntimeUiState(event.state)) {
+        if (!progressMessageActive && isMeaningfulActivityState(event.state)) {
           await activateProgressMessage(event.state);
           return;
         }
@@ -536,8 +546,8 @@ export async function handleThreadConversation(
         return;
       }
 
-      if (event.sessionId) {
-        deps.sessionStore.patch(threadTs, { claudeSessionId: event.sessionId });
+      if (event.resumeHandle) {
+        deps.sessionStore.patch(threadTs, { claudeSessionId: event.resumeHandle });
       }
 
       if (event.phase === 'started') {
@@ -555,7 +565,7 @@ export async function handleThreadConversation(
           threadTs,
           redact(String(event.error ?? '')),
         );
-        activeUiState = undefined;
+        activeActivityState = undefined;
         await deps.renderer.postThreadReply(
           client,
           message.channel,
@@ -567,8 +577,14 @@ export async function handleThreadConversation(
   };
 
   try {
-    runtimeInfo(deps.logger, 'Starting Claude execution for thread %s', threadTs);
-    await deps.claudeExecutor.execute(
+    const executor = resolveExecutor(existingSession, deps);
+    runtimeInfo(
+      deps.logger,
+      'Starting agent execution for thread %s (provider=%s)',
+      threadTs,
+      executor.providerId,
+    );
+    await executor.execute(
       {
         channelId: message.channel,
         threadTs,
@@ -583,20 +599,20 @@ export async function handleThreadConversation(
               workspaceRepoId: workspace.repo.id,
             }
           : {}),
-        ...(resumeSessionId ? { resumeSessionId } : {}),
+        ...(resumeHandle ? { resumeHandle } : {}),
       },
       sink,
     );
-    runtimeInfo(deps.logger, 'Claude execution completed for thread %s', threadTs);
+    runtimeInfo(deps.logger, 'Agent execution completed for thread %s', threadTs);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     runtimeError(
       deps.logger,
-      'Claude execution failed for thread %s: %s',
+      'Agent execution failed for thread %s: %s',
       threadTs,
       redact(errorMessage),
     );
-    activeUiState = undefined;
+    activeActivityState = undefined;
     await deps.renderer.postThreadReply(
       client,
       message.channel,
@@ -627,8 +643,8 @@ const TOOL_ACTIVITY_PATTERN =
   /^(?:Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) /;
 const MAX_TOOL_ACTIVITY_ENTRIES = 20;
 
-function collectToolActivity(state: ClaudeUiState, log: string[]): void {
-  const candidates = [...(state.loadingMessages ?? [])];
+function collectToolActivity(state: AgentActivityState, log: string[]): void {
+  const candidates = [...(state.activities ?? [])];
   if (state.status?.trim()) {
     candidates.push(state.status);
   }
@@ -658,11 +674,11 @@ function runtimeWarn(logger: AppLogger, message: string, ...args: unknown[]): vo
   console.warn(message, ...args);
 }
 
-function createDefaultThinkingUiState(threadTs: string): ClaudeUiState {
+function createDefaultThinkingState(threadTs: string): AgentActivityState {
   return {
     threadTs,
     status: 'Thinking...',
-    loadingMessages: [
+    activities: [
       'Reading the thread context...',
       'Planning the next steps...',
       'Generating a response...',
@@ -790,6 +806,16 @@ function mentionsUser(messageText: string, userId: string | undefined): boolean 
   }
 
   return messageText.includes(`<@${userId}>`);
+}
+
+function resolveExecutor(
+  session: SessionRecord | undefined,
+  deps: SlackIngressDependencies,
+): AgentExecutor {
+  if (session?.agentProvider && deps.providerRegistry?.has(session.agentProvider)) {
+    return deps.providerRegistry.getExecutor(session.agentProvider);
+  }
+  return deps.claudeExecutor;
 }
 
 function resolveWorkspaceForConversation(

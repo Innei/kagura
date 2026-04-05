@@ -32,13 +32,13 @@ import {
   setTaskStatus,
   setToolStatus,
   summarizeProgressOutput,
-} from './anthropic-agent-sdk-runtime-ui.js';
-import type { ClaudeExecutionSink, MessageHandlers } from './types.js';
+} from './runtime-ui.js';
+import type { AgentExecutionSink, MessageHandlers } from './types.js';
 
 export async function handleClaudeSdkMessage(
   logger: AppLogger,
   message: SDKMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   switch (message.type) {
@@ -94,7 +94,7 @@ export async function handleClaudeSdkMessage(
 async function handleSystemMessage(
   logger: AppLogger,
   message: SDKMessage & { subtype: string },
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   switch (message.subtype) {
@@ -182,7 +182,7 @@ async function handleApiRetryMessage(
 
 async function handleTaskStartedMessage(
   message: SDKTaskStartedMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   await sink.onEvent({
@@ -199,7 +199,7 @@ async function handleTaskStartedMessage(
 
 async function handleTaskProgressMessage(
   message: SDKTaskProgressMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   await sink.onEvent({
@@ -220,7 +220,7 @@ async function handleTaskProgressMessage(
 
 async function handleTaskNotificationMessage(
   message: SDKTaskNotificationMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   const status = message.status === 'completed' ? ('complete' as const) : ('error' as const);
@@ -295,7 +295,7 @@ async function handleHookProgressMessage(
 async function handleAssistantMessage(
   logger: AppLogger,
   message: SDKAssistantMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   if (message.error) {
@@ -344,7 +344,7 @@ async function handleAuthStatusMessage(
 async function handleToolProgressMessage(
   logger: AppLogger,
   message: SDKToolProgressMessage,
-  sink: ClaudeExecutionSink,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   const elapsed = message.elapsed_time_seconds.toFixed(1);

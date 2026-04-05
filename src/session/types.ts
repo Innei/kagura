@@ -1,4 +1,5 @@
 export interface SessionRecord {
+  agentProvider?: string | undefined;
   bootstrapMessageTs?: string | undefined;
   channelId: string;
   claudeSessionId?: string | undefined;

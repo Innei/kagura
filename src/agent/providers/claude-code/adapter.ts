@@ -1,27 +1,24 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
+import type {
+  AgentExecutionRequest,
+  AgentExecutionSink,
+  AgentExecutor,
+} from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { extractImplicitMemories } from '~/memory/memory-extractor.js';
 import type { MemoryStore } from '~/memory/types.js';
 
-import { createAnthropicAgentSdkMcpServer } from './anthropic-agent-sdk-mcp-server.js';
-import { handleClaudeSdkMessage } from './anthropic-agent-sdk-messages.js';
-import { buildPrompt, buildSystemPrompt } from './anthropic-agent-sdk-prompts.js';
-import {
-  buildRuntimeUiState,
-  createRuntimeUiStateTracker,
-} from './anthropic-agent-sdk-runtime-ui.js';
-import type {
-  ClaudeExecutionRequest,
-  ClaudeExecutionSink,
-  ClaudeExecutor,
-  MessageHandlers,
-  RuntimeUiStateTracker,
-} from './types.js';
+import { createAnthropicAgentSdkMcpServer } from './mcp-server.js';
+import { handleClaudeSdkMessage } from './messages.js';
+import { buildPrompt, buildSystemPrompt } from './prompts.js';
+import { buildRuntimeUiState, createRuntimeUiStateTracker } from './runtime-ui.js';
+import type { MessageHandlers, RuntimeUiStateTracker } from './types.js';
 
-export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
+export class ClaudeAgentSdkExecutor implements AgentExecutor {
+  readonly providerId = 'claude-code';
   private readonly activeExecutions = new Set<Promise<void>>();
 
   constructor(
@@ -36,7 +33,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
     }
   }
 
-  async execute(request: ClaudeExecutionRequest, sink: ClaudeExecutionSink): Promise<void> {
+  async execute(request: AgentExecutionRequest, sink: AgentExecutionSink): Promise<void> {
     const execution = this.executeInternal(request, sink);
     this.activeExecutions.add(execution);
     try {
@@ -47,8 +44,8 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
   }
 
   private async executeInternal(
-    request: ClaudeExecutionRequest,
-    sink: ClaudeExecutionSink,
+    request: AgentExecutionRequest,
+    sink: AgentExecutionSink,
   ): Promise<void> {
     this.logger.info('Claude Agent SDK execution requested for thread %s', request.threadTs);
 
@@ -66,7 +63,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       env.CLAUDE_MODEL ?? 'default',
       env.CLAUDE_MAX_TURNS,
       env.CLAUDE_PERMISSION_MODE,
-      request.resumeSessionId ?? 'none',
+      request.resumeHandle ?? 'none',
       request.workspacePath ?? '(none)',
     );
 
@@ -90,7 +87,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
             ? { allowDangerouslySkipPermissions: true }
             : {}),
           persistSession: true,
-          ...(request.resumeSessionId ? { resume: request.resumeSessionId } : {}),
+          ...(request.resumeHandle ? { resume: request.resumeHandle } : {}),
         },
       });
       this.logger.info('Claude SDK query created (thread %s)', request.threadTs);
@@ -145,7 +142,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       await sink.onEvent({
         type: 'lifecycle',
         phase: 'completed',
-        ...(sessionId ? { sessionId } : {}),
+        ...(sessionId ? { resumeHandle: sessionId } : {}),
       });
     } catch (error) {
       const errorMessage = this.describeUnknownError(error);
@@ -153,7 +150,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       await sink.onEvent({
         type: 'lifecycle',
         phase: 'failed',
-        ...(sessionId ? { sessionId } : {}),
+        ...(sessionId ? { resumeHandle: sessionId } : {}),
         error: errorMessage,
       });
     }
@@ -164,7 +161,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
   }
 
   private async extractAndSaveImplicitMemories(
-    request: ClaudeExecutionRequest,
+    request: AgentExecutionRequest,
     assistantText: string,
   ): Promise<void> {
     try {
@@ -216,7 +213,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
 
   private async publishRuntimeUiState(
     threadTs: string,
-    sink: ClaudeExecutionSink,
+    sink: AgentExecutionSink,
     runtimeUi: RuntimeUiStateTracker,
   ): Promise<void> {
     const state = buildRuntimeUiState(threadTs, runtimeUi);
@@ -225,7 +222,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
     }
 
     await sink.onEvent({
-      type: 'ui-state',
+      type: 'activity-state',
       state,
     });
   }
