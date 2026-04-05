@@ -302,12 +302,16 @@ describe('Slack loading status test', () => {
       text: 'Updated loading messages.',
       thread_ts: threadTs,
     });
-    expect(deleteCalls).toEqual([
-      {
-        channel: 'C123',
-        ts: '1712345678.000200',
-      },
-    ]);
+    expect(deleteCalls).toEqual([]);
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: 'C123',
+          text: expect.stringContaining('\u2705'),
+          ts: '1712345678.000200',
+        }),
+      ]),
+    );
 
     expect(sessionStore.get(threadTs)?.claudeSessionId).toBe('session-1');
   });
@@ -434,12 +438,16 @@ describe('Slack loading status test', () => {
       text: 'An error occurred while processing your request.',
       thread_ts: threadTs,
     });
-    expect(deleteCalls).toEqual([
-      {
-        channel: 'C123',
-        ts: '1712345678.000200',
-      },
-    ]);
+    expect(deleteCalls).toEqual([]);
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: 'C123',
+          text: expect.stringContaining('\u2705'),
+          ts: '1712345678.000200',
+        }),
+      ]),
+    );
   });
 });
 

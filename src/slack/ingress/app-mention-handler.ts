@@ -352,6 +352,7 @@ export async function handleThreadConversation(
   let activeUiState: ClaudeUiState | undefined = createDefaultThinkingUiState(threadTs);
   let progressMessageTs: string | undefined;
   let progressMessageActive = false;
+  const toolActivityLog: string[] = [];
 
   await deps.renderer.showThinkingIndicator(client, message.channel, threadTs).catch((error) => {
     deps.logger.warn('Failed to show Slack thinking indicator: %s', String(error));
@@ -438,10 +439,16 @@ export async function handleThreadConversation(
         });
         if (progressMessageActive && progressMessageTs) {
           await deps.renderer
-            .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
+            .finalizeThreadProgressMessage(
+              client,
+              message.channel,
+              threadTs,
+              progressMessageTs,
+              toolActivityLog,
+            )
             .catch((error) => {
               deps.logger.warn(
-                'Failed to reset thread progress message after assistant reply: %s',
+                'Failed to finalize thread progress message after assistant reply: %s',
                 String(error),
               );
             });
@@ -463,6 +470,10 @@ export async function handleThreadConversation(
         }
         lastUiStateKey = nextUiStateKey;
         activeUiState = event.state.clear ? undefined : event.state;
+
+        if (!event.state.clear) {
+          collectToolActivity(event.state, toolActivityLog);
+        }
 
         if (event.state.clear) {
           if (progressMessageActive && progressMessageTs) {
@@ -567,10 +578,36 @@ export async function handleThreadConversation(
     });
     if (progressMessageTs) {
       await deps.renderer
-        .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
+        .finalizeThreadProgressMessage(
+          client,
+          message.channel,
+          threadTs,
+          progressMessageTs,
+          toolActivityLog,
+        )
         .catch((err) => {
-          deps.logger.warn('Failed to delete progress message: %s', String(err));
+          deps.logger.warn('Failed to finalize progress message: %s', String(err));
         });
+    }
+  }
+}
+
+const TOOL_ACTIVITY_PATTERN =
+  /^(?:Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) /;
+const MAX_TOOL_ACTIVITY_ENTRIES = 20;
+
+function collectToolActivity(state: ClaudeUiState, log: string[]): void {
+  const candidates = [...(state.loadingMessages ?? [])];
+  if (state.status?.trim()) {
+    candidates.push(state.status);
+  }
+
+  for (const msg of candidates) {
+    const trimmed = msg.trim();
+    if (!trimmed || !TOOL_ACTIVITY_PATTERN.test(trimmed)) continue;
+    if (log.includes(trimmed)) continue;
+    if (log.length < MAX_TOOL_ACTIVITY_ENTRIES) {
+      log.push(trimmed);
     }
   }
 }

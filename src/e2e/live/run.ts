@@ -34,6 +34,7 @@ interface LiveE2EResult {
     fallbackStatusObserved: boolean;
     explicitMemoryPersisted: boolean;
     progressMessageDeleted: boolean;
+    progressMessageFinalized: boolean;
     progressMessagePosted: boolean;
     progressMessageUpdated: boolean;
     streamDetailLoadingMessage: boolean;
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
       fallbackStatusObserved: false,
       explicitMemoryPersisted: false,
       progressMessageDeleted: false,
+      progressMessageFinalized: false,
       progressMessagePosted: false,
       progressMessageUpdated: false,
       streamDetailLoadingMessage: false,
@@ -420,6 +422,8 @@ function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: Live
     result.matched.progressMessageUpdated = true;
   } else if (record.action === 'delete') {
     result.matched.progressMessageDeleted = true;
+  } else if (record.action === 'finalize') {
+    result.matched.progressMessageFinalized = true;
   }
 
   const text = record.text?.trim();
@@ -454,7 +458,7 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
     result.matched.clearCallObserved &&
     result.matched.progressMessagePosted &&
     result.matched.progressMessageUpdated &&
-    result.matched.progressMessageDeleted &&
+    result.matched.progressMessageFinalized &&
     result.matched.workspaceBindingObserved &&
     result.matched.explicitMemoryPersisted
   );
@@ -475,7 +479,9 @@ function assertLiveE2EResult(result: LiveE2EResult): void {
   if (!result.matched.clearCallObserved) failures.push('clear status call not observed');
   if (!result.matched.progressMessagePosted) failures.push('progress message post not observed');
   if (!result.matched.progressMessageUpdated) failures.push('progress message update not observed');
-  if (!result.matched.progressMessageDeleted) failures.push('progress message delete not observed');
+  if (!result.matched.progressMessageDeleted && !result.matched.progressMessageFinalized) {
+    failures.push('progress message finalize or delete not observed');
+  }
   if (!result.matched.workspaceBindingObserved)
     failures.push('workspace-binding reply marker not observed');
   if (!result.matched.explicitMemoryPersisted)

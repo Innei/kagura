@@ -9,7 +9,7 @@ export interface SlackStatusProbeStatusRecord {
 }
 
 export interface SlackStatusProbeProgressRecord {
-  action: 'post' | 'update' | 'delete';
+  action: 'post' | 'update' | 'delete' | 'finalize';
   channelId: string;
   kind: 'progress-message';
   messageTs?: string;
@@ -18,9 +18,7 @@ export interface SlackStatusProbeProgressRecord {
   threadTs: string;
 }
 
-export type SlackStatusProbeRecord =
-  | SlackStatusProbeStatusRecord
-  | SlackStatusProbeProgressRecord;
+export type SlackStatusProbeRecord = SlackStatusProbeStatusRecord | SlackStatusProbeProgressRecord;
 
 export interface SlackStatusProbe {
   recordProgressMessage: (record: SlackStatusProbeProgressRecord) => Promise<void>;

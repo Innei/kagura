@@ -172,6 +172,40 @@ export class SlackRenderer {
     });
   }
 
+  async finalizeThreadProgressMessage(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    progressMessageTs: string,
+    toolActivity?: readonly string[],
+  ): Promise<void> {
+    const summaryItems = (toolActivity ?? []).map((entry) => entry.replace(/\.{3}$/, '')).slice(-5);
+    const summaryLine = summaryItems.length > 0 ? summaryItems.join(' · ') : 'Done';
+    const text = `\u2705 ${summaryLine}`;
+    const blocks: SlackBlock[] = [
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text }],
+      },
+    ];
+
+    await client.chat.update({
+      channel: channelId,
+      ts: progressMessageTs,
+      text,
+      blocks,
+    });
+    await this.statusProbe?.recordProgressMessage({
+      action: 'finalize',
+      channelId,
+      kind: 'progress-message',
+      messageTs: progressMessageTs,
+      recordedAt: new Date().toISOString(),
+      text,
+      threadTs,
+    });
+  }
+
   async postThreadReply(
     client: SlackWebClientLike,
     channelId: string,

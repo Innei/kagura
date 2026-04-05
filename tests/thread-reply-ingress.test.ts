@@ -201,6 +201,7 @@ function createRendererStub(): SlackRenderer {
     addAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
