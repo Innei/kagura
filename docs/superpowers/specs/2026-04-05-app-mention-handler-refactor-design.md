@@ -86,7 +86,6 @@ export interface ConversationPipelineContext {
   resumeHandle?: string;
   threadContext?: NormalizedThreadContext;
   contextMemories?: ContextMemories;
-  executor?: AgentExecutor;
 }
 
 // Step result — continue or terminate early
