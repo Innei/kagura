@@ -171,6 +171,12 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH` and binds each
 
 When Slack app manifest sync is enabled, the bot can rotate Slack configuration tokens automatically on startup. Use `SLACK_CONFIG_REFRESH_TOKEN` for long-lived setup; `SLACK_CONFIG_TOKEN` remains available as a short-lived fallback.
 
+#### Docker deployment prerequisites
+
+- Docker Engine with the Docker Compose plugin
+- A `.env` file with valid Slack credentials, plus whatever Claude/Anthropic authentication your containerized Claude Agent SDK setup requires
+- An absolute host directory containing the repositories you want the bot to scan
+
 ### 3. Set up the database
 
 ```bash
@@ -187,6 +193,30 @@ pnpm dev
 # Production
 pnpm build && pnpm start
 ```
+
+#### Run with Docker Compose
+
+1. Copy `.env.example` to `.env` if you have not already.
+2. Set `REPO_ROOT_DIR=/workspace`.
+3. Set `HOST_REPO_ROOT` to the absolute host path that contains your repositories.
+4. On Linux, if you expect the bot to edit bind-mounted repositories, set `HOST_UID_GID` to your host `uid:gid` value, for example `1000:1000` (you can inspect it with `id -u` and `id -g`).
+
+To build the image directly:
+
+```bash
+docker build -t slack-cc-bot:local .
+```
+
+To start the bot with Compose:
+
+```bash
+docker compose up -d --build
+```
+
+- SQLite data is persisted in the `slack_cc_bot_data` volume at `/app/data`.
+- If you enable `LOG_TO_FILE=true`, add a separate mount if you want log files to survive container replacement.
+- Repositories from `HOST_REPO_ROOT` are mounted read-write into `/workspace`.
+- No inbound port mapping is required because Slack Socket Mode uses outbound connections.
 
 ## Project structure
 

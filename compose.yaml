@@ -1,0 +1,21 @@
+services:
+  slack-cc-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    user: '${HOST_UID_GID:-app}'
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${HOST_REPO_ROOT:?set HOST_REPO_ROOT in .env}
+        target: /workspace
+      - type: volume
+        source: slack_cc_bot_data
+        target: /app/data
+
+volumes:
+  slack_cc_bot_data: {}
