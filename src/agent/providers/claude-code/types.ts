@@ -1,62 +1,32 @@
-import type { ContextMemories, MemoryScope } from '~/memory/types.js';
-import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
-import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
+import type { MemoryScope } from '~/memory/types.js';
 
-export interface ClaudeExecutionRequest {
-  channelId: string;
-  contextMemories?: ContextMemories;
-  mentionText: string;
-  resumeSessionId?: string;
-  threadContext: NormalizedThreadContext;
-  threadTs: string;
-  userId: string;
-  workspaceLabel?: string;
-  workspacePath?: string;
-  workspaceRepoId?: string;
-}
+export type {
+  AgentActivityState,
+  AgentExecutionEvent,
+  AgentExecutionRequest,
+  AgentExecutionSink,
+  AgentExecutor,
+} from '~/agent/types.js';
 
-export type ClaudeExecutionEvent =
-  | {
-      type: 'lifecycle';
-      phase: 'started';
-      sessionId?: string;
-    }
-  | {
-      type: 'lifecycle';
-      phase: 'completed';
-      sessionId?: string;
-    }
-  | {
-      type: 'lifecycle';
-      phase: 'failed';
-      sessionId?: string;
-      error: string;
-    }
-  | {
-      type: 'assistant-message';
-      text: string;
-    }
-  | {
-      type: 'ui-state';
-      state: ClaudeUiState;
-    }
-  | {
-      type: 'task-update';
-      taskId: string;
-      title: string;
-      status: 'pending' | 'in_progress' | 'complete' | 'error';
-      details?: string;
-      output?: string;
-    };
+/**
+ * @deprecated Use AgentExecutionRequest from '~/agent/types.js'
+ */
+export type { AgentExecutionRequest as ClaudeExecutionRequest } from '~/agent/types.js';
 
-export interface ClaudeExecutionSink {
-  onEvent: (event: ClaudeExecutionEvent) => Promise<void>;
-}
+/**
+ * @deprecated Use AgentExecutionEvent from '~/agent/types.js'
+ */
+export type { AgentExecutionEvent as ClaudeExecutionEvent } from '~/agent/types.js';
 
-export interface ClaudeExecutor {
-  drain: () => Promise<void>;
-  execute: (request: ClaudeExecutionRequest, sink: ClaudeExecutionSink) => Promise<void>;
-}
+/**
+ * @deprecated Use AgentExecutionSink from '~/agent/types.js'
+ */
+export type { AgentExecutionSink as ClaudeExecutionSink } from '~/agent/types.js';
+
+/**
+ * @deprecated Use AgentExecutor from '~/agent/types.js'
+ */
+export type { AgentExecutor as ClaudeExecutor } from '~/agent/types.js';
 
 export type RuntimeSystemStatusKey = 'auth' | 'compacting' | 'hook' | 'permission' | 'retry';
 

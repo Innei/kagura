@@ -1,7 +1,4 @@
-import {
-  type SaveMemoryToolInput,
-  SaveMemoryToolInputSchema,
-} from '~/schemas/claude/memory-tools.js';
+import { type SaveMemoryToolInput, SaveMemoryToolInputSchema } from '../schemas/memory-tools.js';
 
 export const SAVE_MEMORY_TOOL_NAME = 'save_memory';
 export const SAVE_MEMORY_TOOL_DESCRIPTION =

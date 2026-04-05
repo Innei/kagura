@@ -1,10 +1,11 @@
-import { SLACK_UI_STATE_TOOL_NAME } from '../tools/publish-state.js';
-import { RECALL_MEMORY_TOOL_NAME } from '../tools/recall-memory.js';
-import { SAVE_MEMORY_TOOL_NAME } from '../tools/save-memory.js';
-import type { ClaudeExecutionRequest } from './types.js';
+import type { AgentExecutionRequest } from '~/agent/types.js';
 
-export function buildPrompt(request: ClaudeExecutionRequest): string {
-  if (request.resumeSessionId) {
+import { SLACK_UI_STATE_TOOL_NAME } from './tools/publish-state.js';
+import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
+import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
+
+export function buildPrompt(request: AgentExecutionRequest): string {
+  if (request.resumeHandle) {
     const header = request.workspaceLabel
       ? `Current workspace: ${request.workspaceLabel}`
       : 'No workspace is set for this conversation.';
@@ -28,7 +29,7 @@ export function buildPrompt(request: ClaudeExecutionRequest): string {
   return parts.join('\n');
 }
 
-export function buildSystemPrompt(request: ClaudeExecutionRequest): string {
+export function buildSystemPrompt(request: AgentExecutionRequest): string {
   const workspaceLines = request.workspacePath
     ? [
         `Your working directory is ${request.workspacePath} (${request.workspaceLabel}, repo id ${request.workspaceRepoId}).`,
@@ -82,7 +83,7 @@ export function buildSystemPrompt(request: ClaudeExecutionRequest): string {
   ].join('\n');
 }
 
-function buildMemoryContext(request: ClaudeExecutionRequest): string[] {
+function buildMemoryContext(request: AgentExecutionRequest): string[] {
   const ctx = request.contextMemories;
   if (
     !ctx ||

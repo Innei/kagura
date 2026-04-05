@@ -168,7 +168,7 @@ export function createWorkspaceSelectionViewHandler(deps: SlackIngressDependenci
       deps,
       {
         addAcknowledgementReaction: false,
-        forceNewClaudeSession: sessionMode === 'new_session',
+        forceNewSession: sessionMode === 'new_session',
         logLabel: 'workspace message action',
         rootMessageTs: conversationRootTs,
         workspaceOverride: workspace,

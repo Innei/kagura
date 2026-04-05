@@ -1,7 +1,7 @@
 import {
   type RecallMemoryToolInput,
   RecallMemoryToolInputSchema,
-} from '~/schemas/claude/memory-tools.js';
+} from '../schemas/memory-tools.js';
 
 export const RECALL_MEMORY_TOOL_NAME = 'recall_memory';
 export const RECALL_MEMORY_TOOL_DESCRIPTION =

@@ -3,7 +3,8 @@ import path from 'node:path';
 
 import type { App } from '@slack/bolt';
 
-import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
+import { createProviderRegistry } from '~/agent/registry.js';
 import { createDatabase } from '~/db/index.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { env, validateLiveE2EEnv } from '~/env/server.js';
@@ -38,12 +39,17 @@ export function createApplication(): RuntimeApplication {
     ? new FileSlackStatusProbe(env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
 
-  const claudeExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
+  const ccExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
+  const providerRegistry = createProviderRegistry(
+    'claude-code',
+    new Map([['claude-code', ccExecutor]]),
+  );
+
   const slackApp: App = createSlackApp({
     logger,
     memoryStore,
     sessionStore,
-    claudeExecutor,
+    providerRegistry,
     workspaceResolver,
     ...(statusProbe ? { statusProbe } : {}),
   });
@@ -69,7 +75,7 @@ export function createApplication(): RuntimeApplication {
     },
     async stop() {
       await slackApp.stop();
-      await claudeExecutor.drain();
+      await providerRegistry.drain();
       sqlite.close();
       logger.info('Slack Socket Mode application stopped.');
     },

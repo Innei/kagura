@@ -1,8 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+import type {
+  ExtractedMemory,
+  MemoryExtractionParams,
+  MemoryExtractor,
+} from '~/agent/shared/memory-extractor.js';
 import type { AppLogger } from '~/logger/index.js';
 
-import type { MemoryRecord, SaveMemoryInput } from './types.js';
+export type { ExtractedMemory } from '~/agent/shared/memory-extractor.js';
 
 const EXTRACTION_MODEL = 'claude-haiku-4-20250414';
 const EXTRACTION_TIMEOUT_MS = 5_000;
@@ -38,16 +43,15 @@ interface ExtractionResult {
   supersedes?: string;
 }
 
-export interface ExtractedMemory extends SaveMemoryInput {
-  supersedesId?: string;
+export function createAnthropicMemoryExtractor(logger: AppLogger): MemoryExtractor {
+  return {
+    extract: (params) => extractImplicitMemories({ ...params, logger }),
+  };
 }
 
-export async function extractImplicitMemories(params: {
-  userMessage: string;
-  assistantResponse: string;
-  existingMemories: MemoryRecord[];
-  logger: AppLogger;
-}): Promise<ExtractedMemory[]> {
+export async function extractImplicitMemories(
+  params: MemoryExtractionParams,
+): Promise<ExtractedMemory[]> {
   const { userMessage, assistantResponse, existingMemories, logger } = params;
 
   if (!userMessage.trim() || !assistantResponse.trim()) {

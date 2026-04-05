@@ -171,6 +171,15 @@ function createTestDeps(options?: {
   return {
     logger: createTestLogger(),
     memoryStore: createMemoryStore(options?.memoryRecords ?? []),
+    providerRegistry: {
+      defaultProviderId: 'claude-code',
+      providerIds: ['claude-code'],
+      has: (id: string) => id === 'claude-code',
+      getExecutor: () => {
+        throw new Error('not used in tests');
+      },
+      drain: async () => {},
+    },
     sessionStore: createMemorySessionStore(options?.sessionRecords ?? []),
     workspaceResolver: new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 3 }),
   };

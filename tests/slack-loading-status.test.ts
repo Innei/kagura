@@ -4,11 +4,11 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
-import type { ClaudeExecutionEvent, ClaudeExecutionRequest } from '~/claude/executor/types.js';
-import { SLACK_UI_STATE_TOOL_NAME } from '~/claude/tools/publish-state.js';
-import { RECALL_MEMORY_TOOL_NAME } from '~/claude/tools/recall-memory.js';
-import { SAVE_MEMORY_TOOL_NAME } from '~/claude/tools/save-memory.js';
+import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
+import { SLACK_UI_STATE_TOOL_NAME } from '~/agent/providers/claude-code/tools/publish-state.js';
+import { RECALL_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/recall-memory.js';
+import { SAVE_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/save-memory.js';
+import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -469,10 +469,10 @@ describe('Slack loading status test', () => {
       content: [{ text: 'UI state published.', type: 'text' }],
     });
     expect(events).toContainEqual({
-      type: 'ui-state',
+      type: 'activity-state',
       state: {
         clear: false,
-        loadingMessages: ['Inspecting the workspace...'],
+        activities: ['Inspecting the workspace...'],
         status: 'Thinking...',
         threadTs: '1712345678.000100',
       },
@@ -551,15 +551,15 @@ type CapturedMcpTool = {
 };
 
 async function getMcpToolsForRequest(
-  overrides: Partial<ClaudeExecutionRequest> = {},
+  overrides: Partial<AgentExecutionRequest> = {},
   memoryStore: MemoryStore = createMemoryStore(),
-): Promise<{ events: ClaudeExecutionEvent[]; tools: CapturedMcpTool[] }> {
+): Promise<{ events: AgentExecutionEvent[]; tools: CapturedMcpTool[] }> {
   sdkMocks.query.mockImplementation(() => {
     throw new Error('stop-after-mcp-server');
   });
 
   const executor = new ClaudeAgentSdkExecutor(createTestLogger(), memoryStore);
-  const events: ClaudeExecutionEvent[] = [];
+  const events: AgentExecutionEvent[] = [];
 
   await expect(
     executor.execute(createExecutionRequest(overrides), {
@@ -589,8 +589,8 @@ function getToolHandler(
 }
 
 function createExecutionRequest(
-  overrides: Partial<ClaudeExecutionRequest> = {},
-): ClaudeExecutionRequest {
+  overrides: Partial<AgentExecutionRequest> = {},
+): AgentExecutionRequest {
   return {
     channelId: 'C123',
     mentionText: '<@U_BOT> inspect the loading messages in slack-cc-bot',

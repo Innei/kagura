@@ -2,10 +2,10 @@ import path from 'node:path';
 
 import type { SDKPartialAssistantMessage } from '@anthropic-ai/claude-agent-sdk';
 
-import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
+import type { AgentActivityState } from '~/agent/types.js';
 
-import { RECALL_MEMORY_TOOL_NAME } from '../tools/recall-memory.js';
-import { SAVE_MEMORY_TOOL_NAME } from '../tools/save-memory.js';
+import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
+import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
 import type { RuntimeSystemStatusKey, RuntimeUiStateTracker } from './types.js';
 
 type StreamToolStartEvent = {
@@ -46,7 +46,7 @@ export function createRuntimeUiStateTracker(): RuntimeUiStateTracker {
 export function buildRuntimeUiState(
   threadTs: string,
   runtimeUi: RuntimeUiStateTracker,
-): ClaudeUiState | undefined {
+): AgentActivityState | undefined {
   const status = pickRuntimeStatus(runtimeUi);
   const loadingMessages = buildRuntimeLoadingMessages(runtimeUi, status);
 
@@ -59,7 +59,7 @@ export function buildRuntimeUiState(
   return {
     threadTs,
     ...(status ? { status } : {}),
-    ...(loadingMessages.length > 0 ? { loadingMessages } : {}),
+    ...(loadingMessages.length > 0 ? { activities: loadingMessages } : {}),
     ...(composing ? { composing: true } : {}),
     clear: false,
   };

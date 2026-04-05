@@ -1,35 +1,33 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 
+import type { AgentExecutionRequest, AgentExecutionSink } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryScope, MemoryStore } from '~/memory/types.js';
-import {
-  RecallMemoryToolInputSchema,
-  SaveMemoryToolInputSchema,
-} from '~/schemas/claude/memory-tools.js';
-import { ClaudeUiStateToolInputShape } from '~/schemas/claude/publish-state.js';
 
+import { RecallMemoryToolInputSchema, SaveMemoryToolInputSchema } from './schemas/memory-tools.js';
+import { ClaudeUiStateToolInputShape } from './schemas/publish-state.js';
 import {
   parseSlackUiStateToolInput,
   SLACK_UI_STATE_TOOL_DESCRIPTION,
   SLACK_UI_STATE_TOOL_NAME,
-} from '../tools/publish-state.js';
+} from './tools/publish-state.js';
 import {
   parseRecallMemoryToolInput,
   RECALL_MEMORY_TOOL_DESCRIPTION,
   RECALL_MEMORY_TOOL_NAME,
-} from '../tools/recall-memory.js';
+} from './tools/recall-memory.js';
 import {
   parseSaveMemoryToolInput,
   SAVE_MEMORY_TOOL_DESCRIPTION,
   SAVE_MEMORY_TOOL_NAME,
-} from '../tools/save-memory.js';
-import type { ClaudeExecutionRequest, ClaudeExecutionSink, ResolvedMemoryScope } from './types.js';
+} from './tools/save-memory.js';
+import type { ResolvedMemoryScope } from './types.js';
 
 export function createAnthropicAgentSdkMcpServer(
   logger: AppLogger,
   memoryStore: MemoryStore,
-  request: ClaudeExecutionRequest,
-  sink: ClaudeExecutionSink,
+  request: AgentExecutionRequest,
+  sink: AgentExecutionSink,
 ) {
   return createSdkMcpServer({
     name: 'slack-ui',
@@ -43,8 +41,8 @@ export function createAnthropicAgentSdkMcpServer(
 
 function createPublishStateTool(
   logger: AppLogger,
-  request: ClaudeExecutionRequest,
-  sink: ClaudeExecutionSink,
+  request: AgentExecutionRequest,
+  sink: AgentExecutionSink,
 ) {
   return tool(
     SLACK_UI_STATE_TOOL_NAME,
@@ -56,7 +54,16 @@ function createPublishStateTool(
           ...args,
           threadTs: request.threadTs,
         });
-        await sink.onEvent({ type: 'ui-state', state });
+        await sink.onEvent({
+          type: 'activity-state',
+          state: {
+            threadTs: state.threadTs,
+            status: state.status,
+            activities: state.loadingMessages,
+            composing: state.composing,
+            clear: state.clear,
+          },
+        });
         return createTextToolResult('UI state published.');
       } catch (error) {
         return createToolValidationErrorResult(logger, SLACK_UI_STATE_TOOL_NAME, error);
@@ -68,7 +75,7 @@ function createPublishStateTool(
 function createRecallMemoryTool(
   logger: AppLogger,
   memoryStore: MemoryStore,
-  request: ClaudeExecutionRequest,
+  request: AgentExecutionRequest,
 ) {
   return tool(
     RECALL_MEMORY_TOOL_NAME,
@@ -98,7 +105,7 @@ function createRecallMemoryTool(
 function createSaveMemoryTool(
   logger: AppLogger,
   memoryStore: MemoryStore,
-  request: ClaudeExecutionRequest,
+  request: AgentExecutionRequest,
 ) {
   return tool(
     SAVE_MEMORY_TOOL_NAME,

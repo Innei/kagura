@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ClaudeExecutor } from '~/claude/executor/types.js';
+import type { AgentExecutor } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -104,7 +104,7 @@ describe('thread reply ingress', () => {
 });
 
 function createThreadReplyTestHarness(threadTs: string): {
-  claudeExecutor: ClaudeExecutor;
+  claudeExecutor: AgentExecutor;
   client: SlackWebClientLike & {
     auth: {
       test: ReturnType<typeof vi.fn>;
@@ -126,8 +126,10 @@ function createThreadReplyTestHarness(threadTs: string): {
     },
   ]);
   const claudeExecutor = {
+    providerId: 'claude-code',
     execute: vi.fn().mockResolvedValue(undefined),
-  } as unknown as ClaudeExecutor;
+    drain: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AgentExecutor;
   const renderer = createRendererStub();
   const threadContextLoader = {
     loadThread: vi.fn().mockResolvedValue({
