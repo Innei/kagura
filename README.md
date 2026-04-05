@@ -41,8 +41,7 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 - [Node.js](https://nodejs.org/) >= 22.0.0
 - [pnpm](https://pnpm.io/) >= 10.33.0
 - A [Slack app](https://api.slack.com/apps) with **Socket Mode** and **Interactivity** enabled (see [Slack app manifest](#slack-app-manifest) below)
-- A **Message Shortcut** configured with callback ID `workspace_message_action` (included in the manifest)
-- An [Anthropic API key](https://console.anthropic.com/)
+- A **Message Action** configured with callback ID `workspace_message_action` (add it in your Slack app configuration)
 
 ## Slack app manifest
 
@@ -167,17 +166,23 @@ Optional — for automatic slash command registration:
 
 See [`.env.example`](.env.example) for all available options including `REPO_SCAN_DEPTH`, `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, and logging configuration.
 
-The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH` and binds each Slack thread to a concrete workspace path. It no longer falls back to the bot process `cwd` when no repo is identified.
+This repository does not require an `ANTHROPIC_API_KEY` environment variable to boot. Claude authentication follows your local Claude Agent SDK / runtime setup.
+
+The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can resolve a repo/path from the conversation, it binds the Slack thread to that concrete workspace path. When no repo is identified, it proceeds without a workspace instead of falling back to the bot process `cwd`.
 
 When Slack app manifest sync is enabled, the bot can rotate Slack configuration tokens automatically on startup. Use `SLACK_CONFIG_REFRESH_TOKEN` for long-lived setup; `SLACK_CONFIG_TOKEN` remains available as a short-lived fallback.
 
 #### Docker deployment prerequisites
 
 - Docker Engine with the Docker Compose plugin
-- A `.env` file with valid Slack credentials, plus whatever Claude/Anthropic authentication your containerized Claude Agent SDK setup requires
+- A `.env` file with valid Slack credentials
 - An absolute host directory containing the repositories you want the bot to scan
 
-### 3. Set up the database
+### 3. Database setup
+
+No manual database bootstrap is required for normal usage. The app creates the SQLite tables it needs on startup.
+
+If you are developing schema changes, use:
 
 ```bash
 pnpm db:generate
@@ -246,7 +251,7 @@ src/
 
 | Command                       | Description                   |
 | ----------------------------- | ----------------------------- |
-| `pnpm dev`                    | Run with tsx (development)    |
+| `pnpm dev`                    | Run with nodemon + tsx        |
 | `pnpm build`                  | Compile TypeScript            |
 | `pnpm test`                   | Run Vitest test suite         |
 | `pnpm start`                  | Run compiled output           |
@@ -276,9 +281,9 @@ Replies are rendered as Slack block content instead of raw mrkdwn text, so forma
 
 New threads try to infer the target repository from the incoming Slack message. Mention a repo name such as `slack-cc-bot`, a relative repo path such as `team/slack-cc-bot`, or an absolute path under `REPO_ROOT_DIR`.
 
-If the bot cannot determine the workspace confidently, use the Slack Message Action on the relevant message:
+If the bot cannot determine the workspace confidently and you want to bind one manually, use the Slack Message Action on the relevant message:
 
-1. Run the `workspace_message_action` shortcut.
+1. Run the `workspace_message_action` message action.
 2. Accept the detected repo, or choose a repo/path manually in the modal.
 3. Decide whether to take over the current thread or start a new thread/session.
 
@@ -309,7 +314,7 @@ The bot registers four slash commands for introspection and management:
 | `/memory`              | Show help for memory subcommands                              |
 | `/memory list <repo>`  | List recent memories for a repo                               |
 | `/memory count <repo>` | Show total memory count for a repo                            |
-| `/memory clear <repo>` | Clear expired memories for a repo                             |
+| `/memory clear <repo>` | Clear all memories for a repo                                 |
 | `/session`             | Show total session count                                      |
 | `/session <thread_ts>` | Inspect a specific session (workspace, Claude session, state) |
 
@@ -382,7 +387,7 @@ pnpm e2e -- --list
 pnpm e2e -- --search workspace
 ```
 
-The CLI auto-discovers all `run*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
+The CLI auto-discovers `run.ts` and `run-*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
 
 Recent scenarios cover rich text rendering, long reply splitting, workspace label attachment, clearing the thinking state after reply, retained progress summaries, and cross-session preference memory recall.
 
