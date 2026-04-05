@@ -433,7 +433,9 @@ export async function handleThreadConversation(
   const sink = {
     onEvent: async (event: ClaudeExecutionEvent): Promise<void> => {
       if (event.type === 'assistant-message') {
-        await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text);
+        await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text, {
+          ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
+        });
         if (progressMessageActive && progressMessageTs) {
           await deps.renderer
             .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
@@ -445,13 +447,12 @@ export async function handleThreadConversation(
             });
           progressMessageTs = undefined;
           progressMessageActive = false;
-        } else {
-          activeUiState = defaultThinkingUiState;
-          lastUiStateKey = defaultThinkingUiStateKey;
-          await updateInFlightIndicator(activeUiState).catch((error) => {
-            deps.logger.warn('Failed to restore Slack thinking indicator: %s', String(error));
-          });
         }
+        activeUiState = undefined;
+        lastUiStateKey = undefined;
+        await deps.renderer.clearUiState(client, message.channel, threadTs).catch((error) => {
+          deps.logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
+        });
         return;
       }
 
