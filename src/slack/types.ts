@@ -30,10 +30,6 @@ export interface SlackConversationsApi {
   }) => Promise<{ messages?: unknown[] }>;
 }
 
-export interface SlackChatStreamStartResult {
-  ts?: string;
-}
-
 export interface SlackMrkdwnTextObject {
   text: string;
   type: 'mrkdwn';
@@ -73,54 +69,14 @@ export interface SlackActionsBlock {
 
 export type SlackBlock = SlackActionsBlock | SlackContextBlock | SlackSectionBlock;
 
-export interface SlackMarkdownTextChunk {
-  text: string;
-  type: 'markdown_text';
-}
-
-export interface SlackTaskUpdateChunk {
-  details?: string;
-  id: string;
-  output?: string;
-  status: 'pending' | 'in_progress' | 'complete' | 'error';
-  title: string;
-  type: 'task_update';
-}
-
-export interface SlackPlanUpdateChunk {
-  title: string;
-  type: 'plan_update';
-}
-
-export type SlackStreamChunk = SlackMarkdownTextChunk | SlackTaskUpdateChunk | SlackPlanUpdateChunk;
-
 export interface SlackChatApi {
-  appendStream: (args: {
-    channel: string;
-    ts: string;
-    markdown_text?: string;
-    chunks?: SlackStreamChunk[];
-  }) => Promise<unknown>;
   delete: (args: { channel: string; ts: string }) => Promise<unknown>;
   postMessage: (args: {
-    blocks?: SlackBlock[];
+    blocks?: unknown[];
     channel: string;
     text: string;
     thread_ts?: string;
   }) => Promise<{ ts?: string }>;
-  startStream: (args: {
-    channel: string;
-    thread_ts: string;
-    recipient_team_id: string;
-    recipient_user_id: string;
-    task_display_mode?: 'plan';
-  }) => Promise<SlackChatStreamStartResult>;
-  stopStream: (args: {
-    channel: string;
-    ts: string;
-    thread_ts?: string;
-    markdown_text?: string;
-  }) => Promise<unknown>;
   update: (args: {
     blocks?: SlackBlock[];
     channel: string;

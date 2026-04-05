@@ -184,6 +184,10 @@ describe('Workspace message action test', () => {
       {
         blocks: [
           {
+            elements: [{ text: '_Working in team/slack-cc-bot_', type: 'mrkdwn' }],
+            type: 'context',
+          },
+          {
             elements: [
               {
                 elements: [{ text: 'Workspace action completed.', type: 'text' }],

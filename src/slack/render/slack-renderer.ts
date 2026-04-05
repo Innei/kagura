@@ -1,13 +1,10 @@
+import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks';
+
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { ClaudeUiState } from '~/schemas/claude/publish-state.js';
 
-import type {
-  SlackBlock,
-  SlackMrkdwnTextObject,
-  SlackStreamChunk,
-  SlackWebClientLike,
-} from '../types.js';
+import type { SlackBlock, SlackMrkdwnTextObject, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
 const DEFAULT_LOADING_MESSAGES = [
@@ -180,87 +177,40 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     text: string,
+    options?: { workspaceLabel?: string },
   ): Promise<string | undefined> {
     if (!text.trim()) {
       return undefined;
     }
 
-    const response = await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text,
+    const blocks = markdownToBlocks(normalizeUnderscoreEmphasis(text), {
+      preferSectionBlocks: false,
     });
+    const batches = splitBlocksWithText(blocks);
 
-    return response.ts;
-  }
-
-  async startStream(
-    client: SlackWebClientLike,
-    channelId: string,
-    threadTs: string,
-    recipientTeamId: string,
-    recipientUserId: string,
-  ): Promise<string> {
-    const response = await client.chat.startStream({
-      channel: channelId,
-      thread_ts: threadTs,
-      recipient_team_id: recipientTeamId,
-      recipient_user_id: recipientUserId,
-      task_display_mode: 'plan',
-    });
-
-    if (!response.ts) {
-      throw new Error('Slack did not return a stream timestamp.');
+    if (options?.workspaceLabel && batches.length > 0) {
+      const first = batches[0]!;
+      first.blocks = [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `_Working in ${options.workspaceLabel}_` }],
+        },
+        ...(first.blocks ?? []),
+      ];
     }
 
-    return response.ts;
-  }
-
-  async appendText(
-    client: SlackWebClientLike,
-    channelId: string,
-    streamTs: string,
-    text: string,
-  ): Promise<void> {
-    if (!text.trim()) {
-      return;
+    let lastTs: string | undefined;
+    for (const batch of batches) {
+      const response = await client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: batch.text,
+        blocks: batch.blocks,
+      });
+      lastTs = response.ts;
     }
 
-    await client.chat.appendStream({
-      channel: channelId,
-      ts: streamTs,
-      markdown_text: text,
-    });
-  }
-
-  async appendChunks(
-    client: SlackWebClientLike,
-    channelId: string,
-    streamTs: string,
-    chunks: SlackStreamChunk[],
-  ): Promise<void> {
-    if (chunks.length === 0) return;
-
-    await client.chat.appendStream({
-      channel: channelId,
-      ts: streamTs,
-      chunks,
-    });
-  }
-
-  async stopStream(
-    client: SlackWebClientLike,
-    channelId: string,
-    streamTs: string,
-    threadTs: string,
-    markdownText?: string,
-  ): Promise<void> {
-    await client.chat.stopStream({
-      channel: channelId,
-      ts: streamTs,
-      thread_ts: threadTs,
-      ...(markdownText ? { markdown_text: markdownText } : {}),
-    });
+    return lastTs;
   }
 
   private buildProgressMessageText(state: ClaudeUiState): string {
@@ -339,4 +289,25 @@ export class SlackRenderer {
 
     return deduped;
   }
+}
+
+const FENCED_CODE_BLOCK = /^(`{3}|~{3})[^\n]*\n.+?\n\1/gms;
+const INLINE_CODE = /`[^\n`]+`/g;
+const UNDERSCORE_EMPHASIS = /\b_([^\n_]+)_\b/g;
+
+export function normalizeUnderscoreEmphasis(markdown: string): string {
+  const codeRanges: Array<[number, number]> = [];
+  for (const match of markdown.matchAll(FENCED_CODE_BLOCK)) {
+    codeRanges.push([match.index, match.index + match[0].length]);
+  }
+  for (const match of markdown.matchAll(INLINE_CODE)) {
+    codeRanges.push([match.index, match.index + match[0].length]);
+  }
+
+  return markdown.replaceAll(UNDERSCORE_EMPHASIS, (full, inner, offset) => {
+    if (codeRanges.some(([start, end]) => offset >= start && offset < end)) {
+      return full;
+    }
+    return `*${inner}*`;
+  });
 }

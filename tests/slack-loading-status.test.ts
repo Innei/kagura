@@ -285,6 +285,10 @@ describe('Slack loading status test', () => {
     expect(postMessageCalls[1]).toEqual({
       blocks: [
         {
+          elements: [{ text: '_Working in slack-cc-bot_', type: 'mrkdwn' }],
+          type: 'context',
+        },
+        {
           elements: [
             {
               elements: [{ text: 'Updated loading messages.', type: 'text' }],
