@@ -107,9 +107,8 @@ describe('Workspace picker action test', () => {
     expect(pickerMessage.text).toContain('org1/my-app');
     expect(pickerMessage.text).toContain('org2/my-app');
 
-    const actionsBlock = pickerMessage.blocks?.find(
-      (block: SlackBlock) => block.type === 'actions',
-    );
+    const pickerBlocks = pickerMessage.blocks as SlackBlock[] | undefined;
+    const actionsBlock = pickerBlocks?.find((block: SlackBlock) => block.type === 'actions');
     expect(actionsBlock).toBeDefined();
     expect(actionsBlock!.type).toBe('actions');
 
@@ -297,12 +296,7 @@ function createMemoryStore(): MemoryStore {
 function createSlackClientFixture(): {
   ackCalls: unknown[];
   client: SlackWebClientLike;
-  postMessageCalls: Array<{
-    blocks?: SlackBlock[];
-    channel: string;
-    text: string;
-    thread_ts?: string;
-  }>;
+  postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]>;
   statusCalls: Array<{
     channel_id: string;
     loading_messages?: string[];
@@ -312,12 +306,7 @@ function createSlackClientFixture(): {
   viewOpenCalls: Array<{ trigger_id: string; view: unknown }>;
 } {
   const ackCalls: unknown[] = [];
-  const postMessageCalls: Array<{
-    blocks?: SlackBlock[];
-    channel: string;
-    text: string;
-    thread_ts?: string;
-  }> = [];
+  const postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
   const statusCalls: Array<{
     channel_id: string;
     loading_messages?: string[];

@@ -5,6 +5,10 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeAgentSdkExecutor } from '~/claude/executor/anthropic-agent-sdk.js';
+import type { ClaudeExecutionEvent, ClaudeExecutionRequest } from '~/claude/executor/types.js';
+import { SLACK_UI_STATE_TOOL_NAME } from '~/claude/tools/publish-state.js';
+import { RECALL_MEMORY_TOOL_NAME } from '~/claude/tools/recall-memory.js';
+import { SAVE_MEMORY_TOOL_NAME } from '~/claude/tools/save-memory.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -449,7 +453,158 @@ describe('Slack loading status test', () => {
       ]),
     );
   });
+
+  it('injects threadTs when the publish_state MCP tool emits UI state', async () => {
+    const { events, tools } = await getMcpToolsForRequest();
+
+    const result = await getToolHandler(
+      tools,
+      SLACK_UI_STATE_TOOL_NAME,
+    )({
+      loadingMessages: ['Inspecting the workspace...'],
+      status: 'Thinking...',
+    });
+
+    expect(result).toEqual({
+      content: [{ text: 'UI state published.', type: 'text' }],
+    });
+    expect(events).toContainEqual({
+      type: 'ui-state',
+      state: {
+        clear: false,
+        loadingMessages: ['Inspecting the workspace...'],
+        status: 'Thinking...',
+        threadTs: '1712345678.000100',
+      },
+    });
+  });
+
+  it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {
+    const search = vi.fn(() => []);
+    const memoryStore = {
+      ...createMemoryStore(),
+      search,
+    };
+    const { tools } = await getMcpToolsForRequest({}, memoryStore);
+
+    const result = await getToolHandler(
+      tools,
+      RECALL_MEMORY_TOOL_NAME,
+    )({
+      scope: 'workspace',
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          text: 'No workspace is set. Use scope "global" to search global memories, or mention a repository to set a workspace.',
+          type: 'text',
+        },
+      ],
+    });
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('defaults save_memory to workspace scope when a workspace is configured', async () => {
+    const save = vi.fn((input) => ({
+      ...input,
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+      scope: 'workspace' as const,
+    }));
+    const memoryStore = {
+      ...createMemoryStore(),
+      save,
+    };
+    const { tools } = await getMcpToolsForRequest(
+      {
+        workspaceLabel: 'slack-cc-bot',
+        workspacePath: '/tmp/slack-cc-bot',
+        workspaceRepoId: 'repo-1',
+      },
+      memoryStore,
+    );
+
+    const result = await getToolHandler(
+      tools,
+      SAVE_MEMORY_TOOL_NAME,
+    )({
+      category: 'context',
+      content: 'Remember this summary.',
+    });
+
+    expect(save).toHaveBeenCalledWith({
+      category: 'context',
+      content: 'Remember this summary.',
+      repoId: 'repo-1',
+      threadTs: '1712345678.000100',
+    });
+    expect(result).toEqual({
+      content: [{ text: 'Memory saved (workspace): memory-1', type: 'text' }],
+    });
+  });
 });
+
+type CapturedMcpTool = {
+  handler: (args: Record<string, unknown>) => Promise<unknown>;
+  name: string;
+};
+
+async function getMcpToolsForRequest(
+  overrides: Partial<ClaudeExecutionRequest> = {},
+  memoryStore: MemoryStore = createMemoryStore(),
+): Promise<{ events: ClaudeExecutionEvent[]; tools: CapturedMcpTool[] }> {
+  sdkMocks.query.mockImplementation(() => {
+    throw new Error('stop-after-mcp-server');
+  });
+
+  const executor = new ClaudeAgentSdkExecutor(createTestLogger(), memoryStore);
+  const events: ClaudeExecutionEvent[] = [];
+
+  await expect(
+    executor.execute(createExecutionRequest(overrides), {
+      onEvent: async (event) => {
+        events.push(event);
+      },
+    }),
+  ).rejects.toThrow('stop-after-mcp-server');
+
+  const lastCreateMcpServerCall = sdkMocks.createSdkMcpServer.mock.calls.at(-1);
+  const mcpServer = lastCreateMcpServerCall?.[0] as { tools: CapturedMcpTool[] } | undefined;
+  expect(mcpServer).toBeDefined();
+
+  return {
+    events,
+    tools: mcpServer!.tools,
+  };
+}
+
+function getToolHandler(
+  tools: CapturedMcpTool[],
+  toolName: string,
+): (args: Record<string, unknown>) => Promise<unknown> {
+  const tool = tools.find((candidate) => candidate.name === toolName);
+  expect(tool).toBeDefined();
+  return tool!.handler;
+}
+
+function createExecutionRequest(
+  overrides: Partial<ClaudeExecutionRequest> = {},
+): ClaudeExecutionRequest {
+  return {
+    channelId: 'C123',
+    mentionText: '<@U_BOT> inspect the loading messages in slack-cc-bot',
+    threadContext: {
+      channelId: 'C123',
+      messages: [],
+      renderedPrompt: '',
+      threadTs: '1712345678.000100',
+    },
+    threadTs: '1712345678.000100',
+    userId: 'U123',
+    ...overrides,
+  };
+}
 
 function createTestLogger(): AppLogger {
   const logger = {
@@ -527,12 +682,7 @@ function createMemoryStore(): MemoryStore {
 function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   client: SlackWebClientLike;
   deleteCalls: Array<{ channel: string; ts: string }>;
-  postMessageCalls: Array<{
-    blocks?: SlackBlock[];
-    channel: string;
-    text: string;
-    thread_ts?: string;
-  }>;
+  postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]>;
   reactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
   statusCalls: Array<{
     channel_id: string;
@@ -543,12 +693,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   updateCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; ts: string }>;
 } {
   const deleteCalls: Array<{ channel: string; ts: string }> = [];
-  const postMessageCalls: Array<{
-    blocks?: SlackBlock[];
-    channel: string;
-    text: string;
-    thread_ts?: string;
-  }> = [];
+  const postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
   const reactionCalls: Array<{ channel: string; name: string; timestamp: string }> = [];
   const statusCalls: Array<{
     channel_id: string;

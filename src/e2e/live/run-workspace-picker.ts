@@ -11,6 +11,7 @@ import { decodeWorkspacePickerButtonValue } from '~/slack/interactions/workspace
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
+import { buildWorkspacePickerTempRepoPaths } from './workspace-picker-paths.js';
 
 interface WorkspacePickerLiveResult {
   botUserId: string;
@@ -44,11 +45,8 @@ async function main(): Promise<void> {
   }
 
   const runId = randomUUID();
-  const tempRepoName = `e2e-picker-${runId.slice(0, 8)}`;
-  const tempParentA = path.join(env.REPO_ROOT_DIR, `__e2e_a_${runId.slice(0, 8)}__`);
-  const tempParentB = path.join(env.REPO_ROOT_DIR, `__e2e_b_${runId.slice(0, 8)}__`);
-  const tempRepo1 = path.join(tempParentA, tempRepoName);
-  const tempRepo2 = path.join(tempParentB, tempRepoName);
+  const { tempParentA, tempParentB, tempRepo1, tempRepo2, tempRepoName } =
+    buildWorkspacePickerTempRepoPaths(env.REPO_ROOT_DIR, runId);
 
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
   const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
