@@ -31,6 +31,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   let progressMessageTs: string | undefined;
   let progressMessageActive = false;
+  let terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   const toolHistory = new Map<string, number>();
   const seenActivities = new Set<string>();
   let lastStateKey: string | undefined;
@@ -184,8 +185,20 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     if (event.resumeHandle) {
       sessionStore.patch(threadTs, { claudeSessionId: event.resumeHandle });
     }
-    if (event.phase === 'started' || event.phase === 'completed') return;
+    if (event.phase === 'started') return;
+    if (event.phase === 'completed') {
+      terminalPhase = 'completed';
+      return;
+    }
+    if (event.phase === 'stopped') {
+      terminalPhase = 'stopped';
+      if (!progressMessageTs) {
+        await renderer.postThreadReply(client, channel, threadTs, '_Stopped by user._');
+      }
+      return;
+    }
     if (event.phase === 'failed') {
+      terminalPhase = 'failed';
       runtimeError(
         logger,
         'Execution failed for thread %s: %s',
@@ -222,11 +235,31 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         logger.warn('Failed to clear UI state: %s', String(err));
       });
       if (progressMessageTs) {
-        await renderer
-          .finalizeThreadProgressMessage(client, channel, threadTs, progressMessageTs, toolHistory)
-          .catch((err) => {
-            logger.warn('Failed to finalize progress message: %s', String(err));
-          });
+        if (terminalPhase === 'stopped') {
+          await renderer
+            .finalizeThreadProgressMessageStopped(
+              client,
+              channel,
+              threadTs,
+              progressMessageTs,
+              toolHistory,
+            )
+            .catch((err) => {
+              logger.warn('Failed to finalize stopped progress message: %s', String(err));
+            });
+        } else {
+          await renderer
+            .finalizeThreadProgressMessage(
+              client,
+              channel,
+              threadTs,
+              progressMessageTs,
+              toolHistory,
+            )
+            .catch((err) => {
+              logger.warn('Failed to finalize progress message: %s', String(err));
+            });
+        }
       }
     },
   };

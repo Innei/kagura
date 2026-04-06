@@ -132,6 +132,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'test' },
               { command: '/session', description: 'test' },
               { command: '/provider', description: 'test' },
+              { command: '/stop', description: 'test' },
             ],
           },
         },
@@ -185,6 +186,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
+                { command: '/stop', description: 'test' },
               ],
             },
           },
@@ -247,6 +249,8 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/workspace', description: 'test' },
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
+                { command: '/provider', description: 'test' },
+                { command: '/stop', description: 'test' },
               ],
             },
           },
@@ -302,9 +306,9 @@ describe('syncSlashCommands with token rotation', () => {
 
     const body = JSON.parse(updateInit.body as string);
     const commands = body.manifest.features.slash_commands;
-    expect(commands).toHaveLength(5);
+    expect(commands).toHaveLength(6);
     expect(commands.map((c: { command: string }) => c.command)).toEqual(
-      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session', '/provider']),
+      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session', '/provider', '/stop']),
     );
   });
 
@@ -322,6 +326,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'x' },
               { command: '/session', description: 'x' },
               { command: '/provider', description: 'x' },
+              { command: '/stop', description: 'x' },
             ],
           },
         },

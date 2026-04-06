@@ -67,6 +67,11 @@ const DESIRED_COMMANDS: SlackManifestSlashCommand[] = [
     description: 'View or switch the AI provider for this thread',
     usage_hint: '[list|reset|<provider-id>]',
   },
+  {
+    command: '/stop',
+    description: 'Stop all in-progress bot replies in the current thread',
+    usage_hint: ' ',
+  },
 ];
 
 export interface ManifestSyncOptions {

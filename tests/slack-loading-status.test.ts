@@ -13,6 +13,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { createAppMentionHandler } from '~/slack/ingress/app-mention-handler.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackBlock, SlackWebClientLike } from '~/slack/types.js';
@@ -75,6 +76,7 @@ describe('Slack loading status test', () => {
       renderer,
       sessionStore,
       threadContextLoader,
+      threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     });
     const { client, deleteCalls, postMessageCalls, reactionCalls, statusCalls, updateCalls } =
@@ -322,6 +324,157 @@ describe('Slack loading status test', () => {
     expect(sessionStore.get(threadTs)?.claudeSessionId).toBe('session-1');
   });
 
+  it('emits stopped lifecycle when the executor abort signal fires', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-'));
+    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+    const ac = new AbortController();
+    const logger = createTestLogger();
+    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const events: AgentExecutionEvent[] = [];
+
+    sdkMocks.query.mockImplementation(() =>
+      createAbortAfterFirstMessageStream(ac.signal, repoPath),
+    );
+
+    const done = executor.execute(
+      {
+        ...createExecutionRequest(),
+        workspacePath: repoPath,
+        abortSignal: ac.signal,
+      },
+      {
+        onEvent: async (event) => {
+          events.push(event);
+        },
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(events.some((e) => e.type === 'lifecycle' && e.phase === 'started')).toBe(true);
+    });
+    await vi.waitFor(() => {
+      expect(
+        (logger.info as ReturnType<typeof vi.fn>).mock.calls.some((call: unknown[]) =>
+          String(call[0]).includes('First Claude SDK message'),
+        ),
+      ).toBe(true);
+    });
+    ac.abort();
+    await done;
+
+    const lifecycle = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'lifecycle' }> => e.type === 'lifecycle',
+    );
+    expect(lifecycle.map((e) => e.phase)).toEqual(['started', 'stopped']);
+    expect(lifecycle.some((e) => e.phase === 'failed')).toBe(false);
+    expect(lifecycle[0]).toEqual({ type: 'lifecycle', phase: 'started' });
+    expect(lifecycle[1]).toEqual({
+      type: 'lifecycle',
+      phase: 'stopped',
+      reason: 'user_stop',
+      resumeHandle: 'session-abort-test',
+    });
+  });
+
+  it('resolves without failed lifecycle when publishing stopped throws', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-sink-'));
+    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+    const ac = new AbortController();
+    const logger = createTestLogger();
+    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const events: AgentExecutionEvent[] = [];
+    let stoppedPublishAttempts = 0;
+
+    sdkMocks.query.mockImplementation(() =>
+      createAbortAfterFirstMessageStream(ac.signal, repoPath),
+    );
+
+    const done = executor.execute(
+      {
+        ...createExecutionRequest(),
+        workspacePath: repoPath,
+        abortSignal: ac.signal,
+      },
+      {
+        onEvent: async (event) => {
+          if (event.type === 'lifecycle' && event.phase === 'stopped') {
+            stoppedPublishAttempts += 1;
+            throw new Error('sink stopped publish failed');
+          }
+          events.push(event);
+        },
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(events.some((e) => e.type === 'lifecycle' && e.phase === 'started')).toBe(true);
+    });
+    ac.abort();
+    await expect(done).resolves.toBeUndefined();
+
+    const lifecycle = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'lifecycle' }> => e.type === 'lifecycle',
+    );
+    expect(lifecycle.map((e) => e.phase)).toEqual(['started']);
+    expect(lifecycle.some((e) => e.phase === 'failed')).toBe(false);
+    expect(stoppedPublishAttempts).toBe(1);
+    expect(logger.warn).toHaveBeenCalled();
+    const warnMsg = String((logger.warn as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '');
+    expect(warnMsg).toContain('Failed to publish stopped lifecycle');
+  });
+
+  it('emits started then stopped when abort signal is already aborted before first next()', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const events: AgentExecutionEvent[] = [];
+
+    sdkMocks.query.mockImplementation(() => createMessageStream([]));
+
+    await executor.execute(
+      { ...createExecutionRequest(), abortSignal: ac.signal },
+      {
+        onEvent: async (event) => {
+          events.push(event);
+        },
+      },
+    );
+
+    const lifecycle = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'lifecycle' }> => e.type === 'lifecycle',
+    );
+    expect(lifecycle.map((e) => e.phase)).toEqual(['started', 'stopped']);
+    expect(lifecycle.some((e) => e.phase === 'failed')).toBe(false);
+  });
+
+  it('emits failed when the iterator rejects with a non-abort error', async () => {
+    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const events: AgentExecutionEvent[] = [];
+
+    sdkMocks.query.mockImplementation(() =>
+      createIterableFirstNextRejects(new Error('iterator boom')),
+    );
+
+    await executor.execute(createExecutionRequest(), {
+      onEvent: async (event) => {
+        events.push(event);
+      },
+    });
+
+    const lifecycle = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'lifecycle' }> => e.type === 'lifecycle',
+    );
+    expect(lifecycle.map((e) => e.phase)).toEqual(['started', 'failed']);
+    expect(lifecycle.some((e) => e.phase === 'stopped')).toBe(false);
+    expect(lifecycle[1]).toMatchObject({
+      type: 'lifecycle',
+      phase: 'failed',
+      error: 'iterator boom',
+    });
+  });
+
   it('cleans up the thread progress message when execution fails after cutover', async () => {
     const threadTs = '1712345678.000101';
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-'));
@@ -341,6 +494,7 @@ describe('Slack loading status test', () => {
       renderer,
       sessionStore,
       threadContextLoader,
+      threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     });
     const { client, deleteCalls, postMessageCalls, statusCalls, updateCalls } =
@@ -778,4 +932,41 @@ async function* createFailingMessageStream(
   }
 
   throw error;
+}
+
+function createIterableFirstNextRejects(err: Error): AsyncIterable<unknown> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          return Promise.reject(err);
+        },
+      };
+    },
+  };
+}
+
+async function* createAbortAfterFirstMessageStream(
+  signal: AbortSignal,
+  cwd: string,
+): AsyncIterable<unknown> {
+  yield {
+    type: 'system',
+    subtype: 'init',
+    cwd,
+    model: 'claude-sonnet-test',
+    session_id: 'session-abort-test',
+  };
+  await new Promise<void>((_resolve, reject) => {
+    const abortErr = (): void => {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      reject(err);
+    };
+    if (signal.aborted) {
+      abortErr();
+      return;
+    }
+    signal.addEventListener('abort', abortErr, { once: true });
+  });
 }

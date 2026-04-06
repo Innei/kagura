@@ -213,6 +213,38 @@ export class SlackRenderer {
     });
   }
 
+  async finalizeThreadProgressMessageStopped(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    progressMessageTs: string,
+    _toolHistory?: Map<string, number>,
+  ): Promise<void> {
+    const text = 'Stopped by user.';
+    const blocks: SlackBlock[] = [
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text }],
+      },
+    ];
+
+    await client.chat.update({
+      channel: channelId,
+      ts: progressMessageTs,
+      text,
+      blocks,
+    });
+    await this.statusProbe?.recordProgressMessage({
+      action: 'stopped',
+      channelId,
+      kind: 'progress-message',
+      messageTs: progressMessageTs,
+      recordedAt: new Date().toISOString(),
+      text,
+      threadTs,
+    });
+  }
+
   async postThreadReply(
     client: SlackWebClientLike,
     channelId: string,

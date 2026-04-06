@@ -8,6 +8,7 @@ import { createRootLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 function createTestLogger() {
@@ -182,6 +183,7 @@ function createTestDeps(options?: {
       drain: async () => {},
     },
     sessionStore: createSessionStore() as SlashCommandDependencies['sessionStore'],
+    threadExecutionRegistry: createThreadExecutionRegistry(),
     workspaceResolver: new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 3 }),
   };
 }

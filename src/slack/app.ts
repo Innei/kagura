@@ -9,6 +9,7 @@ import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
+import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
 import {
   createAppMentionHandler,
   createAssistantThreadStartedHandler,
@@ -32,6 +33,7 @@ export interface SlackApplicationDependencies {
   providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
+  threadExecutionRegistry: ThreadExecutionRegistry;
   workspaceResolver: WorkspaceResolver;
 }
 
@@ -56,6 +58,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     sessionStore: deps.sessionStore,
     claudeExecutor: defaultExecutor,
     providerRegistry: deps.providerRegistry,
+    threadExecutionRegistry: deps.threadExecutionRegistry,
     workspaceResolver: deps.workspaceResolver,
   };
   const assistant = new Assistant({
@@ -70,6 +73,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     memoryStore: deps.memoryStore,
     providerRegistry: deps.providerRegistry,
     sessionStore: deps.sessionStore,
+    threadExecutionRegistry: deps.threadExecutionRegistry,
     workspaceResolver: deps.workspaceResolver,
   });
   app.shortcut(

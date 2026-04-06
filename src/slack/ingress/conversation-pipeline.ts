@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { AgentExecutor } from '~/agent/types.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
@@ -182,6 +184,31 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
   });
 
+  const controller = new AbortController();
+  const executionId = randomUUID();
+  const startedAt = new Date().toISOString();
+  let executionReleasedFromRegistry = false;
+  const releaseExecutionFromRegistry = () => {
+    if (executionReleasedFromRegistry) {
+      return;
+    }
+    executionReleasedFromRegistry = true;
+    unregisterExecution();
+  };
+
+  const unregisterExecution = deps.threadExecutionRegistry.register({
+    channelId: message.channel,
+    executionId,
+    providerId: executor.providerId,
+    startedAt,
+    stop: async () => {
+      releaseExecutionFromRegistry();
+      controller.abort();
+    },
+    threadTs,
+    userId: message.user,
+  });
+
   try {
     runtimeInfo(
       deps.logger,
@@ -191,6 +218,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     );
     await executor.execute(
       {
+        abortSignal: controller.signal,
         channelId: message.channel,
         threadTs,
         userId: message.user,
@@ -224,6 +252,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       'An error occurred while processing your request.',
     );
   } finally {
+    releaseExecutionFromRegistry();
     await sink.finalize();
   }
 

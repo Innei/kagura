@@ -16,6 +16,7 @@ import { handleSessionCommand } from '~/slack/commands/session-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { handleUsageCommand } from '~/slack/commands/usage-command.js';
 import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 import type { LiveE2EScenario } from './scenario.js';
@@ -104,6 +105,7 @@ function buildCommandDeps(): SlashCommandDependencies {
     memoryStore,
     providerRegistry: createProviderRegistry('claude-code', new Map([['claude-code', ccExecutor]])),
     sessionStore: new SqliteSessionStore(db, logger.withTag('session')),
+    threadExecutionRegistry: createThreadExecutionRegistry(),
     workspaceResolver: new WorkspaceResolver({
       repoRootDir: env.REPO_ROOT_DIR,
       scanDepth: env.REPO_SCAN_DEPTH,

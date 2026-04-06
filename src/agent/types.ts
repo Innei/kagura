@@ -2,6 +2,7 @@ import type { ContextMemories } from '~/memory/types.js';
 import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
 
 export interface AgentExecutionRequest {
+  abortSignal?: AbortSignal;
   channelId: string;
   contextMemories?: ContextMemories;
   mentionText: string;
@@ -23,6 +24,12 @@ export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
       phase: 'completed';
+      resumeHandle?: string;
+    }
+  | {
+      type: 'lifecycle';
+      phase: 'stopped';
+      reason: 'user_stop';
       resumeHandle?: string;
     }
   | {

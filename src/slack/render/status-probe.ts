@@ -9,7 +9,7 @@ export interface SlackStatusProbeStatusRecord {
 }
 
 export interface SlackStatusProbeProgressRecord {
-  action: 'post' | 'update' | 'delete' | 'finalize';
+  action: 'post' | 'update' | 'delete' | 'finalize' | 'stopped';
   channelId: string;
   kind: 'progress-message';
   messageTs?: string;

@@ -27,6 +27,7 @@ function createRendererStub(): SlackRenderer {
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
@@ -170,5 +171,77 @@ describe('createActivitySink', () => {
     await sink.onEvent({ type: 'activity-state', state });
 
     expect(sink.toolHistory.get('Reading')).toBe(2);
+  });
+
+  it('lifecycle stopped with no progress posts _Stopped by user._ and not the generic error', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'lifecycle', phase: 'stopped', reason: 'user_stop' });
+
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      '_Stopped by user._',
+    );
+    expect(renderer.postThreadReply).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'An error occurred while processing your request.',
+    );
+  });
+
+  it('finalize uses stopped progress finalizer when stopped with progress and no assistant reply yet', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    const state: AgentActivityState = {
+      threadTs: 'ts1',
+      status: 'Reading files...',
+      activities: ['Reading src/index.ts...'],
+      clear: false,
+    };
+    await sink.onEvent({ type: 'activity-state', state });
+    await sink.onEvent({ type: 'lifecycle', phase: 'stopped', reason: 'user_stop' });
+
+    expect(renderer.postThreadReply).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      '_Stopped by user._',
+    );
+
+    await sink.finalize();
+
+    expect(renderer.finalizeThreadProgressMessageStopped).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'progress-ts',
+      sink.toolHistory,
+    );
+    expect(renderer.finalizeThreadProgressMessage).not.toHaveBeenCalled();
+    expect(renderer.postThreadReply).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      '_Stopped by user._',
+    );
   });
 });
