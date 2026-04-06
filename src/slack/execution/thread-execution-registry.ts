@@ -158,7 +158,7 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
       // Wait for stopped executions to fully complete (flush lifecycle events, persist session)
       const completionPromises = executions
         .filter((e) => e.completionPromise && !failedExecutions.includes(e))
-        .map((e) => e.completionPromise!.catch(() => {}));
+        .map((e) => e.completionPromise!);
       if (completionPromises.length > 0) {
         await Promise.allSettled(completionPromises);
       }
