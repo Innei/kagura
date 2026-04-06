@@ -97,7 +97,7 @@ describe('DEFAULT_CONVERSATION_STEPS', () => {
 function createMinimalPipelineContext(overrides?: {
   addAcknowledgementReaction?: boolean;
   sessionStoreRecords?: SessionRecord[];
-  threadExecutionRegistry?: ThreadExecutionRegistry;
+  threadExecutionRegistry?: ConversationPipelineContext['deps']['threadExecutionRegistry'];
   workspaceResolverResult?: WorkspaceResolution;
 }): ConversationPipelineContext {
   const records = new Map(
@@ -460,11 +460,7 @@ describe('executeAgent step', () => {
         userId: 'U123',
       }),
     );
-    const firstRegisterCall = register.mock.calls[0];
-    if (!firstRegisterCall) {
-      throw new Error('Expected register() to be called once');
-    }
-    const registered = firstRegisterCall[0] as { stop: () => Promise<void> };
+    const registered = register.mock.calls[0]![0] as { stop: () => Promise<void> };
     expect(typeof registered.stop).toBe('function');
 
     expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledWith(

@@ -41,6 +41,12 @@ export class SlackUserInputBridge {
       throw new Error(`Thread ${params.threadTs} is already waiting for user input.`);
     }
 
+    if (params.signal?.aborted) {
+      throw (
+        params.signal.reason ?? new Error(`User input request aborted for thread ${params.threadTs}`)
+      );
+    }
+
     return await new Promise<SlackUserInputAnswer>((resolve, reject) => {
       const cleanupAbort = this.attachAbortHandler(params.threadTs, params.signal, reject);
 
@@ -100,11 +106,6 @@ export class SlackUserInputBridge {
     reject: (reason?: unknown) => void,
   ): () => void {
     if (!signal) {
-      return () => {};
-    }
-
-    if (signal.aborted) {
-      reject(signal.reason ?? new Error(`User input request aborted for thread ${threadTs}`));
       return () => {};
     }
 

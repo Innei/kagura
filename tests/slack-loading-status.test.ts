@@ -383,7 +383,7 @@ describe('Slack loading status test', () => {
     });
     await vi.waitFor(() => {
       expect(
-        (logger.info as unknown as ReturnType<typeof vi.fn>).mock.calls.some((call: unknown[]) =>
+        ((logger.info as unknown) as ReturnType<typeof vi.fn>).mock.calls.some((call: unknown[]) =>
           String(call[0]).includes('First Claude SDK message'),
         ),
       ).toBe(true);
@@ -449,6 +449,10 @@ describe('Slack loading status test', () => {
     expect(lifecycle.some((e) => e.phase === 'failed')).toBe(false);
     expect(stoppedPublishAttempts).toBe(1);
     expect(logger.warn).toHaveBeenCalled();
+    const warnMsg = String(
+      ((logger.warn as unknown) as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '',
+    );
+    expect(warnMsg).toContain('Failed to publish stopped lifecycle');
   });
 
   it('emits started then stopped when abort signal is already aborted before first next()', async () => {

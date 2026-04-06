@@ -66,6 +66,26 @@ describe('SlackUserInputBridge', () => {
     expect(result.feedback).toContain('没有识别你的回复');
     expect(bridge.hasPending('thread-2')).toBe(true);
   });
+
+  it('does not keep a pending entry when the input signal is already aborted', async () => {
+    const bridge = new SlackUserInputBridge(createTestLogger());
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      bridge.awaitAnswer({
+        question: {
+          header: 'Calendar',
+          options: [{ description: 'Use Gregorian', label: 'Gregorian' }],
+          question: 'Which calendar should I use?',
+        },
+        signal: controller.signal,
+        threadTs: 'thread-3',
+      }),
+    ).rejects.toBeDefined();
+
+    expect(bridge.hasPending('thread-3')).toBe(false);
+  });
 });
 
 function createTestLogger(): AppLogger {

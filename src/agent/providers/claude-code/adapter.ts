@@ -1,8 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 import type {
@@ -265,7 +264,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         if (next.done) {
           break;
         }
-        const message = next.value;
+        const message = next.value as SDKMessage;
         if (firstMessage) {
           firstMessage = false;
           this.logger.info(
@@ -416,6 +415,13 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       settingSources: ['user', 'project'],
       allowedTools: ['Skill'],
       canUseTool: async (toolName, input, options) => {
+        if (toolName === 'Skill') {
+          return {
+            behavior: 'allow',
+            updatedInput: input,
+          };
+        }
+
         if (toolName === 'AskUserQuestion') {
           const userInputRequest = parseAgentUserInputRequest(input);
           if (!userInputRequest) {
@@ -452,8 +458,9 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         }
 
         return {
-          behavior: 'allow',
-          updatedInput: input,
+          behavior: 'deny',
+          message:
+            'The Slack host only bridges Skill dispatch and AskUserQuestion right now. Other tool permission requests inside skills are not yet supported here.',
         };
       },
     };
