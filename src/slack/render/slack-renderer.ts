@@ -46,6 +46,34 @@ export class SlackRenderer {
     this.logger.debug('Added acknowledgement reaction to message %s', messageTs);
   }
 
+  async removeAcknowledgementReaction(
+    client: SlackWebClientLike,
+    channelId: string,
+    messageTs: string,
+  ): Promise<void> {
+    await client.reactions.remove({
+      channel: channelId,
+      timestamp: messageTs,
+      name: env.SLACK_REACTION_NAME,
+    });
+
+    this.logger.debug('Removed acknowledgement reaction from message %s', messageTs);
+  }
+
+  async addCompletionReaction(
+    client: SlackWebClientLike,
+    channelId: string,
+    messageTs: string,
+  ): Promise<void> {
+    await client.reactions.add({
+      channel: channelId,
+      timestamp: messageTs,
+      name: env.SLACK_REACTION_DONE_NAME,
+    });
+
+    this.logger.debug('Added completion reaction to message %s', messageTs);
+  }
+
   async showThinkingIndicator(
     client: SlackWebClientLike,
     channelId: string,

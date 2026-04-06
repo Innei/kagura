@@ -1,5 +1,6 @@
 export interface SlackReactionsApi {
   add: (args: { channel: string; timestamp: string; name: string }) => Promise<unknown>;
+  remove: (args: { channel: string; timestamp: string; name: string }) => Promise<unknown>;
 }
 
 export interface SlackAssistantThreadsApi {

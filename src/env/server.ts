@@ -17,6 +17,7 @@ export const env = createEnv({
     SLACK_CONFIG_REFRESH_TOKEN: z.string().min(1).optional(),
     SLACK_SIGNING_SECRET: z.string().min(1),
     SLACK_REACTION_NAME: z.string().min(1).default('eyes'),
+    SLACK_REACTION_DONE_NAME: z.string().min(1).default('white_check_mark'),
     CLAUDE_MODEL: z.string().min(1).optional(),
     CLAUDE_MAX_TURNS: z.coerce.number().int().positive().default(24),
     CLAUDE_PERMISSION_MODE: z
@@ -48,6 +49,7 @@ export const env = createEnv({
     SLACK_CONFIG_REFRESH_TOKEN: process.env.SLACK_CONFIG_REFRESH_TOKEN,
     SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET,
     SLACK_REACTION_NAME: process.env.SLACK_REACTION_NAME,
+    SLACK_REACTION_DONE_NAME: process.env.SLACK_REACTION_DONE_NAME,
     CLAUDE_MODEL: process.env.CLAUDE_MODEL,
     CLAUDE_MAX_TURNS: process.env.CLAUDE_MAX_TURNS,
     CLAUDE_PERMISSION_MODE: process.env.CLAUDE_PERMISSION_MODE,

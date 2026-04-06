@@ -71,6 +71,20 @@ export interface SlackCompleteUploadExternalResponse {
   }>;
 }
 
+export interface SlackReactionsGetResponse {
+  channel: string;
+  message?: {
+    reactions?: Array<{
+      count: number;
+      name: string;
+      users: string[];
+    }>;
+    text?: string;
+    ts?: string;
+  };
+  type: string;
+}
+
 export class SlackApiClient {
   constructor(private readonly token: string) {}
 
@@ -94,6 +108,13 @@ export class SlackApiClient {
     timestamp: string;
   }): Promise<Record<string, never>> {
     return this.call<Record<string, never>>('reactions.add', args, 'POST');
+  }
+
+  async getReactions(args: {
+    channel: string;
+    timestamp: string;
+  }): Promise<SlackReactionsGetResponse> {
+    return this.call<SlackReactionsGetResponse>('reactions.get', { ...args, full: true }, 'GET');
   }
 
   async conversationReplies(args: {

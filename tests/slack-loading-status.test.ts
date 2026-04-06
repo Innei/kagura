@@ -79,8 +79,15 @@ describe('Slack loading status test', () => {
       threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     });
-    const { client, deleteCalls, postMessageCalls, reactionCalls, statusCalls, updateCalls } =
-      createSlackClientFixture({ threadTs });
+    const {
+      client,
+      deleteCalls,
+      postMessageCalls,
+      reactionCalls,
+      removeReactionCalls,
+      statusCalls,
+      updateCalls,
+    } = createSlackClientFixture({ threadTs });
 
     sdkMocks.query.mockImplementation(
       (_request: { prompt: string; options: Record<string, unknown> }) =>
@@ -205,6 +212,19 @@ describe('Slack loading status test', () => {
     });
 
     expect(reactionCalls).toEqual([
+      {
+        channel: 'C123',
+        name: 'eyes',
+        timestamp: threadTs,
+      },
+      {
+        channel: 'C123',
+        name: 'white_check_mark',
+        timestamp: threadTs,
+      },
+    ]);
+
+    expect(removeReactionCalls).toEqual([
       {
         channel: 'C123',
         name: 'eyes',
@@ -844,6 +864,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   deleteCalls: Array<{ channel: string; ts: string }>;
   postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]>;
   reactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
+  removeReactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
   statusCalls: Array<{
     channel_id: string;
     loading_messages?: string[];
@@ -855,6 +876,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   const deleteCalls: Array<{ channel: string; ts: string }> = [];
   const postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
   const reactionCalls: Array<{ channel: string; name: string; timestamp: string }> = [];
+  const removeReactionCalls: Array<{ channel: string; name: string; timestamp: string }> = [];
   const statusCalls: Array<{
     channel_id: string;
     loading_messages?: string[];
@@ -905,6 +927,10 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         reactionCalls.push(args);
         return {};
       },
+      remove: async (args) => {
+        removeReactionCalls.push(args);
+        return {};
+      },
     },
     files: {
       uploadV2: async () => ({ files: [{ id: 'F1' }] }),
@@ -919,6 +945,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     deleteCalls,
     postMessageCalls,
     reactionCalls,
+    removeReactionCalls,
     statusCalls,
     updateCalls,
   };

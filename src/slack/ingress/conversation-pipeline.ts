@@ -173,6 +173,14 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     throw new Error('Pipeline invariant: threadContext must be set before executeAgent');
   }
 
+  if (ctx.options.addAcknowledgementReaction) {
+    await deps.renderer
+      .removeAcknowledgementReaction(client, message.channel, message.ts)
+      .catch((error) => {
+        deps.logger.warn('Failed to remove acknowledgement reaction: %s', String(error));
+      });
+  }
+
   const executor = resolveExecutor(ctx.existingSession, deps);
   const sink = createActivitySink({
     channel: message.channel,
@@ -256,6 +264,13 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   } finally {
     releaseExecutionFromRegistry();
     await sink.finalize();
+    if (ctx.options.addAcknowledgementReaction && sink.terminalPhase === 'completed') {
+      await deps.renderer
+        .addCompletionReaction(client, message.channel, message.ts)
+        .catch((error) => {
+          deps.logger.warn('Failed to add completion reaction: %s', String(error));
+        });
+    }
   }
 
   return CONTINUE;

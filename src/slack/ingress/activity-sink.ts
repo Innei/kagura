@@ -20,6 +20,7 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  readonly terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   readonly toolHistory: Map<string, number>;
 }
 
@@ -233,6 +234,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   return {
     toolHistory,
+
+    get terminalPhase() {
+      return terminalPhase;
+    },
 
     async onEvent(event: AgentExecutionEvent): Promise<void> {
       if (event.type === 'assistant-message') {
