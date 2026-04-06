@@ -16,6 +16,7 @@ import {
   runConversationPipeline,
   stopActiveExecutionsStep,
 } from '~/slack/ingress/conversation-pipeline.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { ConversationPipelineContext, PipelineStep } from '~/slack/ingress/types.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -198,6 +199,7 @@ function createMinimalPipelineContext(overrides?: {
         }),
       } as unknown as SlackThreadContextLoader,
       threadExecutionRegistry,
+      userInputBridge: new SlackUserInputBridge(logger as unknown as AppLogger),
       workspaceResolver: {
         resolveFromText: vi
           .fn()
