@@ -275,6 +275,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       {
         abortSignal: controller.signal,
         channelId: message.channel,
+        executionId,
         threadTs,
         userId: message.user,
         mentionText: message.text,

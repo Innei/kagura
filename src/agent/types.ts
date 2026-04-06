@@ -13,6 +13,7 @@ export interface AgentExecutionRequest {
   abortSignal?: AbortSignal;
   channelId: string;
   contextMemories?: ContextMemories;
+  executionId?: string;
   mentionText: string;
   resumeHandle?: string;
   threadContext: NormalizedThreadContext;
