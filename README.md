@@ -1,6 +1,6 @@
 # slack-cc-bot
 
-Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) natively in Slack — mention the bot in any channel or thread, route the session into the right repository, and get context-aware replies with Slack-native rich text, live status updates, and persistent memory.
+Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) natively in Slack — mention the bot in any channel or thread, route the session into the right repository, and get context-aware replies with Slack-native rich text, live status updates, and persistent memory.
 
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)
