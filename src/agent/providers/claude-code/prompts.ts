@@ -5,14 +5,29 @@ import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
 
 export function buildPrompt(request: AgentExecutionRequest): string {
+  const parts: string[] = [];
+
+  // Inject memories into the user prompt (not system prompt) so the system
+  // prompt stays stable across turns and Anthropic prompt-cache can hit.
+  const memoryLines = buildMemoryContext(request);
+  if (memoryLines.length > 0) {
+    parts.push('<conversation_memory>');
+    parts.push(...memoryLines);
+    parts.push('</conversation_memory>');
+    parts.push('');
+  }
+
   if (request.resumeHandle) {
     const header = request.workspaceLabel
       ? `Current workspace: ${request.workspaceLabel}`
       : 'No workspace is set for this conversation.';
-    return [header, '', '<user_message>', request.mentionText, '</user_message>'].join('\n');
+    parts.push(header);
+    parts.push('');
+    parts.push('<user_message>');
+    parts.push(request.mentionText);
+    parts.push('</user_message>');
+    return parts.join('\n');
   }
-
-  const parts: string[] = [];
 
   if (request.threadContext.messages.length > 0) {
     parts.push('<thread_context>');
@@ -52,7 +67,6 @@ export function buildSystemPrompt(request: AgentExecutionRequest): string {
     `You are responding in channel ${request.channelId}, thread ${request.threadTs}.`,
     ...workspaceLines,
     '',
-    ...buildMemoryContext(request),
     'Available tools:',
     `- ${SLACK_UI_STATE_TOOL_NAME}: publish status/loading state updates to Slack UI.`,
     `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
