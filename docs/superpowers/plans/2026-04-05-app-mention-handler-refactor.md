@@ -16,8 +16,7 @@
 
 - Create: `src/slack/ingress/types.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Create the types file**
+- **Step 1: Create the types file**
 
 Create `src/slack/ingress/types.ts` with all shared interfaces extracted from the handler:
 
@@ -83,7 +82,7 @@ export type PipelineStepResult = { action: 'continue' } | { action: 'done'; reas
 export type PipelineStep = (ctx: ConversationPipelineContext) => Promise<PipelineStepResult>;
 ```
 
-- [ ] **Step 2: Update app-mention-handler.ts to import from types.ts**
+- **Step 2: Update app-mention-handler.ts to import from types.ts**
 
 In `src/slack/ingress/app-mention-handler.ts`, remove the `SlackIngressDependencies`, `ThreadConversationMessage`, and `ThreadConversationOptions` interface definitions. Replace with imports:
 
@@ -112,17 +111,17 @@ Also remove these now-unnecessary type imports from the handler file (they were 
 
 Keep imports that are used in function bodies (e.g., `SessionRecord` for `resolveWorkspaceForConversation`).
 
-- [ ] **Step 3: Run tests to verify nothing broke**
+- **Step 3: Run tests to verify nothing broke**
 
 Run: `pnpm test`
 Expected: All tests pass. No import resolution errors.
 
-- [ ] **Step 4: Run typecheck**
+- **Step 4: Run typecheck**
 
 Run: `pnpm typecheck`
 Expected: No type errors.
 
-- [ ] **Step 5: Commit**
+- **Step 5: Commit**
 
 ```bash
 git add src/slack/ingress/types.ts src/slack/ingress/app-mention-handler.ts
@@ -137,8 +136,7 @@ git commit -m "refactor: extract shared ingress types to types.ts"
 
 - Create: `src/logger/runtime.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Create the runtime logging module**
+- **Step 1: Create the runtime logging module**
 
 Create `src/logger/runtime.ts`:
 
@@ -161,7 +159,7 @@ export function runtimeWarn(logger: AppLogger, message: string, ...args: unknown
 }
 ```
 
-- [ ] **Step 2: Update app-mention-handler.ts**
+- **Step 2: Update app-mention-handler.ts**
 
 Remove the three `runtimeInfo`, `runtimeError`, `runtimeWarn` function definitions from the handler file (lines 671-684). Replace with:
 
@@ -169,12 +167,12 @@ Remove the three `runtimeInfo`, `runtimeError`, `runtimeWarn` function definitio
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 ```
 
-- [ ] **Step 3: Run tests**
+- **Step 3: Run tests**
 
 Run: `pnpm test`
 Expected: All tests pass.
 
-- [ ] **Step 4: Commit**
+- **Step 4: Commit**
 
 ```bash
 git add src/logger/runtime.ts src/slack/ingress/app-mention-handler.ts
@@ -190,8 +188,7 @@ git commit -m "refactor: extract runtime dual-logging helpers to logger/runtime.
 - Create: `src/slack/ingress/message-filter.ts`
 - Create: `tests/message-filter.test.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Write the failing test**
+- **Step 1: Write the failing test**
 
 Create `tests/message-filter.test.ts`:
 
@@ -405,12 +402,12 @@ describe('createBotUserIdResolver', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/message-filter.test.ts`
 Expected: FAIL — module `~/slack/ingress/message-filter.js` not found.
 
-- [ ] **Step 3: Create the message filter module**
+- **Step 3: Create the message filter module**
 
 Create `src/slack/ingress/message-filter.ts`:
 
@@ -540,12 +537,12 @@ function mentionsUser(messageText: string, userId: string | undefined): boolean 
 }
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- **Step 4: Run the new test to verify it passes**
 
 Run: `pnpm test -- tests/message-filter.test.ts`
 Expected: All tests PASS.
 
-- [ ] **Step 5: Update app-mention-handler.ts to use the new module**
+- **Step 5: Update app-mention-handler.ts to use the new module**
 
 Remove from `app-mention-handler.ts`:
 
@@ -567,12 +564,12 @@ import {
 } from './message-filter.js';
 ```
 
-- [ ] **Step 6: Run full test suite**
+- **Step 6: Run full test suite**
 
 Run: `pnpm test`
 Expected: All tests pass (including existing `thread-reply-ingress.test.ts`).
 
-- [ ] **Step 7: Commit**
+- **Step 7: Commit**
 
 ```bash
 git add src/slack/ingress/message-filter.ts tests/message-filter.test.ts src/slack/ingress/app-mention-handler.ts
@@ -588,8 +585,7 @@ git commit -m "refactor: extract message filter logic to message-filter.ts"
 - Create: `src/slack/ingress/workspace-resolution.ts`
 - Create: `tests/workspace-resolution.test.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Write the failing test**
+- **Step 1: Write the failing test**
 
 Create `tests/workspace-resolution.test.ts`:
 
@@ -709,12 +705,12 @@ describe('WORKSPACE_PICKER_ACTION_ID', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/workspace-resolution.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create the workspace resolution module**
+- **Step 3: Create the workspace resolution module**
 
 Create `src/slack/ingress/workspace-resolution.ts`:
 
@@ -804,12 +800,12 @@ export function buildWorkspaceResolutionBlocks(
 }
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- **Step 4: Run the new test to verify it passes**
 
 Run: `pnpm test -- tests/workspace-resolution.test.ts`
 Expected: All tests PASS.
 
-- [ ] **Step 5: Update app-mention-handler.ts**
+- **Step 5: Update app-mention-handler.ts**
 
 Remove from `app-mention-handler.ts`:
 
@@ -834,12 +830,12 @@ Add re-export for backward compat:
 export { WORKSPACE_PICKER_ACTION_ID } from './workspace-resolution.js';
 ```
 
-- [ ] **Step 6: Run full test suite**
+- **Step 6: Run full test suite**
 
 Run: `pnpm test`
 Expected: All tests pass (including `workspace-picker-action.test.ts`).
 
-- [ ] **Step 7: Commit**
+- **Step 7: Commit**
 
 ```bash
 git add src/slack/ingress/workspace-resolution.ts tests/workspace-resolution.test.ts src/slack/ingress/app-mention-handler.ts
@@ -855,8 +851,7 @@ git commit -m "refactor: extract workspace resolution to workspace-resolution.ts
 - Create: `src/slack/ingress/session-manager.ts`
 - Create: `tests/session-manager.test.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Write the failing test**
+- **Step 1: Write the failing test**
 
 Create `tests/session-manager.test.ts`:
 
@@ -1016,12 +1011,12 @@ describe('resolveAndPersistSession', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/session-manager.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create the session manager module**
+- **Step 3: Create the session manager module**
 
 Create `src/slack/ingress/session-manager.ts`:
 
@@ -1086,12 +1081,12 @@ export function resolveAndPersistSession(
 }
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- **Step 4: Run the new test to verify it passes**
 
 Run: `pnpm test -- tests/session-manager.test.ts`
 Expected: All tests PASS.
 
-- [ ] **Step 5: Update app-mention-handler.ts**
+- **Step 5: Update app-mention-handler.ts**
 
 In `handleThreadConversation`, replace the session management block (lines 310-351 approximately — from `const shouldResetSession` through the `else { deps.sessionStore.upsert(...) }` block) with:
 
@@ -1111,12 +1106,12 @@ const { resumeHandle } = resolveAndPersistSession(
 
 Remove the now-unused `existingSession` variable reference in the session block (but keep the one used earlier for workspace resolution and the one used later for `resolveExecutor`). The `existingSession` lookup at line 268 (`const existingSession = deps.sessionStore.get(threadTs)`) stays — it's still needed for workspace resolution and executor resolution.
 
-- [ ] **Step 6: Run full test suite**
+- **Step 6: Run full test suite**
 
 Run: `pnpm test`
 Expected: All tests pass.
 
-- [ ] **Step 7: Commit**
+- **Step 7: Commit**
 
 ```bash
 git add src/slack/ingress/session-manager.ts tests/session-manager.test.ts src/slack/ingress/app-mention-handler.ts
@@ -1132,8 +1127,7 @@ git commit -m "refactor: extract session management to session-manager.ts"
 - Create: `src/slack/ingress/activity-sink.ts`
 - Create: `tests/activity-sink.test.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Write the failing test**
+- **Step 1: Write the failing test**
 
 Create `tests/activity-sink.test.ts`:
 
@@ -1316,12 +1310,12 @@ describe('createActivitySink', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/activity-sink.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create the activity sink module**
+- **Step 3: Create the activity sink module**
 
 Create `src/slack/ingress/activity-sink.ts`. This is the largest extraction. Move all activity/progress-related code from `handleThreadConversation`:
 
@@ -1594,12 +1588,12 @@ function collectToolActivity(
 }
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- **Step 4: Run the new test to verify it passes**
 
 Run: `pnpm test -- tests/activity-sink.test.ts`
 Expected: All tests PASS.
 
-- [ ] **Step 5: Update app-mention-handler.ts**
+- **Step 5: Update app-mention-handler.ts**
 
 Remove from `app-mention-handler.ts`:
 
@@ -1679,12 +1673,12 @@ try {
 }
 ```
 
-- [ ] **Step 6: Run full test suite**
+- **Step 6: Run full test suite**
 
 Run: `pnpm test`
 Expected: All tests pass (especially `slack-loading-status.test.ts`).
 
-- [ ] **Step 7: Commit**
+- **Step 7: Commit**
 
 ```bash
 git add src/slack/ingress/activity-sink.ts tests/activity-sink.test.ts src/slack/ingress/app-mention-handler.ts
@@ -1700,8 +1694,7 @@ git commit -m "refactor: extract activity sink to activity-sink.ts"
 - Create: `src/slack/ingress/conversation-pipeline.ts`
 - Create: `tests/conversation-pipeline.test.ts`
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Write the failing test for the pipeline runner**
+- **Step 1: Write the failing test for the pipeline runner**
 
 Create `tests/conversation-pipeline.test.ts`:
 
@@ -2019,12 +2012,12 @@ function createMinimalPipelineContext(overrides?: {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/conversation-pipeline.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create the conversation pipeline module**
+- **Step 3: Create the conversation pipeline module**
 
 Create `src/slack/ingress/conversation-pipeline.ts`:
 
@@ -2281,12 +2274,12 @@ export const DEFAULT_CONVERSATION_STEPS: PipelineStep[] = [
 ];
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- **Step 4: Run the new test to verify it passes**
 
 Run: `pnpm test -- tests/conversation-pipeline.test.ts`
 Expected: All tests PASS.
 
-- [ ] **Step 5: Commit**
+- **Step 5: Commit**
 
 ```bash
 git add src/slack/ingress/conversation-pipeline.ts tests/conversation-pipeline.test.ts
@@ -2300,8 +2293,7 @@ git commit -m "refactor: create conversation pipeline with step definitions"
 **Files:**
 
 - Modify: `src/slack/ingress/app-mention-handler.ts`
-
-- [ ] **Step 1: Rewrite the handler file**
+- **Step 1: Rewrite the handler file**
 
 Replace the entire file content with the slimmed version that uses the pipeline. The file should contain only handler factories and re-exports:
 
@@ -2530,17 +2522,17 @@ export function createAssistantUserMessageHandler(
 }
 ```
 
-- [ ] **Step 2: Run full test suite**
+- **Step 2: Run full test suite**
 
 Run: `pnpm test`
 Expected: ALL tests pass — `slack-loading-status.test.ts`, `thread-reply-ingress.test.ts`, `workspace-picker-action.test.ts`, and all new tests.
 
-- [ ] **Step 3: Run typecheck**
+- **Step 3: Run typecheck**
 
 Run: `pnpm typecheck`
 Expected: No type errors.
 
-- [ ] **Step 4: Commit**
+- **Step 4: Commit**
 
 ```bash
 git add src/slack/ingress/app-mention-handler.ts
@@ -2553,22 +2545,22 @@ git commit -m "refactor: rewrite app-mention-handler to use conversation pipelin
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run the full test suite**
+- **Step 1: Run the full test suite**
 
 Run: `pnpm test`
 Expected: All tests pass.
 
-- [ ] **Step 2: Run typecheck**
+- **Step 2: Run typecheck**
 
 Run: `pnpm typecheck`
 Expected: No type errors.
 
-- [ ] **Step 3: Run build**
+- **Step 3: Run build**
 
 Run: `pnpm build`
 Expected: Build succeeds with no errors.
 
-- [ ] **Step 4: Verify file sizes**
+- **Step 4: Verify file sizes**
 
 Run: `wc -l src/slack/ingress/*.ts src/logger/runtime.ts`
 
@@ -2585,7 +2577,7 @@ Expected approximate line counts:
 
 No single file should exceed ~200 lines.
 
-- [ ] **Step 5: Final commit (if any formatting changes from build)**
+- **Step 5: Final commit (if any formatting changes from build)**
 
 ```bash
 git add -A
