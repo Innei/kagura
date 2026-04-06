@@ -8,9 +8,9 @@ slack-cc-bot connects the Claude Agent SDK to a Slack workspace via Socket Mode.
 When a user @mentions the bot in a channel or thread, the bot:
 
 1. Resolves which local code repository the conversation is about
-2. Loads the full thread history (text and images) as context
+2. Loads the full thread history (text, supported files, and images) as context
 3. Runs the Claude agent with the repo as its working directory
-4. Streams progress updates into Slack, then posts a rich-text reply
+4. Streams progress updates into Slack, then posts a rich-text reply plus generated attachments
 5. Persists the session and memories to SQLite for multi-turn continuity
 
 The bot acts as a coding assistant that is aware of your repositories and

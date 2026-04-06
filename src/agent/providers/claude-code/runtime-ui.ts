@@ -6,6 +6,7 @@ import type { AgentActivityState } from '~/agent/types.js';
 
 import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
+import { UPLOAD_SLACK_FILE_TOOL_NAME } from './tools/upload-slack-file.js';
 import type { RuntimeSystemStatusKey, RuntimeUiStateTracker } from './types.js';
 
 type StreamToolStartEvent = {
@@ -304,6 +305,13 @@ function describeStreamToolUse(toolName: string, partialInput: string): string {
 
     case SAVE_MEMORY_TOOL_NAME: {
       return 'Saving workspace memory...';
+    }
+
+    case UPLOAD_SLACK_FILE_TOOL_NAME: {
+      const targetPath = extractToolInputValue(partialInput, ['path']);
+      return targetPath
+        ? `Queueing ${formatUiPath(targetPath)} for Slack upload...`
+        : 'Queueing a file for Slack upload...';
     }
 
     case 'readlints': {

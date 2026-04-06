@@ -11,6 +11,8 @@ function baseRequest(
 ): AgentExecutionRequest {
   const threadDefaults: AgentExecutionRequest['threadContext'] = {
     channelId: 'C1',
+    fileLoadFailures: [],
+    loadedFiles: [],
     threadTs: '100.000',
     messages: [],
     renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
@@ -104,6 +106,24 @@ describe('runPromptPipeline', () => {
       const { systemPrompt: sp2 } = runPromptPipeline(reqResume);
       expect(sp1).toBe(sp2);
     });
+
+    it('advertises Slack attachment read/write capability to the model', () => {
+      const { systemPrompt } = runPromptPipeline(baseRequest());
+
+      expect(systemPrompt).toContain('Slack attachment capabilities:');
+      expect(systemPrompt).toContain(
+        'Supported Slack text/code files attached in the thread are downloaded and included in your context when available.',
+      );
+      expect(systemPrompt).toContain(
+        'Use upload_slack_file after creating a local file that must be delivered into Slack.',
+      );
+      expect(systemPrompt).toContain(
+        'you must actually create and save the file locally, then call upload_slack_file; a text-only reply is not sufficient.',
+      );
+      expect(systemPrompt).toContain(
+        'Do not claim that you cannot upload files or images to Slack when this flow applies.',
+      );
+    });
   });
 
   describe('user prompt construction', () => {
@@ -157,7 +177,15 @@ describe('runPromptPipeline', () => {
       const request = baseRequest({
         threadContext: {
           messages: [
-            { text: 'hello', ts: '100.000', authorId: 'U1', images: [], threadTs: '100.000' },
+            {
+              text: 'hello',
+              ts: '100.000',
+              authorId: 'U1',
+              files: [],
+              images: [],
+              rawText: 'hello',
+              threadTs: '100.000',
+            },
           ],
           renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
         },
@@ -172,7 +200,15 @@ describe('runPromptPipeline', () => {
         resumeHandle: 'session-abc',
         threadContext: {
           messages: [
-            { text: 'hello', ts: '100.000', authorId: 'U1', images: [], threadTs: '100.000' },
+            {
+              text: 'hello',
+              ts: '100.000',
+              authorId: 'U1',
+              files: [],
+              images: [],
+              rawText: 'hello',
+              threadTs: '100.000',
+            },
           ],
           renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
         },
@@ -196,6 +232,47 @@ describe('runPromptPipeline', () => {
       const { userPrompt: resumePrompt } = runPromptPipeline(reqResume);
       expect(newPrompt as string).toContain('From <@U42>');
       expect(resumePrompt as string).not.toContain('From <@U42>');
+    });
+
+    it('includes loaded thread files in the user prompt as structured context', () => {
+      const request = baseRequest({
+        threadContext: {
+          loadedFiles: [
+            {
+              authorId: 'U1',
+              content: 'export const answer = 42;\n',
+              fileId: 'F_FILE',
+              fileName: 'answer.ts',
+              messageIndex: 1,
+              messageTs: '100.100',
+              mimeType: 'application/typescript',
+              slackUrl: 'https://files.example/answer.ts',
+              truncated: false,
+            },
+          ],
+        },
+      });
+
+      const { userPrompt } = runPromptPipeline(request);
+      expect(typeof userPrompt).toBe('string');
+      expect(userPrompt as string).toContain('<thread_files>');
+      expect(userPrompt as string).toContain('filename=answer.ts');
+      expect(userPrompt as string).toContain('export const answer = 42;');
+    });
+
+    it('includes thread file load failures in the user prompt', () => {
+      const request = baseRequest({
+        threadContext: {
+          fileLoadFailures: [
+            'Failed to download Slack file F_BAD (blob.txt): not a supported text/code file',
+          ],
+        },
+      });
+
+      const { userPrompt } = runPromptPipeline(request);
+      expect(typeof userPrompt).toBe('string');
+      expect(userPrompt as string).toContain('<thread_file_load_failures>');
+      expect(userPrompt as string).toContain('Failed to download Slack file F_BAD');
     });
   });
 

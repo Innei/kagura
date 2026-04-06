@@ -38,6 +38,7 @@ export interface SlackMessageFile {
   mimetype?: string;
   name?: string;
   pretty_type?: string;
+  title?: string;
   url_private?: string;
 }
 
@@ -165,6 +166,33 @@ export class SlackApiClient {
       },
       'POST',
     );
+  }
+
+  async downloadPrivateFile(url: string): Promise<{ contentType: string; data: Uint8Array }> {
+    const response = await this.fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Slack private file download failed with HTTP ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    return {
+      contentType: response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '',
+      data: new Uint8Array(buffer),
+    };
+  }
+
+  async downloadPrivateTextFile(url: string): Promise<{ contentType: string; text: string }> {
+    const { contentType, data } = await this.downloadPrivateFile(url);
+    return {
+      contentType,
+      text: new TextDecoder('utf-8').decode(data),
+    };
   }
 
   private async call<T extends object>(

@@ -22,6 +22,13 @@ function baseExecution(
 }
 
 describe('createThreadExecutionRegistry', () => {
+  it('claimMessage returns false when the same message ts is claimed twice', () => {
+    const registry = createThreadExecutionRegistry();
+
+    expect(registry.claimMessage('msg-1', 't1')).toBe(true);
+    expect(registry.claimMessage('msg-1', 't1')).toBe(false);
+  });
+
   it('register adds an execution and the cleanup removes it', () => {
     const registry = createThreadExecutionRegistry();
     const exec = baseExecution({ executionId: 'e1', threadTs: 't1' });
@@ -165,7 +172,7 @@ describe('createThreadExecutionRegistry', () => {
       expect(result).toEqual({ stopped: 0, failed: 0 });
     });
 
-    it('tracked messages are cleaned up when last execution in thread is unregistered', async () => {
+    it('tracked messages remain resolvable after unregister, but stopByMessage still returns zero when no execution is active', async () => {
       const registry = createThreadExecutionRegistry();
       const cleanup = registry.register(baseExecution({ executionId: 'e1', threadTs: 't1' }));
       registry.trackMessage('msg1', 't1');

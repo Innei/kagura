@@ -132,6 +132,7 @@ function createMinimalPipelineContext(overrides?: {
 
   const unregister = vi.fn();
   const threadExecutionRegistry = {
+    claimMessage: vi.fn().mockReturnValue(true),
     listActive: vi.fn().mockReturnValue([]),
     register: vi.fn().mockReturnValue(unregister),
     stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
@@ -151,8 +152,14 @@ function createMinimalPipelineContext(overrides?: {
       },
       conversations: { replies: vi.fn().mockResolvedValue({ messages: [] }) },
       files: { uploadV2: vi.fn().mockResolvedValue({ files: [{ id: 'F1' }] }) },
-      reactions: { add: vi.fn().mockResolvedValue({}) },
-      views: { open: vi.fn().mockResolvedValue({}) },
+      reactions: {
+        add: vi.fn().mockResolvedValue({}),
+        remove: vi.fn().mockResolvedValue({}),
+      },
+      views: {
+        open: vi.fn().mockResolvedValue({}),
+        publish: vi.fn().mockResolvedValue({}),
+      },
     } as unknown as SlackWebClientLike,
     deps: {
       claudeExecutor: {
@@ -169,6 +176,7 @@ function createMinimalPipelineContext(overrides?: {
         clearUiState: vi.fn().mockResolvedValue(undefined),
         deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
         finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+        postGeneratedFiles: vi.fn().mockResolvedValue([]),
         postGeneratedImages: vi.fn().mockResolvedValue([]),
         postThreadReply: vi.fn().mockResolvedValue(undefined),
         setUiState: vi.fn().mockResolvedValue(undefined),
@@ -179,9 +187,13 @@ function createMinimalPipelineContext(overrides?: {
       threadContextLoader: {
         loadThread: vi.fn().mockResolvedValue({
           channelId: 'C123',
+          fileLoadFailures: [],
+          loadedFiles: [],
           messages: [],
           renderedPrompt: '',
           threadTs: 'ts1',
+          loadedImages: [],
+          imageLoadFailures: [],
         }),
       } as unknown as SlackThreadContextLoader,
       threadExecutionRegistry,
@@ -231,6 +243,22 @@ describe('acknowledgeAndLog step', () => {
     expect(ctx.deps.renderer.addAcknowledgementReaction).toHaveBeenCalledWith(
       ctx.client,
       'C123',
+      'ts1',
+    );
+  });
+
+  it('returns done for duplicate ingress messages before doing any further work', async () => {
+    const ctx = createMinimalPipelineContext({ addAcknowledgementReaction: true });
+    vi.mocked(ctx.deps.threadExecutionRegistry.claimMessage).mockReturnValue(false);
+
+    const result = await acknowledgeAndLog(ctx);
+
+    expect(result).toEqual({ action: 'done', reason: 'duplicate ingress message' });
+    expect(ctx.deps.renderer.addAcknowledgementReaction).not.toHaveBeenCalled();
+    expect(ctx.deps.logger.info).toHaveBeenCalledWith(
+      'Skipping %s for thread %s because message %s was already claimed by ingress',
+      'test',
+      'ts1',
       'ts1',
     );
   });
@@ -326,6 +354,7 @@ describe('executeAgent step', () => {
     const register = vi.fn().mockReturnValue(unregister);
     const ctx = createMinimalPipelineContext({
       threadExecutionRegistry: {
+        claimMessage: vi.fn().mockReturnValue(true),
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
@@ -368,6 +397,7 @@ describe('executeAgent step', () => {
     const register = vi.fn().mockReturnValue(unregister);
     const ctx = createMinimalPipelineContext({
       threadExecutionRegistry: {
+        claimMessage: vi.fn().mockReturnValue(true),
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
@@ -391,6 +421,7 @@ describe('executeAgent step', () => {
     const register = vi.fn().mockReturnValue(unregister);
     const ctx = createMinimalPipelineContext({
       threadExecutionRegistry: {
+        claimMessage: vi.fn().mockReturnValue(true),
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),

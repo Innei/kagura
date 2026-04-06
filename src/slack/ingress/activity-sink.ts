@@ -1,4 +1,9 @@
-import type { AgentActivityState, AgentExecutionEvent, GeneratedImageFile } from '~/agent/types.js';
+import type {
+  AgentActivityState,
+  AgentExecutionEvent,
+  GeneratedImageFile,
+  GeneratedOutputFile,
+} from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
@@ -36,6 +41,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const toolHistory = new Map<string, number>();
   const seenActivities = new Set<string>();
   let lastStateKey: string | undefined;
+  let pendingGeneratedFiles: GeneratedOutputFile[] = [];
   let pendingGeneratedImages: GeneratedImageFile[] = [];
   let executionCompletedSuccessfully = false;
 
@@ -105,6 +111,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       ...(workspaceLabel ? { workspaceLabel } : {}),
       ...(toolHistory.size > 0 ? { toolHistory } : {}),
     });
+    if (pendingGeneratedFiles.length > 0) {
+      const batch = [...pendingGeneratedFiles];
+      try {
+        pendingGeneratedFiles = await renderer.postGeneratedFiles(client, channel, threadTs, batch);
+      } catch (error) {
+        logger.warn('Failed to post generated files after assistant reply: %s', String(error));
+      }
+    }
     if (pendingGeneratedImages.length > 0) {
       const batch = [...pendingGeneratedImages];
       try {
@@ -215,6 +229,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       return;
     }
     if (event.phase === 'failed') {
+      pendingGeneratedFiles = [];
       pendingGeneratedImages = [];
       terminalPhase = 'failed';
       runtimeError(
@@ -248,6 +263,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         pendingGeneratedImages.push(...event.files);
         return;
       }
+      if (event.type === 'generated-files') {
+        pendingGeneratedFiles.push(...event.files);
+        return;
+      }
       if (event.type === 'activity-state') {
         await handleActivityState(event.state);
         return;
@@ -260,6 +279,19 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       await renderer.clearUiState(client, channel, threadTs).catch((err) => {
         logger.warn('Failed to clear UI state: %s', String(err));
       });
+      if (executionCompletedSuccessfully && pendingGeneratedFiles.length > 0) {
+        const batch = [...pendingGeneratedFiles];
+        try {
+          pendingGeneratedFiles = await renderer.postGeneratedFiles(
+            client,
+            channel,
+            threadTs,
+            batch,
+          );
+        } catch (err) {
+          logger.warn('Failed to flush generated files on finalize: %s', String(err));
+        }
+      }
       if (executionCompletedSuccessfully && pendingGeneratedImages.length > 0) {
         const batch = [...pendingGeneratedImages];
         try {

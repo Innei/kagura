@@ -4,6 +4,7 @@ import type { AgentExecutionRequest } from '~/agent/types.js';
 import type { LoadedThreadImage } from '~/slack/context/thread-context-loader.js';
 
 import {
+  fileContextProcessor,
   imageCollectionProcessor,
   memoryContextProcessor,
   memoryInstructionProcessor,
@@ -26,7 +27,7 @@ import type { PromptPipelineContext, PromptProcessor } from './types.js';
  *   systemRole → toolDeclaration → memoryInstruction
  *
  * Phase 2 — Context injection (dynamic, in user message area):
- *   sessionContext → memoryContext → threadContext
+ *   sessionContext → memoryContext → threadContext → fileContext
  *
  * Phase 3 — User message:
  *   userMessage
@@ -44,6 +45,7 @@ export const DEFAULT_PROMPT_PROCESSORS: PromptProcessor[] = [
   sessionContextProcessor,
   memoryContextProcessor,
   threadContextProcessor,
+  fileContextProcessor,
 
   // Phase 3 — User message
   userMessageProcessor,

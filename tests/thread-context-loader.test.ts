@@ -52,6 +52,8 @@ describe('SlackThreadContextLoader (images)', () => {
       mimeType: 'image/png',
     });
     expect(ctx.loadedImages[0]?.base64Data).toBe(Buffer.from(pngBytes).toString('base64'));
+    expect(ctx.loadedFiles).toEqual([]);
+    expect(ctx.fileLoadFailures).toEqual([]);
     expect(ctx.imageLoadFailures).toEqual([]);
   });
 
@@ -111,8 +113,115 @@ describe('SlackThreadContextLoader (images)', () => {
     expect(ctx.loadedImages[0]?.messageIndex).toBe(2);
     expect(ctx.messages[1]?.images[0]?.mimeType).toBe('IMAGE/PNG');
     expect(ctx.loadedImages[0]?.mimeType).toBe('image/png');
+    expect(ctx.loadedFiles).toEqual([]);
+    expect(ctx.fileLoadFailures).toEqual([]);
     expect(ctx.imageLoadFailures.length).toBeGreaterThanOrEqual(1);
     expect(ctx.imageLoadFailures.some((m) => m.includes('F_BAD') || m.includes('404'))).toBe(true);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('downloads supported Slack text files into loadedFiles and records truncation metadata', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe('https://files.slack.com/files-pri/T-good/notes.txt');
+      return new Response('alpha\nbeta\ngamma', {
+        status: 200,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createClientFixture({
+      messages: [
+        {
+          ts: '3.0',
+          user: 'U2',
+          text: '',
+          files: [
+            {
+              id: 'F_TEXT',
+              name: 'notes.txt',
+              mimetype: 'text/plain',
+              filetype: 'text',
+              url_private: 'https://files.slack.com/files-pri/T-good/notes.txt',
+            },
+          ],
+        },
+      ],
+    });
+
+    const loader = new SlackThreadContextLoader(createTestLogger());
+    const ctx = await loader.loadThread(client, 'C1', '3.0');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(ctx.loadedFiles).toEqual([
+      {
+        authorId: 'U2',
+        content: 'alpha\nbeta\ngamma',
+        fileId: 'F_TEXT',
+        fileName: 'notes.txt',
+        fileType: 'text',
+        messageIndex: 1,
+        messageTs: '3.0',
+        mimeType: 'text/plain',
+        slackUrl: 'https://files.slack.com/files-pri/T-good/notes.txt',
+        truncated: false,
+      },
+    ]);
+    expect(ctx.fileLoadFailures).toEqual([]);
+    expect(ctx.renderedPrompt).toContain('Attached files: notes.txt');
+  });
+
+  it('records per-file failures while still loading the rest of the thread', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('bad')) {
+        return new Response(new Uint8Array([0, 1, 2, 3]), {
+          status: 200,
+          headers: { 'content-type': 'application/octet-stream' },
+        });
+      }
+
+      return new Response('const answer = 42;\n', {
+        status: 200,
+        headers: { 'content-type': 'application/typescript' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const logger = createTestLogger();
+    const warn = vi.spyOn(logger, 'warn');
+    const client = createClientFixture({
+      messages: [
+        {
+          ts: '4.0',
+          user: 'U4',
+          text: 'please review files',
+          files: [
+            {
+              id: 'F_BAD',
+              name: 'blob.txt',
+              mimetype: 'text/plain',
+              url_private: 'https://files.slack.com/bad/blob.txt',
+            },
+            {
+              id: 'F_OK',
+              name: 'index.ts',
+              mimetype: 'application/typescript',
+              url_private: 'https://files.slack.com/good/index.ts',
+            },
+          ],
+        },
+      ],
+    });
+
+    const loader = new SlackThreadContextLoader(logger);
+    const ctx = await loader.loadThread(client, 'C1', '4.0');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(ctx.loadedFiles).toHaveLength(1);
+    expect(ctx.loadedFiles[0]?.fileId).toBe('F_OK');
+    expect(ctx.loadedFiles[0]?.content).toContain('answer = 42');
+    expect(ctx.fileLoadFailures).toHaveLength(1);
+    expect(ctx.fileLoadFailures[0]).toContain('F_BAD');
     expect(warn).toHaveBeenCalled();
   });
 });

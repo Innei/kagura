@@ -15,15 +15,15 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 ```
 @mention / Message Action
   → resolve target repo
-  → load thread history (text + images)
+  → load thread history (text + files + images)
   → run agent in repo cwd
-  → stream progress → post rich-text reply
+  → stream progress → post rich-text reply and generated attachments
   → persist session & memory to SQLite
 ```
 
 ## Features
 
-**Conversation** — Thread-aware multimodal context (text + images), session resumption across restarts, layered memory (global / workspace / preferences).
+**Conversation** — Thread-aware multimodal context (text + files + images), session resumption across restarts, layered memory (global / workspace / preferences).
 
 **Slack UX** — Rich text rendering (headings, lists, code blocks, auto-splitting), live progress indicators, reaction lifecycle, native assistant typing.
 

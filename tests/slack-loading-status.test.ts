@@ -8,6 +8,7 @@ import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js
 import { SLACK_UI_STATE_TOOL_NAME } from '~/agent/providers/claude-code/tools/publish-state.js';
 import { RECALL_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/save-memory.js';
+import { UPLOAD_SLACK_FILE_TOOL_NAME } from '~/agent/providers/claude-code/tools/upload-slack-file.js';
 import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
@@ -721,6 +722,106 @@ describe('Slack loading status test', () => {
       content: [{ text: 'Memory saved (workspace): memory-1', type: 'text' }],
     });
   });
+
+  it('queues a workspace file for Slack upload via upload_slack_file', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-tool-workspace-'));
+    const nestedDir = path.join(workspacePath, 'artifacts');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const reportPath = path.join(nestedDir, 'report.txt');
+    fs.writeFileSync(reportPath, 'artifact body', 'utf8');
+
+    const { events, tools } = await getMcpToolsForRequest({
+      workspaceLabel: 'upload-test',
+      workspacePath,
+      workspaceRepoId: 'repo-upload',
+    });
+
+    const result = await getToolHandler(
+      tools,
+      UPLOAD_SLACK_FILE_TOOL_NAME,
+    )({
+      path: 'artifacts/report.txt',
+    });
+
+    expect(result).toEqual({
+      content: [{ text: 'Queued report.txt for Slack upload.', type: 'text' }],
+    });
+    expect(events).toContainEqual({
+      type: 'generated-files',
+      files: [
+        {
+          fileName: 'report.txt',
+          path: fs.realpathSync(reportPath),
+          providerFileId: 'manual-upload:artifacts/report.txt',
+        },
+      ],
+    });
+  });
+
+  it('rejects upload_slack_file paths outside the current workspace root', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-tool-root-'));
+    const outsidePath = path.join(os.tmpdir(), `outside-${Date.now()}.txt`);
+    fs.writeFileSync(outsidePath, 'outside', 'utf8');
+
+    const { events, tools } = await getMcpToolsForRequest({
+      workspaceLabel: 'upload-test',
+      workspacePath,
+      workspaceRepoId: 'repo-upload',
+    });
+
+    const result = await getToolHandler(
+      tools,
+      UPLOAD_SLACK_FILE_TOOL_NAME,
+    )({
+      path: outsidePath,
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          text: expect.stringContaining('path must stay inside the current workspace/session root'),
+          type: 'text',
+        },
+      ],
+      isError: true,
+    });
+    expect(events.filter((event) => event.type === 'generated-files')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'generated-images')).toHaveLength(0);
+  });
+
+  it('routes image uploads through generated-images when upload_slack_file targets an image', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-tool-image-'));
+    const imagePath = path.join(workspacePath, 'screens', 'preview.png');
+    fs.mkdirSync(path.dirname(imagePath), { recursive: true });
+    fs.writeFileSync(imagePath, 'png-data', 'utf8');
+
+    const { events, tools } = await getMcpToolsForRequest({
+      workspaceLabel: 'upload-test',
+      workspacePath,
+      workspaceRepoId: 'repo-upload',
+    });
+
+    const result = await getToolHandler(
+      tools,
+      UPLOAD_SLACK_FILE_TOOL_NAME,
+    )({
+      path: 'screens/preview.png',
+    });
+
+    expect(result).toEqual({
+      content: [{ text: 'Queued preview.png for Slack upload.', type: 'text' }],
+    });
+    expect(events).toContainEqual({
+      type: 'generated-images',
+      files: [
+        {
+          fileName: 'preview.png',
+          path: fs.realpathSync(imagePath),
+          providerFileId: 'manual-upload:screens/preview.png',
+        },
+      ],
+    });
+  });
 });
 
 type CapturedMcpTool = {
@@ -774,6 +875,8 @@ function createExecutionRequest(
     mentionText: '<@U_BOT> inspect the loading messages in slack-cc-bot',
     threadContext: {
       channelId: 'C123',
+      fileLoadFailures: [],
+      loadedFiles: [],
       messages: [],
       renderedPrompt: '',
       threadTs: '1712345678.000100',
@@ -937,6 +1040,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     },
     views: {
       open: async () => ({}),
+      publish: async () => ({}),
     },
   };
 

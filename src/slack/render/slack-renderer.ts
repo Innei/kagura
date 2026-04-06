@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks';
 
-import type { GeneratedImageFile } from '~/agent/types.js';
+import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
@@ -342,37 +342,8 @@ export class SlackRenderer {
     const failed: GeneratedImageFile[] = [];
 
     for (const meta of files) {
-      let bytes: Buffer;
-      try {
-        bytes = await readFile(meta.path);
-      } catch (error) {
-        this.logger.warn('Failed to read generated image at %s: %s', meta.path, String(error));
-        failed.push(meta);
-        continue;
-      }
-
-      let response: SlackFilesUploadV2Response;
-      try {
-        response = await client.files.uploadV2({
-          alt_text: meta.fileName,
-          channel_id: channelId,
-          file: bytes,
-          filename: meta.fileName,
-          thread_ts: threadTs,
-          title: meta.fileName,
-        });
-      } catch (error) {
-        this.logger.warn('Failed to upload generated image %s: %s', meta.fileName, String(error));
-        failed.push(meta);
-        continue;
-      }
-
-      const fileId = extractUploadedFileId(response);
+      const fileId = await this.uploadGeneratedFile(client, channelId, threadTs, meta, 'image');
       if (!fileId) {
-        this.logger.warn(
-          'Upload returned no file id for generated image %s; skipping image block',
-          meta.fileName,
-        );
         failed.push(meta);
         continue;
       }
@@ -396,6 +367,24 @@ export class SlackRenderer {
           meta.fileName,
           String(error),
         );
+        failed.push(meta);
+      }
+    }
+
+    return failed;
+  }
+
+  async postGeneratedFiles(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    files: readonly GeneratedOutputFile[],
+  ): Promise<GeneratedOutputFile[]> {
+    const failed: GeneratedOutputFile[] = [];
+
+    for (const meta of files) {
+      const fileId = await this.uploadGeneratedFile(client, channelId, threadTs, meta, 'file');
+      if (!fileId) {
         failed.push(meta);
       }
     }
@@ -460,6 +449,45 @@ export class SlackRenderer {
     }
 
     return deduped;
+  }
+
+  private async uploadGeneratedFile(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    meta: GeneratedOutputFile,
+    kind: 'file' | 'image',
+  ): Promise<string | undefined> {
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(meta.path);
+    } catch (error) {
+      this.logger.warn('Failed to read generated %s at %s: %s', kind, meta.path, String(error));
+      return undefined;
+    }
+
+    let response: SlackFilesUploadV2Response;
+    try {
+      response = await client.files.uploadV2({
+        ...(kind === 'image' ? { alt_text: meta.fileName } : {}),
+        channel_id: channelId,
+        file: bytes,
+        filename: meta.fileName,
+        thread_ts: threadTs,
+        title: meta.fileName,
+      });
+    } catch (error) {
+      this.logger.warn('Failed to upload generated %s %s: %s', kind, meta.fileName, String(error));
+      return undefined;
+    }
+
+    const fileId = extractUploadedFileId(response);
+    if (!fileId) {
+      this.logger.warn('Upload returned no file id for generated %s %s', kind, meta.fileName);
+      return undefined;
+    }
+
+    return fileId;
   }
 }
 

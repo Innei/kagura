@@ -96,6 +96,10 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
       (e): e is Extract<AgentExecutionEvent, { type: 'generated-images' }> =>
         e.type === 'generated-images',
     );
+    const fileEvents = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'generated-files' }> =>
+        e.type === 'generated-files',
+    );
     expect(imgEvents).toHaveLength(1);
     expect(imgEvents[0]!.files).toEqual([
       {
@@ -104,9 +108,17 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
         providerFileId: 'file-abc',
       },
     ]);
+    expect(fileEvents).toHaveLength(1);
+    expect(fileEvents[0]!.files).toEqual([
+      {
+        fileName: 'notes/readme.txt',
+        path: path.resolve(root, 'notes/readme.txt'),
+        providerFileId: 'file-txt',
+      },
+    ]);
   });
 
-  it('ignores non-image persisted files (no generated-images when only non-images)', async () => {
+  it('emits generated-files for persisted non-image files', async () => {
     await handleClaudeSdkMessage(createTestLogger(), minimalInitMessage('/tmp/ws'), sink, handlers);
 
     const persisted: SDKFilesPersistedEvent = {
@@ -122,6 +134,18 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
     await handleClaudeSdkMessage(createTestLogger(), persisted, sink, handlers);
 
     expect(events.filter((e) => e.type === 'generated-images')).toHaveLength(0);
+    const fileEvents = events.filter(
+      (e): e is Extract<AgentExecutionEvent, { type: 'generated-files' }> =>
+        e.type === 'generated-files',
+    );
+    expect(fileEvents).toHaveLength(1);
+    expect(fileEvents[0]!.files).toEqual([
+      {
+        fileName: 'data.csv',
+        path: path.resolve('/tmp/ws', 'data.csv'),
+        providerFileId: 'id-1',
+      },
+    ]);
   });
 
   it('resolves paths against process.cwd() when session cwd was not set', async () => {

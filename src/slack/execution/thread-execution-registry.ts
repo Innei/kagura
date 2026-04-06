@@ -16,6 +16,7 @@ export interface StopAllResult {
 }
 
 export interface ThreadExecutionRegistry {
+  claimMessage: (messageTs: string, threadTs: string) => boolean;
   listActive: (threadTs: string) => RegisteredThreadExecution[];
   register: (execution: RegisteredThreadExecution) => () => void;
   stopAll: (threadTs: string, reason: ThreadExecutionStopReason) => Promise<StopAllResult>;
@@ -27,6 +28,9 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
   const byThread = new Map<string, Map<string, RegisteredThreadExecution>>();
   const messageToThread = new Map<string, string>();
   const threadToMessages = new Map<string, Set<string>>();
+  const threadMessageOrder = new Map<string, string[]>();
+
+  const MAX_TRACKED_MESSAGES_PER_THREAD = 128;
 
   function cleanupMessagesForThread(threadTs: string): void {
     const messages = threadToMessages.get(threadTs);
@@ -35,9 +39,55 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
       messageToThread.delete(ts);
     }
     threadToMessages.delete(threadTs);
+    threadMessageOrder.delete(threadTs);
+  }
+
+  function rememberMessage(messageTs: string, threadTs: string): void {
+    const existingThreadTs = messageToThread.get(messageTs);
+    if (existingThreadTs) {
+      return;
+    }
+
+    messageToThread.set(messageTs, threadTs);
+
+    let set = threadToMessages.get(threadTs);
+    if (!set) {
+      set = new Set();
+      threadToMessages.set(threadTs, set);
+    }
+    set.add(messageTs);
+
+    let order = threadMessageOrder.get(threadTs);
+    if (!order) {
+      order = [];
+      threadMessageOrder.set(threadTs, order);
+    }
+    order.push(messageTs);
+
+    while (order.length > MAX_TRACKED_MESSAGES_PER_THREAD) {
+      const evicted = order.shift();
+      if (!evicted) {
+        break;
+      }
+      set.delete(evicted);
+      messageToThread.delete(evicted);
+    }
+
+    if (set.size === 0) {
+      cleanupMessagesForThread(threadTs);
+    }
   }
 
   return {
+    claimMessage(messageTs, threadTs) {
+      if (messageToThread.has(messageTs)) {
+        return false;
+      }
+
+      rememberMessage(messageTs, threadTs);
+      return true;
+    },
+
     listActive(threadTs) {
       const bucket = byThread.get(threadTs);
       if (!bucket) return [];
@@ -58,19 +108,12 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
         b.delete(execution.executionId);
         if (b.size === 0) {
           byThread.delete(execution.threadTs);
-          cleanupMessagesForThread(execution.threadTs);
         }
       };
     },
 
     trackMessage(messageTs, threadTs) {
-      messageToThread.set(messageTs, threadTs);
-      let set = threadToMessages.get(threadTs);
-      if (!set) {
-        set = new Set();
-        threadToMessages.set(threadTs, set);
-      }
-      set.add(messageTs);
+      rememberMessage(messageTs, threadTs);
     },
 
     async stopByMessage(messageTs, reason) {

@@ -1,11 +1,13 @@
 import type { ContextMemories } from '~/memory/types.js';
 import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
 
-export interface GeneratedImageFile {
+export interface GeneratedOutputFile {
   fileName: string;
   path: string;
   providerFileId: string;
 }
+
+export type GeneratedImageFile = GeneratedOutputFile;
 
 export interface AgentExecutionRequest {
   abortSignal?: AbortSignal;
@@ -63,6 +65,10 @@ export type AgentExecutionEvent =
   | {
       type: 'generated-images';
       files: GeneratedImageFile[];
+    }
+  | {
+      type: 'generated-files';
+      files: GeneratedOutputFile[];
     };
 
 export interface AgentActivityState {

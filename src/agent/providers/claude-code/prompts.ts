@@ -1,8 +1,21 @@
 import type { AgentExecutionRequest } from '~/agent/types.js';
+import type { LoadedThreadFile } from '~/slack/context/thread-context-loader.js';
 
 import { SLACK_UI_STATE_TOOL_NAME } from './tools/publish-state.js';
 import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
+import { UPLOAD_SLACK_FILE_TOOL_NAME } from './tools/upload-slack-file.js';
+
+export const SLACK_ATTACHMENT_CAPABILITY_LINES = [
+  'Slack attachment capabilities:',
+  '- Slack thread images are included in your context when available.',
+  '- Supported Slack text/code files attached in the thread are downloaded and included in your context when available.',
+  `- Use ${UPLOAD_SLACK_FILE_TOOL_NAME} after creating a local file that must be delivered into Slack.`,
+  '- The Slack runtime may also auto-detect persisted local files, but explicit upload is preferred for user-facing deliverables.',
+  '- Saved image files are uploaded and rendered back as Slack images; other saved files are uploaded as Slack file attachments.',
+  `- When the user asks for a file deliverable, you must actually create and save the file locally, then call ${UPLOAD_SLACK_FILE_TOOL_NAME}; a text-only reply is not sufficient.`,
+  '- Do not claim that you cannot upload files or images to Slack when this flow applies.',
+] as const;
 
 export function buildPrompt(request: AgentExecutionRequest): string {
   const parts: string[] = [];
@@ -23,6 +36,19 @@ export function buildPrompt(request: AgentExecutionRequest): string {
       : 'No workspace is set for this conversation.';
     parts.push(header);
     parts.push('');
+    const fileContext = buildFileContext(request.threadContext.loadedFiles);
+    if (fileContext) {
+      parts.push('<thread_files>');
+      parts.push(fileContext);
+      parts.push('</thread_files>');
+      parts.push('');
+    }
+    if (request.threadContext.fileLoadFailures.length > 0) {
+      parts.push('<thread_file_load_failures>');
+      parts.push(...request.threadContext.fileLoadFailures.map((line) => `- ${line}`));
+      parts.push('</thread_file_load_failures>');
+      parts.push('');
+    }
     parts.push('<user_message>');
     parts.push(request.mentionText);
     parts.push('</user_message>');
@@ -33,6 +59,21 @@ export function buildPrompt(request: AgentExecutionRequest): string {
     parts.push('<thread_context>');
     parts.push(request.threadContext.renderedPrompt);
     parts.push('</thread_context>');
+    parts.push('');
+  }
+
+  const fileContext = buildFileContext(request.threadContext.loadedFiles);
+  if (fileContext) {
+    parts.push('<thread_files>');
+    parts.push(fileContext);
+    parts.push('</thread_files>');
+    parts.push('');
+  }
+
+  if (request.threadContext.fileLoadFailures.length > 0) {
+    parts.push('<thread_file_load_failures>');
+    parts.push(...request.threadContext.fileLoadFailures.map((line) => `- ${line}`));
+    parts.push('</thread_file_load_failures>');
     parts.push('');
   }
 
@@ -71,6 +112,9 @@ export function buildSystemPrompt(request: AgentExecutionRequest): string {
     `- ${SLACK_UI_STATE_TOOL_NAME}: publish status/loading state updates to Slack UI.`,
     `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
     `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
+    `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,
+    '',
+    ...SLACK_ATTACHMENT_CAPABILITY_LINES,
     '',
     'CONVERSATION MEMORY — CRITICAL INSTRUCTIONS:',
     '',
@@ -145,4 +189,25 @@ function buildMemoryContext(request: AgentExecutionRequest): string[] {
   }
 
   return lines;
+}
+
+function buildFileContext(files: LoadedThreadFile[]): string {
+  if (files.length === 0) {
+    return '';
+  }
+
+  return files
+    .map((file, index) => {
+      const header = [
+        `File ${index + 1}`,
+        `ts=${file.messageTs}`,
+        `filename=${file.fileName}`,
+        `mime=${file.mimeType || 'unknown'}`,
+        `thread_message_index=${file.messageIndex}`,
+        ...(file.truncated ? ['truncated=true'] : []),
+      ].join(' | ');
+
+      return [header, '<file_content>', file.content, '</file_content>'].join('\n');
+    })
+    .join('\n\n');
 }

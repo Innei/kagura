@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { GeneratedImageFile } from '~/agent/types.js';
+import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -43,8 +43,14 @@ function createClientFixture(): {
     files: {
       uploadV2: vi.fn(),
     },
-    reactions: { add: vi.fn().mockResolvedValue({}) },
-    views: { open: vi.fn().mockResolvedValue({}) },
+    reactions: {
+      add: vi.fn().mockResolvedValue({}),
+      remove: vi.fn().mockResolvedValue({}),
+    },
+    views: {
+      open: vi.fn().mockResolvedValue({}),
+      publish: vi.fn().mockResolvedValue({}),
+    },
   };
 
   return { client, imagePostCalls };
@@ -150,5 +156,39 @@ describe('SlackRenderer.postGeneratedImages', () => {
       alt_text: 'a.png',
       slack_file: { id: 'F_OK' },
     });
+  });
+});
+
+describe('SlackRenderer.postGeneratedFiles', () => {
+  it('uploads non-image files without posting extra image blocks', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'slack-renderer-files-'));
+    const filePath = path.join(dir, 'report.txt');
+    await writeFile(filePath, Buffer.from('report body'));
+
+    const { client, imagePostCalls } = createClientFixture();
+    const uploadCalls: Array<Parameters<SlackWebClientLike['files']['uploadV2']>[0]> = [];
+    vi.mocked(client.files.uploadV2).mockImplementation(async (args) => {
+      uploadCalls.push(args);
+      return { files: [{ id: 'F_FILE' }] };
+    });
+
+    const renderer = new SlackRenderer(createTestLogger());
+    const files: GeneratedOutputFile[] = [
+      { fileName: 'report.txt', path: filePath, providerFileId: 'pf-report' },
+    ];
+
+    const failed = await renderer.postGeneratedFiles(client, 'C1', 'ts-root', files);
+
+    expect(failed).toEqual([]);
+    expect(uploadCalls).toHaveLength(1);
+    expect(uploadCalls[0]).toMatchObject({
+      channel_id: 'C1',
+      thread_ts: 'ts-root',
+      filename: 'report.txt',
+      title: 'report.txt',
+    });
+    expect(uploadCalls[0]).not.toHaveProperty('alt_text');
+    expect(uploadCalls[0]!.file.equals(Buffer.from('report body'))).toBe(true);
+    expect(imagePostCalls).toHaveLength(0);
   });
 });

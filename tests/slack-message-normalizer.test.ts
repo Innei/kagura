@@ -40,6 +40,7 @@ describe('normalizeThreadMessages (images)', () => {
     }
     expect(first).toMatchObject({
       authorId: 'U_AUTHOR',
+      files: [],
       text: '',
       rawText: '',
       threadTs: '100.000',
@@ -90,6 +91,46 @@ describe('normalizeThreadMessages (images)', () => {
     expect(withIdOnly.images[0]?.fileName).toBe('FID_ONLY');
   });
 
+  it('preserves supported text/code files and keeps file-only messages', () => {
+    const result = normalizeThreadMessages([
+      {
+        ts: '55.001',
+        thread_ts: '50.000',
+        user: 'U_FILE',
+        text: '',
+        files: [
+          {
+            id: 'F_TEXT',
+            name: 'notes.txt',
+            mimetype: 'text/plain; charset=utf-8',
+            filetype: 'text',
+            title: 'Notes',
+            url_private: 'https://files.slack.com/files-pri/T-test-F_TEXT/notes.txt',
+          },
+        ],
+      },
+    ]);
+
+    expect(result).toHaveLength(1);
+    const first = result[0];
+    if (!first) {
+      throw new Error('Expected one normalized message');
+    }
+    expect(first.images).toEqual([]);
+    expect(first.files).toEqual([
+      {
+        authorId: 'U_FILE',
+        fileId: 'F_TEXT',
+        fileName: 'notes.txt',
+        fileType: 'text',
+        messageTs: '55.001',
+        mimeType: 'text/plain; charset=utf-8',
+        slackUrl: 'https://files.slack.com/files-pri/T-test-F_TEXT/notes.txt',
+        title: 'Notes',
+      },
+    ]);
+  });
+
   it('treats MIME types with parameters as supported images', () => {
     const messages = [
       {
@@ -115,6 +156,7 @@ describe('normalizeThreadMessages (images)', () => {
       throw new Error('Expected one normalized message');
     }
     expect(first.images).toHaveLength(1);
+    expect(first.files).toEqual([]);
     const firstImage = first.images[0];
     if (!firstImage) {
       throw new Error('Expected one normalized image');
@@ -150,6 +192,7 @@ describe('normalizeThreadMessages (images)', () => {
       throw new Error('Expected one normalized message');
     }
     expect(first.images).toHaveLength(1);
+    expect(first.files).toEqual([]);
     const firstImage = first.images[0];
     if (!firstImage) {
       throw new Error('Expected one normalized image');
@@ -186,5 +229,25 @@ describe('normalizeThreadMessages (images)', () => {
     ];
 
     expect(normalizeThreadMessages(messages)).toHaveLength(0);
+  });
+
+  it('treats supported code extensions as text-like even when mime metadata is missing', () => {
+    const result = normalizeThreadMessage({
+      ts: '3.3',
+      user: 'U1',
+      text: '',
+      files: [
+        {
+          id: 'F_TS',
+          name: 'index.ts',
+          mimetype: null,
+          title: null,
+        },
+      ],
+    });
+
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]?.fileName).toBe('index.ts');
+    expect(result.images).toEqual([]);
   });
 });

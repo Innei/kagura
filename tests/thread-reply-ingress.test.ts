@@ -6,7 +6,10 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
-import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
+import {
+  createAppMentionHandler,
+  createThreadReplyHandler,
+} from '~/slack/ingress/app-mention-handler.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -102,6 +105,42 @@ describe('thread reply ingress', () => {
       userId: 'U_BOT',
     });
   });
+
+  it('deduplicates a thread self-mention that arrives through both app_mention and message ingress', async () => {
+    const threadTs = '1712345678.000105';
+    const messageTs = '1712345678.000106';
+    const registry = createThreadExecutionRegistry();
+    const { appMentionHandler, claudeExecutor, client, threadReplyHandler } =
+      createDualIngressTestHarness(threadTs, registry);
+
+    await appMentionHandler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> continue with the deliverable',
+        thread_ts: threadTs,
+        ts: messageTs,
+        type: 'app_mention',
+        user: 'U123',
+      },
+    });
+
+    await threadReplyHandler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> continue with the deliverable',
+        thread_ts: threadTs,
+        ts: messageTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createThreadReplyTestHarness(threadTs: string): {
@@ -135,9 +174,13 @@ function createThreadReplyTestHarness(threadTs: string): {
   const threadContextLoader = {
     loadThread: vi.fn().mockResolvedValue({
       channelId: 'C123',
+      fileLoadFailures: [],
+      loadedFiles: [],
       messages: [],
       renderedPrompt: 'Slack thread context:',
       threadTs,
+      loadedImages: [],
+      imageLoadFailures: [],
     }),
   } as unknown as SlackThreadContextLoader;
   const workspaceResolver = {
@@ -169,6 +212,73 @@ function createThreadReplyTestHarness(threadTs: string): {
   };
 }
 
+function createDualIngressTestHarness(
+  threadTs: string,
+  threadExecutionRegistry = createThreadExecutionRegistry(),
+): {
+  appMentionHandler: ReturnType<typeof createAppMentionHandler>;
+  claudeExecutor: AgentExecutor;
+  client: SlackWebClientLike & {
+    auth: {
+      test: ReturnType<typeof vi.fn>;
+    };
+  };
+  threadReplyHandler: ReturnType<typeof createThreadReplyHandler>;
+} {
+  const logger = createTestLogger();
+  const sessionStore = createMemorySessionStore([
+    {
+      channelId: 'C123',
+      createdAt: new Date().toISOString(),
+      rootMessageTs: threadTs,
+      threadTs,
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
+  const claudeExecutor = {
+    providerId: 'claude-code',
+    execute: vi.fn().mockResolvedValue(undefined),
+    drain: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AgentExecutor;
+  const renderer = createRendererStub();
+  const threadContextLoader = {
+    loadThread: vi.fn().mockResolvedValue({
+      channelId: 'C123',
+      fileLoadFailures: [],
+      loadedFiles: [],
+      messages: [],
+      renderedPrompt: 'Slack thread context:',
+      threadTs,
+      loadedImages: [],
+      imageLoadFailures: [],
+    }),
+  } as unknown as SlackThreadContextLoader;
+  const workspaceResolver = {
+    resolveFromText: vi.fn().mockReturnValue({
+      query: '',
+      reason: 'unused in this test',
+      status: 'missing',
+    }),
+  } as unknown as WorkspaceResolver;
+  const deps = {
+    claudeExecutor,
+    logger,
+    memoryStore: createMemoryStore(),
+    renderer,
+    sessionStore,
+    threadContextLoader,
+    threadExecutionRegistry,
+    workspaceResolver,
+  };
+
+  return {
+    appMentionHandler: createAppMentionHandler(deps),
+    claudeExecutor,
+    client: createSlackClientFixture(),
+    threadReplyHandler: createThreadReplyHandler(deps),
+  };
+}
+
 function createSlackClientFixture(): SlackWebClientLike & {
   auth: {
     test: ReturnType<typeof vi.fn>;
@@ -196,9 +306,11 @@ function createSlackClientFixture(): SlackWebClientLike & {
     },
     reactions: {
       add: vi.fn().mockResolvedValue({}),
+      remove: vi.fn().mockResolvedValue({}),
     },
     views: {
       open: vi.fn().mockResolvedValue({}),
+      publish: vi.fn().mockResolvedValue({}),
     },
   };
 }
@@ -209,6 +321,8 @@ function createRendererStub(): SlackRenderer {
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    removeAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
+    postGeneratedFiles: vi.fn().mockResolvedValue([]),
     postGeneratedImages: vi.fn().mockResolvedValue([]),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),

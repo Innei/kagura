@@ -65,6 +65,17 @@ export async function acknowledgeAndLog(
 
   ctx.existingSession = deps.sessionStore.get(threadTs);
 
+  if (!deps.threadExecutionRegistry.claimMessage(message.ts, threadTs)) {
+    runtimeInfo(
+      deps.logger,
+      'Skipping %s for thread %s because message %s was already claimed by ingress',
+      options.logLabel,
+      threadTs,
+      message.ts,
+    );
+    return { action: 'done', reason: 'duplicate ingress message' };
+  }
+
   if (options.addAcknowledgementReaction) {
     await deps.renderer.addAcknowledgementReaction(ctx.client, message.channel, message.ts);
   }

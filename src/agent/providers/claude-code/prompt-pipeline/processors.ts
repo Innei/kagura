@@ -1,6 +1,10 @@
+import type { LoadedThreadFile } from '~/slack/context/thread-context-loader.js';
+
+import { SLACK_ATTACHMENT_CAPABILITY_LINES } from '../prompts.js';
 import { SLACK_UI_STATE_TOOL_NAME } from '../tools/publish-state.js';
 import { RECALL_MEMORY_TOOL_NAME } from '../tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from '../tools/save-memory.js';
+import { UPLOAD_SLACK_FILE_TOOL_NAME } from '../tools/upload-slack-file.js';
 import type { PromptProcessor } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +41,9 @@ export const toolDeclarationProcessor: PromptProcessor = {
       `- ${SLACK_UI_STATE_TOOL_NAME}: publish status/loading state updates to Slack UI.`,
       `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
+      `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,
+      '',
+      ...SLACK_ATTACHMENT_CAPABILITY_LINES,
     );
   },
 };
@@ -182,6 +189,30 @@ export const threadContextProcessor: PromptProcessor = {
   },
 };
 
+/**
+ * Injects loaded Slack text/code file contents for the current thread.
+ */
+export const fileContextProcessor: PromptProcessor = {
+  name: 'file-context',
+  process(ctx) {
+    const loadedFiles = ctx.request.threadContext.loadedFiles;
+    if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
+      ctx.contextParts.push(
+        `<thread_files>\n${renderLoadedFileContext(loadedFiles)}\n</thread_files>`,
+      );
+    }
+
+    const failures = ctx.request.threadContext.fileLoadFailures;
+    if (Array.isArray(failures) && failures.length > 0) {
+      ctx.contextParts.push(
+        '<thread_file_load_failures>\n' +
+          failures.map((line) => `- ${line}`).join('\n') +
+          '\n</thread_file_load_failures>',
+      );
+    }
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Phase 3 — User message
 // ---------------------------------------------------------------------------
@@ -225,3 +256,20 @@ export const imageCollectionProcessor: PromptProcessor = {
     }
   },
 };
+
+function renderLoadedFileContext(files: LoadedThreadFile[]): string {
+  return files
+    .map((file, index) => {
+      const header = [
+        `File ${index + 1}`,
+        `ts=${file.messageTs}`,
+        `filename=${file.fileName}`,
+        `mime=${file.mimeType || 'unknown'}`,
+        `thread_message_index=${file.messageIndex}`,
+        ...(file.truncated ? ['truncated=true'] : []),
+      ].join(' | ');
+
+      return [header, '<file_content>', file.content, '</file_content>'].join('\n');
+    })
+    .join('\n\n');
+}

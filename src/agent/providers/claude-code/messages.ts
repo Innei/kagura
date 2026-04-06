@@ -18,7 +18,7 @@ import type {
   SDKToolProgressMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
-import type { GeneratedImageFile } from '~/agent/types.js';
+import type { GeneratedOutputFile } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 
@@ -169,21 +169,28 @@ async function handleFilesPersistedMessage(
   handlers: MessageHandlers,
 ): Promise<void> {
   const baseDir = handlers.getSessionCwd() ?? process.cwd();
-  const files: GeneratedImageFile[] = [];
+  const imageFiles: GeneratedOutputFile[] = [];
+  const otherFiles: GeneratedOutputFile[] = [];
   for (const entry of message.files) {
-    if (!isPersistedImageFilename(entry.filename)) {
-      continue;
-    }
-    files.push({
+    const file: GeneratedOutputFile = {
       fileName: entry.filename,
       path: path.resolve(baseDir, entry.filename),
       providerFileId: entry.file_id,
-    });
+    };
+
+    if (isPersistedImageFilename(entry.filename)) {
+      imageFiles.push(file);
+    } else {
+      otherFiles.push(file);
+    }
   }
-  if (files.length === 0) {
-    return;
+
+  if (imageFiles.length > 0) {
+    await sink.onEvent({ type: 'generated-images', files: imageFiles });
   }
-  await sink.onEvent({ type: 'generated-images', files });
+  if (otherFiles.length > 0) {
+    await sink.onEvent({ type: 'generated-files', files: otherFiles });
+  }
 }
 
 function handleSystemInit(

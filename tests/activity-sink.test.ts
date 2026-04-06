@@ -27,6 +27,7 @@ function createRendererStub(): SlackRenderer {
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    postGeneratedFiles: vi.fn().mockResolvedValue([]),
     postGeneratedImages: vi.fn().mockResolvedValue([]),
     finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
@@ -47,8 +48,14 @@ function createMockClient(): SlackWebClientLike {
     },
     conversations: { replies: vi.fn().mockResolvedValue({ messages: [] }) },
     files: { uploadV2: vi.fn().mockResolvedValue({ files: [{ id: 'F1' }] }) },
-    reactions: { add: vi.fn().mockResolvedValue({}) },
-    views: { open: vi.fn().mockResolvedValue({}) },
+    reactions: {
+      add: vi.fn().mockResolvedValue({}),
+      remove: vi.fn().mockResolvedValue({}),
+    },
+    views: {
+      open: vi.fn().mockResolvedValue({}),
+      publish: vi.fn().mockResolvedValue({}),
+    },
   } as unknown as SlackWebClientLike;
 }
 
@@ -235,6 +242,54 @@ describe('createActivitySink', () => {
       expect.any(Object),
     );
     expect(renderer.postGeneratedImages).toHaveBeenCalled();
+  });
+
+  it('buffers generated-files and flushes them after the assistant text reply', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedFiles = vi.mocked(renderer.postGeneratedFiles);
+    const postThreadReply = vi.mocked(renderer.postThreadReply);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    const files = [{ fileName: 'report.txt', path: '/tmp/report.txt', providerFileId: 'pf1' }];
+    await sink.onEvent({ type: 'generated-files', files });
+    await sink.onEvent({ type: 'assistant-message', text: 'Attached.' });
+
+    expect(postThreadReply.mock.invocationCallOrder[0]).toBeLessThan(
+      postGeneratedFiles.mock.invocationCallOrder[0]!,
+    );
+    expect(postGeneratedFiles).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1', files);
+  });
+
+  it('retries generated-files on finalize after assistant-time flush leaves failures', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedFiles = vi.mocked(renderer.postGeneratedFiles);
+    const files = [{ fileName: 'report.txt', path: '/tmp/report.txt', providerFileId: 'pf1' }];
+    postGeneratedFiles.mockResolvedValueOnce(files).mockResolvedValueOnce([]);
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'generated-files', files });
+    await sink.onEvent({ type: 'assistant-message', text: 'Attached.' });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(postGeneratedFiles).toHaveBeenCalledTimes(2);
+    expect(postGeneratedFiles).toHaveBeenNthCalledWith(1, expect.anything(), 'C123', 'ts1', files);
+    expect(postGeneratedFiles).toHaveBeenNthCalledWith(2, expect.anything(), 'C123', 'ts1', files);
   });
 
   it('retries postGeneratedImages on finalize after assistant-time flush leaves failures, when lifecycle completed', async () => {
