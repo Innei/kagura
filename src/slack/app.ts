@@ -17,6 +17,7 @@ import {
   createThreadReplyHandler,
   WORKSPACE_PICKER_ACTION_ID,
 } from './ingress/app-mention-handler.js';
+import { createHomeTabHandler } from './ingress/home-tab-handler.js';
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
 import {
   createStopMessageActionHandler,
@@ -71,6 +72,15 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     userMessage: createAssistantUserMessageHandler(ingressDeps),
   });
 
+  app.event(
+    'app_home_opened',
+    createHomeTabHandler({
+      logger: deps.logger.withTag('slack:home'),
+      memoryStore: deps.memoryStore,
+      sessionStore: deps.sessionStore,
+      workspaceResolver: deps.workspaceResolver,
+    }),
+  );
   app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
   app.event(

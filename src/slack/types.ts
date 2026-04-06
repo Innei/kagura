@@ -120,6 +120,7 @@ export interface SlackChatApi {
 
 export interface SlackViewsApi {
   open: (args: { trigger_id: string; view: unknown }) => Promise<unknown>;
+  publish: (args: { user_id: string; view: unknown }) => Promise<unknown>;
 }
 
 export interface SlackWebClientLike {
