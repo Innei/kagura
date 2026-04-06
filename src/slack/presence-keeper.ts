@@ -1,6 +1,6 @@
 import type { AppLogger } from '~/logger/index.js';
 
-const DEFAULT_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (Slack auto-away is ~10 min)
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 60 * 1000; // 1 minute – Slack auto-away for Socket Mode bots can kick in faster than the documented ~10 min
 
 export interface SlackPresenceClient {
   users: {
@@ -18,8 +18,8 @@ export interface PresenceKeeperOptions {
  * Keeps the bot's Slack presence set to "active" (green dot) by periodically
  * calling `users.setPresence({ presence: 'auto' })`.
  *
- * Slack marks a bot as "away" after ~10 minutes of inactivity, so we beat
- * that timeout with a 5-minute default heartbeat.
+ * Slack marks a bot as "away" after a period of inactivity. Socket Mode bots
+ * may lose presence faster, so we default to a 1-minute heartbeat.
  *
  * On stop, explicitly sets presence to "away" for an honest offline signal.
  */
@@ -58,7 +58,10 @@ export class PresenceKeeper {
 
   private async setPresence(presence: 'auto' | 'away'): Promise<void> {
     try {
-      await this.client.users.setPresence({ presence });
+      const result = (await this.client.users.setPresence({ presence })) as { ok?: boolean };
+      if (!result?.ok) {
+        this.logger.warn('users.setPresence(%s) returned non-ok response: %o', presence, result);
+      }
     } catch (error) {
       this.logger.warn(
         'Failed to set presence to %s: %s',

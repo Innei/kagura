@@ -115,7 +115,7 @@ describe('PresenceKeeper', () => {
     await keeper.stop();
   });
 
-  it('defaults to 5-minute heartbeat interval', async () => {
+  it('defaults to 1-minute heartbeat interval', async () => {
     const client = createMockWebClient();
     const logger = createTestLogger();
     const keeper = new PresenceKeeper({
@@ -125,7 +125,27 @@ describe('PresenceKeeper', () => {
 
     await keeper.start();
 
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('heartbeat every'), 300);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('heartbeat every'), 60);
+
+    await keeper.stop();
+  });
+
+  it('warns when setPresence returns non-ok response', async () => {
+    const client = createMockWebClient();
+    client.users.setPresence.mockResolvedValue({ ok: false });
+    const logger = createTestLogger();
+    const keeper = new PresenceKeeper({
+      client: client as any,
+      logger,
+    });
+
+    await keeper.start();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('non-ok response'),
+      'auto',
+      expect.objectContaining({ ok: false }),
+    );
 
     await keeper.stop();
   });
