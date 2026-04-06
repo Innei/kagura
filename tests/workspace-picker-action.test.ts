@@ -9,6 +9,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import {
   createAppMentionHandler,
   WORKSPACE_PICKER_ACTION_ID,
@@ -79,6 +80,7 @@ describe('Workspace picker action test', () => {
       renderer,
       sessionStore,
       threadContextLoader,
+      threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     };
 
@@ -191,6 +193,7 @@ describe('Workspace picker action test', () => {
       renderer,
       sessionStore,
       threadContextLoader,
+      threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     });
     const { client, postMessageCalls } = createSlackClientFixture();

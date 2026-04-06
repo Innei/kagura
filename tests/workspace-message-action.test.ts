@@ -9,6 +9,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
@@ -43,10 +44,22 @@ const sdkMocks = vi.hoisted(() => ({
   ),
 }));
 
+const anthropicMocks = vi.hoisted(() => ({
+  create: vi.fn().mockResolvedValue({
+    content: [{ type: 'text', text: '[]' }],
+  }),
+}));
+
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   createSdkMcpServer: sdkMocks.createSdkMcpServer,
   query: sdkMocks.query,
   tool: sdkMocks.tool,
+}));
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    messages = { create: anthropicMocks.create };
+  },
 }));
 
 describe('Workspace message action test', () => {
@@ -54,6 +67,10 @@ describe('Workspace message action test', () => {
     sdkMocks.createSdkMcpServer.mockClear();
     sdkMocks.query.mockReset();
     sdkMocks.tool.mockClear();
+    anthropicMocks.create.mockClear();
+    anthropicMocks.create.mockResolvedValue({
+      content: [{ type: 'text', text: '[]' }],
+    });
   });
 
   it('opens a modal and starts a new workspace-bound session from message action selection', async () => {
@@ -75,6 +92,7 @@ describe('Workspace message action test', () => {
       renderer,
       sessionStore,
       threadContextLoader,
+      threadExecutionRegistry: createThreadExecutionRegistry(),
       workspaceResolver,
     };
     const actionHandler = createWorkspaceMessageActionHandler(deps);

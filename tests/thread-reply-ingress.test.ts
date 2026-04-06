@@ -5,6 +5,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -153,6 +154,7 @@ function createThreadReplyTestHarness(threadTs: string): {
     renderer,
     sessionStore,
     threadContextLoader,
+    threadExecutionRegistry: createThreadExecutionRegistry(),
     workspaceResolver,
   });
   const client = createSlackClientFixture();

@@ -8,6 +8,7 @@ export interface GeneratedImageFile {
 }
 
 export interface AgentExecutionRequest {
+  abortSignal?: AbortSignal;
   channelId: string;
   contextMemories?: ContextMemories;
   mentionText: string;
@@ -29,6 +30,12 @@ export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
       phase: 'completed';
+      resumeHandle?: string;
+    }
+  | {
+      type: 'lifecycle';
+      phase: 'stopped';
+      reason: 'user_stop';
       resumeHandle?: string;
     }
   | {

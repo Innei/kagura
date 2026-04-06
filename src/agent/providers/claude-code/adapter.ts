@@ -1,3 +1,4 @@
+import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 import type { AgentExecutionRequest, AgentExecutionSink, AgentExecutor } from '~/agent/types.js';
@@ -13,6 +14,61 @@ import { buildClaudePromptInput } from './multimodal-prompt.js';
 import { buildSystemPrompt } from './prompts.js';
 import { buildRuntimeUiState, createRuntimeUiStateTracker } from './runtime-ui.js';
 import type { MessageHandlers, RuntimeUiStateTracker } from './types.js';
+
+function createAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+async function nextMessageOrAbort<T>(
+  iterator: AsyncIterator<T>,
+  signal?: AbortSignal,
+): Promise<IteratorResult<T>> {
+  if (!signal) {
+    return iterator.next();
+  }
+  if (signal.aborted) {
+    throw createAbortError();
+  }
+  let onAbort: (() => void) | undefined;
+  const nextPromise = iterator.next();
+  const abortPromise = new Promise<IteratorResult<T>>((_, reject) => {
+    onAbort = () => reject(createAbortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([nextPromise, abortPromise]);
+  } catch (error) {
+    if (isAbortError(error)) {
+      void nextPromise.catch(() => {
+        /* avoid unhandled rejection when abort wins the race */
+      });
+    }
+    throw error;
+  } finally {
+    if (onAbort) {
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+}
+
+async function disposeAsyncIterator(
+  iterator: AsyncIterator<SDKMessage> | undefined,
+): Promise<void> {
+  if (!iterator?.return) {
+    return;
+  }
+  try {
+    await iterator.return();
+  } catch {
+    /* ignore teardown errors */
+  }
+}
 
 export class ClaudeAgentSdkExecutor implements AgentExecutor {
   readonly providerId = 'claude-code';
@@ -119,13 +175,20 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       },
     };
 
+    let iterator: AsyncIterator<SDKMessage> | undefined;
     try {
       await sink.onEvent({ type: 'lifecycle', phase: 'started' });
 
       let firstMessage = true;
       this.logger.info('Waiting for Claude SDK output (thread %s)...', request.threadTs);
 
-      for await (const message of session) {
+      iterator = (session as AsyncIterable<SDKMessage>)[Symbol.asyncIterator]();
+      for (;;) {
+        const next = await nextMessageOrAbort(iterator, request.abortSignal);
+        if (next.done) {
+          break;
+        }
+        const message = next.value;
         if (firstMessage) {
           firstMessage = false;
           this.logger.info(
@@ -147,6 +210,29 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         ...(sessionId ? { resumeHandle: sessionId } : {}),
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        this.logger.info(
+          'Claude Agent SDK execution stopped (user abort, thread %s)',
+          request.threadTs,
+        );
+        await disposeAsyncIterator(iterator);
+        try {
+          await sink.onEvent({
+            type: 'lifecycle',
+            phase: 'stopped',
+            reason: 'user_stop',
+            ...(sessionId ? { resumeHandle: sessionId } : {}),
+          });
+        } catch (publishError) {
+          const msg = this.describeUnknownError(publishError);
+          this.logger.warn(
+            'Failed to publish stopped lifecycle (thread %s): %s',
+            request.threadTs,
+            redact(msg),
+          );
+        }
+        return;
+      }
       const errorMessage = this.describeUnknownError(error);
       this.logger.error('Claude Agent SDK execution failed: %s', redact(errorMessage));
       await sink.onEvent({

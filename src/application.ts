@@ -13,6 +13,10 @@ import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import {
+  createThreadExecutionRegistry,
+  type ThreadExecutionRegistry,
+} from '~/slack/execution/thread-execution-registry.js';
 import { PresenceKeeper } from '~/slack/presence-keeper.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
@@ -20,6 +24,7 @@ export interface RuntimeApplication {
   readonly logger: AppLogger;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  readonly threadExecutionRegistry: ThreadExecutionRegistry;
 }
 
 export function createApplication(): RuntimeApplication {
@@ -46,11 +51,14 @@ export function createApplication(): RuntimeApplication {
     new Map([['claude-code', ccExecutor]]),
   );
 
+  const threadExecutionRegistry = createThreadExecutionRegistry();
+
   const slackApp: App = createSlackApp({
     logger,
     memoryStore,
     sessionStore,
     providerRegistry,
+    threadExecutionRegistry,
     workspaceResolver,
     ...(statusProbe ? { statusProbe } : {}),
   });
@@ -62,6 +70,7 @@ export function createApplication(): RuntimeApplication {
 
   return {
     logger,
+    threadExecutionRegistry,
     async start() {
       if (env.SLACK_APP_ID && (env.SLACK_CONFIG_TOKEN || env.SLACK_CONFIG_REFRESH_TOKEN)) {
         await syncSlashCommands({

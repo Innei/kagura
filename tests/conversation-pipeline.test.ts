@@ -5,9 +5,11 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import {
   acknowledgeAndLog,
   DEFAULT_CONVERSATION_STEPS,
+  executeAgent,
   prepareThreadContext,
   resolveSessionStep,
   resolveWorkspaceStep,
@@ -93,6 +95,7 @@ describe('DEFAULT_CONVERSATION_STEPS', () => {
 function createMinimalPipelineContext(overrides?: {
   addAcknowledgementReaction?: boolean;
   sessionStoreRecords?: SessionRecord[];
+  threadExecutionRegistry?: ThreadExecutionRegistry;
   workspaceResolverResult?: WorkspaceResolution;
 }): ConversationPipelineContext {
   const records = new Map(
@@ -126,6 +129,15 @@ function createMinimalPipelineContext(overrides?: {
     withTag: vi.fn(),
   };
   logger.withTag.mockReturnValue(logger);
+
+  const unregister = vi.fn();
+  const threadExecutionRegistry =
+    overrides?.threadExecutionRegistry ??
+    ({
+      listActive: vi.fn().mockReturnValue([]),
+      register: vi.fn().mockReturnValue(unregister),
+      stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
+    } as ConversationPipelineContext['deps']['threadExecutionRegistry']);
 
   return {
     client: {
@@ -171,6 +183,7 @@ function createMinimalPipelineContext(overrides?: {
           threadTs: 'ts1',
         }),
       } as unknown as SlackThreadContextLoader,
+      threadExecutionRegistry,
       workspaceResolver: {
         resolveFromText: vi
           .fn()
@@ -303,5 +316,113 @@ describe('prepareThreadContext step', () => {
     expect(result.action).toBe('continue');
     expect(ctx.threadContext).toBeDefined();
     expect(ctx.deps.threadContextLoader.loadThread).toHaveBeenCalled();
+  });
+});
+
+describe('executeAgent step', () => {
+  it('registers execution, passes abortSignal to executor, and unregisters in finally', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+
+    await executeAgent(ctx);
+
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'C123',
+        executionId: expect.stringMatching(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i),
+        providerId: 'claude',
+        startedAt: expect.any(String),
+        threadTs: 'ts1',
+        userId: 'U123',
+      }),
+    );
+    const firstRegisterCall = register.mock.calls[0];
+    if (!firstRegisterCall) {
+      throw new Error('Expected register() to be called once');
+    }
+    const registered = firstRegisterCall[0] as { stop: () => Promise<void> };
+    expect(typeof registered.stop).toBe('function');
+
+    expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abortSignal: expect.any(AbortSignal),
+      }),
+      expect.anything(),
+    );
+
+    expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes execution from registry on stop before execute settles and only calls unregister once', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async () => {
+      const registered = register.mock.calls[0]?.[0] as { stop: () => Promise<void> };
+      await registered.stop();
+      expect(unregister).toHaveBeenCalledTimes(1);
+    });
+
+    await executeAgent(ctx);
+
+    expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('idempotent stop during execute does not call unregister more than once', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async () => {
+      const registered = register.mock.calls[0]?.[0] as { stop: () => Promise<void> };
+      await registered.stop();
+      await registered.stop();
+    });
+
+    await executeAgent(ctx);
+
+    expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('unregisters in finally when execute rejects', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockRejectedValueOnce(new Error('exec failed'));
+
+    await executeAgent(ctx);
+
+    expect(unregister).toHaveBeenCalledTimes(1);
   });
 });
