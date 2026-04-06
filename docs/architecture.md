@@ -44,7 +44,7 @@ Preference memories are injected ahead of other memories so they take priority i
 
 ## Online presence
 
-A **PresenceKeeper** calls `users.setPresence("auto")` on startup and every 5 minutes to keep the bot's green dot active. On graceful shutdown it sets presence to `"away"`.
+The bot's green dot is controlled by the `always_online: true` flag in the app manifest's `bot_user` section. The manifest sync ensures this flag is enabled on every startup. For Socket Mode / Events API bots, `users.setPresence` has no effect — Slack accepts the call but ignores it.
 
 ## Project structure
 
@@ -72,7 +72,7 @@ src/
 │           └── tools/          # MCP tool definitions
 ├── slack/
 │   ├── app.ts                  # @slack/bolt initialization
-│   ├── presence-keeper.ts      # Online presence heartbeat
+
 │   ├── commands/               # Slash command handlers + manifest sync
 │   ├── ingress/                # @mention / thread / assistant / home tab
 │   ├── interactions/           # Message Action + modal + stop shortcut
