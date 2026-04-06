@@ -98,6 +98,8 @@ function createMinimalPipelineContext(overrides?: {
     listActive: ReturnType<typeof vi.fn>;
     register: ReturnType<typeof vi.fn>;
     stopAll: ReturnType<typeof vi.fn>;
+    stopByMessage?: ReturnType<typeof vi.fn>;
+    trackMessage?: ReturnType<typeof vi.fn>;
   };
   workspaceResolverResult?: WorkspaceResolution;
 }): ConversationPipelineContext {
@@ -134,13 +136,14 @@ function createMinimalPipelineContext(overrides?: {
   logger.withTag.mockReturnValue(logger);
 
   const unregister = vi.fn();
-  const threadExecutionRegistry =
-    overrides?.threadExecutionRegistry ??
-    ({
-      listActive: vi.fn().mockReturnValue([]),
-      register: vi.fn().mockReturnValue(unregister),
-      stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
-    } as ConversationPipelineContext['deps']['threadExecutionRegistry']);
+  const threadExecutionRegistry = {
+    listActive: vi.fn().mockReturnValue([]),
+    register: vi.fn().mockReturnValue(unregister),
+    stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
+    stopByMessage: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
+    trackMessage: vi.fn(),
+    ...overrides?.threadExecutionRegistry,
+  } as ConversationPipelineContext['deps']['threadExecutionRegistry'];
 
   return {
     client: {
@@ -339,9 +342,7 @@ describe('executeAgent step', () => {
     expect(register).toHaveBeenCalledWith(
       expect.objectContaining({
         channelId: 'C123',
-        executionId: expect.stringMatching(
-          /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i,
-        ),
+        executionId: expect.stringMatching(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i),
         providerId: 'claude',
         startedAt: expect.any(String),
         threadTs: 'ts1',
