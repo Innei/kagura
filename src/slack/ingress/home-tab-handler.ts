@@ -21,6 +21,9 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
     const userId = event.user;
 
     try {
+      const botInfo = await client.auth!.test();
+      const botMention = botInfo.user_id ? `<@${botInfo.user_id}>` : 'the bot';
+
       const sessionCount = deps.sessionStore.countAll();
       const memoryCount = deps.memoryStore.countAll();
       const repos = deps.workspaceResolver.listRepos();
@@ -57,7 +60,7 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
                 type: 'mrkdwn',
                 text: [
                   '*Chat* \u2014 Click the *Chat* tab above to start a conversation',
-                  '*Mention* \u2014 `@cc-001` in any channel to ask a question',
+                  `*Mention* \u2014 ${botMention} in any channel to ask a question`,
                   '*Thread* \u2014 Reply in an existing thread to continue the conversation',
                 ].join('\n'),
               },
