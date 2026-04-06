@@ -415,6 +415,32 @@ function handleResult(logger: AppLogger, message: SDKResultMessage): void {
   } else {
     logger.warn('Claude execution ended with %s: %s', message.subtype, message.errors.join('; '));
   }
+
+  logModelUsage(logger, message);
+}
+
+function logModelUsage(logger: AppLogger, message: SDKResultMessage): void {
+  if (!message.modelUsage) return;
+  for (const [model, usage] of Object.entries(message.modelUsage)) {
+    const cacheRead = usage.cacheReadInputTokens;
+    const cacheCreate = usage.cacheCreationInputTokens;
+    const totalInput = usage.inputTokens;
+    const cacheHitRate =
+      totalInput + cacheRead > 0
+        ? ((cacheRead / (totalInput + cacheRead)) * 100).toFixed(1)
+        : '0.0';
+
+    logger.info(
+      'Token usage [%s]: input=%d output=%d cache_read=%d cache_create=%d cache_hit=%s%% cost=$%s',
+      model,
+      totalInput,
+      usage.outputTokens,
+      cacheRead,
+      cacheCreate,
+      cacheHitRate,
+      usage.costUSD.toFixed(4),
+    );
+  }
 }
 
 function extractAssistantText(message: SDKAssistantMessage): string {
