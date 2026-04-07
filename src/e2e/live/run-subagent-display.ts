@@ -160,10 +160,10 @@ async function main(): Promise<void> {
  * Check whether any progress-message text includes a task status icon,
  * which indicates that our task rendering code was exercised.
  *
- * The icons we emit are Slack emoji shortcodes:
- * :hourglass:, :spinner:, :white_check_mark:, :x:
+ * The icons we emit are Unicode checkbox characters:
+ * ☐ (U+2610), ☑ (U+2611), ☒ (U+2612)
  */
-const TASK_ICON_PATTERN = /:(?:hourglass|spinner|white_check_mark|x):/;
+const TASK_ICON_PATTERN = /[\u2610-\u2612]/;
 
 function analyzeProbeRecords(result: SubagentDisplayResult): void {
   const progressRecords = result.probeRecords.filter(

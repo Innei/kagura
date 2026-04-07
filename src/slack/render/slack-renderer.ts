@@ -616,10 +616,10 @@ function formatTokenCount(count: number): string {
 }
 
 const TASK_STATUS_ICON: Record<TrackedTask['status'], string> = {
-  pending: ':hourglass:',
-  in_progress: ':spinner:',
-  complete: ':white_check_mark:',
-  error: ':x:',
+  pending: '\u2610',
+  in_progress: '\u2610',
+  complete: '\u2611',
+  error: '\u2612',
 };
 
 function formatTaskLines(tasks?: Map<string, TrackedTask>): string | undefined {
