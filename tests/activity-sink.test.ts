@@ -521,4 +521,70 @@ describe('createActivitySink', () => {
       '_Stopped by user._',
     );
   });
+
+  it('only includes toolbar (workspaceLabel + toolHistory) on the first message of a turn', async () => {
+    const renderer = createRendererStub();
+    const postThreadReply = vi.mocked(renderer.postThreadReply);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      workspaceLabel: 'my-workspace',
+    });
+
+    // Accumulate some tool activity
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        status: 'Reading files...',
+        activities: ['Reading src/index.ts...'],
+        clear: false,
+      },
+    });
+
+    // First message should include toolbar
+    await sink.onEvent({ type: 'assistant-message', text: 'First message' });
+    expect(postThreadReply).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'First message',
+      expect.objectContaining({ workspaceLabel: 'my-workspace' }),
+    );
+
+    // Simulate more tool activity between messages
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        status: 'Searching codebase...',
+        activities: ['Searching for patterns...'],
+        clear: false,
+      },
+    });
+
+    // Second message should NOT include toolbar (empty options object)
+    await sink.onEvent({ type: 'assistant-message', text: 'Second message' });
+    expect(postThreadReply).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Second message',
+      {},
+    );
+
+    // Third message should also NOT include toolbar
+    await sink.onEvent({ type: 'assistant-message', text: 'Third message' });
+    expect(postThreadReply).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Third message',
+      {},
+    );
+  });
 });
