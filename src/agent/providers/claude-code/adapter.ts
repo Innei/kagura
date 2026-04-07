@@ -176,7 +176,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
 
     let session: ReturnType<typeof query>;
     try {
-      const skillOptions = this.buildSkillOptions(sink);
+      const toolOptions = this.buildToolOptions(sink);
       session = query({
         prompt: userPrompt,
         options: {
@@ -195,7 +195,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
             ? { allowDangerouslySkipPermissions: true }
             : {}),
           persistSession: true,
-          ...skillOptions,
+          ...toolOptions,
           ...(request.resumeHandle ? { resume: request.resumeHandle } : {}),
         },
       });
@@ -402,26 +402,36 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     }
   }
 
-  private buildSkillOptions(sink: AgentExecutionSink): {
+  private buildToolOptions(sink: AgentExecutionSink): {
     allowedTools?: string[];
     canUseTool?: CanUseTool;
     settingSources?: Array<'user' | 'project'>;
   } {
-    if (!env.CLAUDE_ENABLE_SKILLS) {
+    const skillsEnabled = env.CLAUDE_ENABLE_SKILLS;
+    const hasPermissionBridge = !!sink.requestPermission;
+    const hasUserInputBridge = !!sink.requestUserInput;
+
+    if (!skillsEnabled && !hasPermissionBridge && !hasUserInputBridge) {
       return {};
     }
 
     return {
-      settingSources: ['user', 'project'],
-      allowedTools: ['Skill'],
+      ...(skillsEnabled
+        ? {
+            settingSources: ['user', 'project'] as Array<'user' | 'project'>,
+            allowedTools: ['Skill'],
+          }
+        : {}),
       canUseTool: async (toolName, input, options) => {
-        if (toolName === 'Skill') {
+        // --- Skill dispatch (always allow when skills enabled) ---
+        if (skillsEnabled && toolName === 'Skill') {
           return {
             behavior: 'allow',
             updatedInput: input,
           };
         }
 
+        // --- AskUserQuestion (bridge to Slack thread reply, always available) ---
         if (toolName === 'AskUserQuestion') {
           const userInputRequest = parseAgentUserInputRequest(input);
           if (!userInputRequest) {
@@ -457,10 +467,35 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           };
         }
 
+        // --- Permission bridge (Approve/Deny buttons in Slack) ---
+        if (hasPermissionBridge) {
+          const response = await sink.requestPermission!(
+            {
+              toolName,
+              input,
+              description: options.description,
+            },
+            { signal: options.signal },
+          );
+
+          if (response.allowed) {
+            return {
+              behavior: 'allow',
+              updatedInput: input,
+            };
+          }
+
+          return {
+            behavior: 'deny',
+            message: `用户在 Slack 中拒绝了 ${toolName} 工具的使用请求。`,
+          };
+        }
+
+        // --- No bridge available: deny ---
         return {
           behavior: 'deny',
           message:
-            'The Slack host only bridges Skill dispatch and AskUserQuestion right now. Other tool permission requests inside skills are not yet supported here.',
+            'The Slack host does not support interactive permission requests for this tool right now.',
         };
       },
     };

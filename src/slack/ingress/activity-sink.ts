@@ -1,6 +1,8 @@
 import type {
   AgentActivityState,
   AgentExecutionEvent,
+  AgentPermissionRequest,
+  AgentPermissionResponse,
   AgentUserInputQuestion,
   AgentUserInputRequest,
   AgentUserInputResponse,
@@ -13,6 +15,11 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 
+import {
+  formatPermissionDecisionMessage,
+  formatPermissionRequestMessage,
+  type SlackPermissionBridge,
+} from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -21,6 +28,7 @@ export interface ActivitySinkOptions {
   channel: string;
   client: SlackWebClientLike;
   logger: AppLogger;
+  permissionBridge?: SlackPermissionBridge | undefined;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadTs: string;
@@ -32,6 +40,12 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestPermission?: (
+    request: AgentPermissionRequest,
+    options?: {
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {
@@ -54,6 +68,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     channel,
     client,
     logger,
+    permissionBridge,
     renderer,
     sessionStore,
     threadTs,
@@ -348,6 +363,78 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               answers,
               ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
             };
+          },
+        }
+      : {}),
+
+    ...(permissionBridge
+      ? {
+          requestPermission: async (
+            request: AgentPermissionRequest,
+            requestOptions?: {
+              signal?: AbortSignal | undefined;
+            },
+          ): Promise<AgentPermissionResponse> => {
+            await renderer.setUiState(client, channel, {
+              threadTs,
+              status: 'Awaiting your permission...',
+              loadingMessages: [
+                `Claude wants to use ${request.toolName}`,
+                'Waiting for your approval in Slack...',
+              ],
+              clear: false,
+            });
+
+            const formatted = formatPermissionRequestMessage(request, {
+              description: request.description,
+            });
+
+            // Post the interactive message with Approve/Deny buttons directly
+            const interactiveResponse = await client.chat.postMessage({
+              channel,
+              thread_ts: threadTs,
+              text: formatted.text,
+              blocks: formatted.blocks,
+            });
+
+            const decision = await permissionBridge.awaitDecision({
+              expectedUserId: userId,
+              request,
+              signal: requestOptions?.signal,
+              threadTs,
+            });
+
+            // Update the interactive message to show the decision (remove buttons)
+            if (interactiveResponse.ts) {
+              const decisionMsg = formatPermissionDecisionMessage(
+                request.toolName,
+                decision.allowed,
+                userId ?? 'unknown',
+              );
+              await client.chat
+                .update({
+                  channel,
+                  ts: interactiveResponse.ts,
+                  text: decisionMsg.text,
+                  blocks: decisionMsg.blocks as any,
+                })
+                .catch((err: unknown) => {
+                  logger.warn(
+                    'Failed to update permission message after decision: %s',
+                    String(err),
+                  );
+                });
+            }
+
+            const defaultState = createDefaultThinkingState(threadTs);
+            await renderer.setUiState(client, channel, {
+              threadTs: defaultState.threadTs,
+              status: defaultState.status,
+              loadingMessages: defaultState.activities,
+              clear: false,
+            });
+
+            return decision;
           },
         }
       : {}),

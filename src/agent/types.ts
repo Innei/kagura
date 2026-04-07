@@ -78,6 +78,16 @@ export interface AgentUserInputResponse {
   >;
   answers: Record<string, string>;
 }
+
+export interface AgentPermissionRequest {
+  description?: string | undefined;
+  input: Record<string, unknown>;
+  toolName: string;
+}
+
+export interface AgentPermissionResponse {
+  allowed: boolean;
+}
 export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
@@ -140,6 +150,12 @@ export interface AgentActivityState {
 
 export interface AgentExecutionSink {
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestPermission?: (
+    request: AgentPermissionRequest,
+    options?: {
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {

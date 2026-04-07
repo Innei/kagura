@@ -24,12 +24,12 @@ describe('Claude skill permission bridge', () => {
     vi.clearAllMocks();
   });
 
-  it('does not auto-approve non-skill tools when skill dispatch is enabled', async () => {
+  it('does not auto-approve non-skill tools when skill dispatch is enabled and no permission bridge', async () => {
     const { ClaudeAgentSdkExecutor } = await import('~/agent/providers/claude-code/adapter.js');
     const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
-    const skillOptions = (
+    const toolOptions = (
       executor as unknown as {
-        buildSkillOptions: (sink: Record<string, unknown>) => {
+        buildToolOptions: (sink: Record<string, unknown>) => {
           canUseTool?: (
             toolName: string,
             input: Record<string, unknown>,
@@ -39,17 +39,25 @@ describe('Claude skill permission bridge', () => {
           ) => Promise<Record<string, unknown>>;
         };
       }
-    ).buildSkillOptions({});
+    ).buildToolOptions({});
 
     await expect(
-      skillOptions.canUseTool?.('Skill', { command: 'bazi' }, { signal: new AbortController().signal }),
+      toolOptions.canUseTool?.(
+        'Skill',
+        { command: 'bazi' },
+        { signal: new AbortController().signal },
+      ),
     ).resolves.toMatchObject({
       behavior: 'allow',
       updatedInput: { command: 'bazi' },
     });
 
     await expect(
-      skillOptions.canUseTool?.('Bash', { command: 'pwd' }, { signal: new AbortController().signal }),
+      toolOptions.canUseTool?.(
+        'Bash',
+        { command: 'pwd' },
+        { signal: new AbortController().signal },
+      ),
     ).resolves.toMatchObject({
       behavior: 'deny',
     });
