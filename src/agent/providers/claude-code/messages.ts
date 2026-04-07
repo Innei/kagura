@@ -201,7 +201,7 @@ function handleSystemInit(
   handlers.setSessionId(message.session_id);
   handlers.setSessionCwd(message.cwd);
   logger.info(
-    'Claude Code session init: id=%s model=%s cwd=%s',
+    'Claude Code effective session model resolved: id=%s model=%s cwd=%s',
     message.session_id,
     message.model,
     message.cwd,
