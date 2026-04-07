@@ -47,6 +47,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let terminalStopReason:
     | Extract<AgentExecutionEvent, { type: 'lifecycle'; phase: 'stopped' }>['reason']
     | undefined;
+  let hasSentToolbarInTurn = false;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -110,10 +111,13 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   };
 
   const handleAssistantMessage = async (text: string): Promise<void> => {
+    // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
+    const includeToolbar = !hasSentToolbarInTurn;
     await renderer.postThreadReply(client, channel, threadTs, text, {
-      ...(workspaceLabel ? { workspaceLabel } : {}),
-      ...(toolHistory.size > 0 ? { toolHistory } : {}),
+      ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
+      ...(includeToolbar && toolHistory.size > 0 ? { toolHistory } : {}),
     });
+    hasSentToolbarInTurn = true;
     if (pendingGeneratedFiles.length > 0) {
       const batch = [...pendingGeneratedFiles];
       try {
