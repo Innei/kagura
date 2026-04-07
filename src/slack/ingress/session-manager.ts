@@ -20,10 +20,10 @@ export function resolveAndPersistSession(
     forceNewSession ||
     Boolean(
       workspace &&
-      existingSession?.claudeSessionId &&
+      existingSession?.providerSessionId &&
       existingSession.workspacePath !== workspace.workspacePath,
     );
-  const resumeHandle = shouldResetSession ? undefined : existingSession?.claudeSessionId;
+  const resumeHandle = shouldResetSession ? undefined : existingSession?.providerSessionId;
 
   const workspaceFields = workspace
     ? {
@@ -40,7 +40,7 @@ export function resolveAndPersistSession(
       channelId,
       rootMessageTs,
       ...workspaceFields,
-      ...(shouldResetSession ? { claudeSessionId: undefined } : {}),
+      ...(shouldResetSession ? { providerSessionId: undefined } : {}),
     });
     return { resumeHandle, session: patched ?? existingSession };
   }

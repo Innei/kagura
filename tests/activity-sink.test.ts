@@ -120,7 +120,7 @@ describe('createActivitySink', () => {
 
     await sink.onEvent({ type: 'lifecycle', phase: 'started', resumeHandle: 'session-42' });
 
-    expect(sessionStore.patch).toHaveBeenCalledWith('ts1', { claudeSessionId: 'session-42' });
+    expect(sessionStore.patch).toHaveBeenCalledWith('ts1', { providerSessionId: 'session-42' });
   });
 
   it('posts error message on lifecycle failed', async () => {

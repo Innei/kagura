@@ -116,7 +116,7 @@ export async function stopActiveExecutionsStep(
     result.failed,
   );
 
-  // Refresh session from store — the stopped execution may have persisted a new claudeSessionId
+  // Refresh session from store — the stopped execution may have persisted a new providerSessionId
   ctx.existingSession = deps.sessionStore.get(threadTs);
 
   return CONTINUE;

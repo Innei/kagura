@@ -2,8 +2,8 @@ export interface SessionRecord {
   agentProvider?: string | undefined;
   bootstrapMessageTs?: string | undefined;
   channelId: string;
-  claudeSessionId?: string | undefined;
   createdAt: string;
+  providerSessionId?: string | undefined;
   rootMessageTs: string;
   streamMessageTs?: string | undefined;
   threadTs: string;

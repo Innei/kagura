@@ -16,8 +16,8 @@ import {
   runConversationPipeline,
   stopActiveExecutionsStep,
 } from '~/slack/ingress/conversation-pipeline.js';
-import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { ConversationPipelineContext, PipelineStep } from '~/slack/ingress/types.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -280,7 +280,7 @@ describe('stopActiveExecutionsStep', () => {
   it('stops active executions and refreshes session', async () => {
     const session: SessionRecord = {
       channelId: 'C123',
-      claudeSessionId: 'saved-session-id',
+      providerSessionId: 'saved-session-id',
       createdAt: '',
       rootMessageTs: 'ts1',
       threadTs: 'ts1',
@@ -310,7 +310,7 @@ describe('stopActiveExecutionsStep', () => {
     expect(result.action).toBe('continue');
     expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'superseded');
     // existingSession should be refreshed from store
-    expect(ctx.existingSession?.claudeSessionId).toBe('saved-session-id');
+    expect(ctx.existingSession?.providerSessionId).toBe('saved-session-id');
   });
 
   it('waits for an in-flight stop to finish even when no executions are currently listed', async () => {
@@ -320,7 +320,7 @@ describe('stopActiveExecutionsStep', () => {
       unblockStop = () => {
         ctx.deps.sessionStore.upsert({
           channelId: 'C123',
-          claudeSessionId: 'persisted-after-drain',
+          providerSessionId: 'persisted-after-drain',
           createdAt: '',
           rootMessageTs: 'ts1',
           threadTs: 'ts1',
@@ -345,7 +345,7 @@ describe('stopActiveExecutionsStep', () => {
 
     unblockStop!();
     await expect(resultPromise).resolves.toEqual({ action: 'continue' });
-    expect(ctx.existingSession?.claudeSessionId).toBe('persisted-after-drain');
+    expect(ctx.existingSession?.providerSessionId).toBe('persisted-after-drain');
   });
 });
 

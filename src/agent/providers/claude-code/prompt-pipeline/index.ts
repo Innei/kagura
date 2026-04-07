@@ -1,5 +1,12 @@
-export type { PromptPipelineOutput } from './pipeline.js';
-export { DEFAULT_PROMPT_PROCESSORS, runPromptPipeline } from './pipeline.js';
+export type {
+  PromptAssemblyContext as PromptPipelineContext,
+  PromptAssembly as PromptPipelineOutput,
+  PromptProcessor,
+} from '~/agent/prompt/index.js';
+export {
+  DEFAULT_PROMPT_PROCESSORS,
+  assemblePrompt as runPromptPipeline,
+} from '~/agent/prompt/index.js';
 export {
   fileContextProcessor,
   imageCollectionProcessor,
@@ -10,5 +17,4 @@ export {
   threadContextProcessor,
   toolDeclarationProcessor,
   userMessageProcessor,
-} from './processors.js';
-export type { PromptPipelineContext, PromptProcessor } from './types.js';
+} from '~/agent/prompt/index.js';

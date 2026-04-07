@@ -58,6 +58,11 @@ export async function extractImplicitMemories(
     return [];
   }
 
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    logger.debug('Skipping memory extraction because ANTHROPIC_API_KEY is not configured.');
+    return [];
+  }
+
   const existingBlock =
     existingMemories.length > 0
       ? `\nExisting memories (avoid duplicates, reference ids for superseding):\n${existingMemories.map((m) => `- [${m.id}] (${m.category}) ${m.content}`).join('\n')}`

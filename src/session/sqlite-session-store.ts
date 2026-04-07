@@ -32,7 +32,7 @@ export class SqliteSessionStore implements SessionStore {
         rootMessageTs: record.rootMessageTs,
         bootstrapMessageTs: record.bootstrapMessageTs ?? null,
         streamMessageTs: record.streamMessageTs ?? null,
-        claudeSessionId: record.claudeSessionId ?? null,
+        providerSessionId: record.providerSessionId ?? null,
         agentProvider: record.agentProvider ?? null,
         workspaceRepoId: record.workspaceRepoId ?? null,
         workspaceRepoPath: record.workspaceRepoPath ?? null,
@@ -49,7 +49,7 @@ export class SqliteSessionStore implements SessionStore {
           rootMessageTs: record.rootMessageTs,
           bootstrapMessageTs: record.bootstrapMessageTs ?? null,
           streamMessageTs: record.streamMessageTs ?? null,
-          claudeSessionId: record.claudeSessionId ?? null,
+          providerSessionId: record.providerSessionId ?? null,
           agentProvider: record.agentProvider ?? null,
           workspaceRepoId: record.workspaceRepoId ?? null,
           workspaceRepoPath: record.workspaceRepoPath ?? null,
@@ -86,7 +86,7 @@ export class SqliteSessionStore implements SessionStore {
         rootMessageTs: next.rootMessageTs,
         bootstrapMessageTs: next.bootstrapMessageTs ?? null,
         streamMessageTs: next.streamMessageTs ?? null,
-        claudeSessionId: next.claudeSessionId ?? null,
+        providerSessionId: next.providerSessionId ?? null,
         agentProvider: next.agentProvider ?? null,
         workspaceRepoId: next.workspaceRepoId ?? null,
         workspaceRepoPath: next.workspaceRepoPath ?? null,
@@ -112,7 +112,7 @@ export class SqliteSessionStore implements SessionStore {
       updatedAt: row.updatedAt,
     };
     if (row.bootstrapMessageTs !== null) record.bootstrapMessageTs = row.bootstrapMessageTs;
-    if (row.claudeSessionId !== null) record.claudeSessionId = row.claudeSessionId;
+    if (row.providerSessionId !== null) record.providerSessionId = row.providerSessionId;
     if (row.streamMessageTs !== null) record.streamMessageTs = row.streamMessageTs;
     if (row.workspaceRepoId !== null) record.workspaceRepoId = row.workspaceRepoId;
     if (row.workspaceRepoPath !== null) record.workspaceRepoPath = row.workspaceRepoPath;

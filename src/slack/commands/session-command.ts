@@ -50,7 +50,7 @@ function lookupSession(threadTs: string, deps: SlashCommandDependencies): SlashC
     `• *State:* ${state}`,
     `• *Workspace:* ${session.workspaceLabel ? `\`${session.workspaceLabel}\`` : '_not set_'}`,
     `• *Workspace Path:* ${session.workspacePath ? `\`${session.workspacePath}\`` : '_not set_'}`,
-    `• *Claude Session:* ${session.claudeSessionId ? `\`${session.claudeSessionId.slice(0, 16)}...\`` : '_none_'}`,
+    `• *Provider Session:* ${session.providerSessionId ? `\`${session.providerSessionId.slice(0, 16)}...\`` : '_none_'}`,
     `• *Created:* ${session.createdAt}`,
     `• *Updated:* ${session.updatedAt}`,
   ];

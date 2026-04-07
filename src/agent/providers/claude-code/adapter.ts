@@ -21,7 +21,7 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { ClaudeExecutionProbe, ClaudeExecutionProbeRecord } from './execution-probe.js';
 import { createAnthropicAgentSdkMcpServer } from './mcp-server.js';
 import { handleClaudeSdkMessage } from './messages.js';
-import { runPromptPipeline } from './prompt-pipeline/index.js';
+import { createClaudePromptInput } from './prompt-input.js';
 import { buildRuntimeUiState, createRuntimeUiStateTracker } from './runtime-ui.js';
 import type { MessageHandlers, RuntimeUiStateTracker } from './types.js';
 
@@ -162,7 +162,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       request,
       sink,
     );
-    const { systemPrompt, userPrompt } = runPromptPipeline(request);
+    const { systemPrompt, userPrompt } = createClaudePromptInput(request);
 
     this.logger.info(
       'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s, cwd=%s)',

@@ -86,7 +86,7 @@ function resetProvider(deps: ProviderCommandDependencies): SlashCommandResponse 
 
   sessionStore.patch(threadTs, {
     agentProvider: undefined,
-    claudeSessionId: undefined,
+    providerSessionId: undefined,
   });
 
   return {
@@ -123,7 +123,7 @@ function setProvider(providerId: string, deps: ProviderCommandDependencies): Sla
 
   sessionStore.patch(threadTs, {
     agentProvider: providerId,
-    claudeSessionId: undefined,
+    providerSessionId: undefined,
   });
 
   return {

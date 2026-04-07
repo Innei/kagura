@@ -10,12 +10,12 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
   WORKSPACE_MODAL_CALLBACK_ID,
 } from '~/slack/interactions/workspace-message-action.js';
-import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -255,7 +255,7 @@ describe('Workspace message action test', () => {
     });
 
     expect(sessionStore.get('1712345678.000200')).toMatchObject({
-      claudeSessionId: 'session-message-action',
+      providerSessionId: 'session-message-action',
       workspaceLabel: 'team/slack-cc-bot',
       workspacePath: repoPath,
       workspaceRepoId: 'team/slack-cc-bot',

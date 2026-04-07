@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { extractImplicitMemories } from '~/memory/memory-extractor.js';
 import type { MemoryRecord } from '~/memory/types.js';
@@ -32,6 +32,22 @@ function setMockResponse(text: string) {
 }
 
 describe('extractImplicitMemories', () => {
+  let previousApiKey: string | undefined;
+
+  beforeEach(() => {
+    previousApiKey = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    mockCreate.mockReset();
+  });
+
+  afterEach(() => {
+    if (previousApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+      return;
+    }
+    process.env.ANTHROPIC_API_KEY = previousApiKey;
+  });
+
   it('extracts nickname preferences from conversation', async () => {
     setMockResponse(
       JSON.stringify([

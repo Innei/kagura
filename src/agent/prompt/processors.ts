@@ -1,20 +1,14 @@
+import {
+  RECALL_MEMORY_TOOL_NAME,
+  SAVE_MEMORY_TOOL_NAME,
+  SLACK_ATTACHMENT_CAPABILITY_LINES,
+  SLACK_UI_STATE_TOOL_NAME,
+  UPLOAD_SLACK_FILE_TOOL_NAME,
+} from '~/agent/slack-runtime-tools.js';
 import type { LoadedThreadFile } from '~/slack/context/thread-context-loader.js';
 
-import { SLACK_ATTACHMENT_CAPABILITY_LINES } from '../prompts.js';
-import { SLACK_UI_STATE_TOOL_NAME } from '../tools/publish-state.js';
-import { RECALL_MEMORY_TOOL_NAME } from '../tools/recall-memory.js';
-import { SAVE_MEMORY_TOOL_NAME } from '../tools/save-memory.js';
-import { UPLOAD_SLACK_FILE_TOOL_NAME } from '../tools/upload-slack-file.js';
 import type { PromptProcessor } from './types.js';
 
-// ---------------------------------------------------------------------------
-// Phase 1 — System prompt (constant across all turns within a session)
-// ---------------------------------------------------------------------------
-
-/**
- * Base role identity and safety rules.
- * Contains ONLY static text — no channel/thread/workspace identifiers.
- */
 export const systemRoleProcessor: PromptProcessor = {
   name: 'system-role',
   process(ctx) {
@@ -29,9 +23,6 @@ export const systemRoleProcessor: PromptProcessor = {
   },
 };
 
-/**
- * Tool declarations — static list of available MCP tools.
- */
 export const toolDeclarationProcessor: PromptProcessor = {
   name: 'tool-declaration',
   process(ctx) {
@@ -48,10 +39,6 @@ export const toolDeclarationProcessor: PromptProcessor = {
   },
 };
 
-/**
- * Instructions telling the model how to use the memory system.
- * Fully static — does not contain actual memory records.
- */
 export const memoryInstructionProcessor: PromptProcessor = {
   name: 'memory-instruction',
   process(ctx) {
@@ -83,16 +70,6 @@ export const memoryInstructionProcessor: PromptProcessor = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Phase 2 — Context injection (dynamic, injected into user message area)
-// ---------------------------------------------------------------------------
-
-/**
- * Channel, thread, and workspace identifiers.
- *
- * Moved out of the system prompt so it stays constant. These change per thread
- * but are stable within a session (workspace changes force a session reset).
- */
 export const sessionContextProcessor: PromptProcessor = {
   name: 'session-context',
   process(ctx) {
@@ -118,10 +95,6 @@ export const sessionContextProcessor: PromptProcessor = {
   },
 };
 
-/**
- * Injects recalled memory records (preferences, global, workspace) from
- * previous sessions.
- */
 export const memoryContextProcessor: PromptProcessor = {
   name: 'memory-context',
   process(ctx) {
@@ -172,10 +145,6 @@ export const memoryContextProcessor: PromptProcessor = {
   },
 };
 
-/**
- * Injects the rendered Slack thread history for **new** sessions.
- * Skipped when resuming (the SDK already has the prior turns).
- */
 export const threadContextProcessor: PromptProcessor = {
   name: 'thread-context',
   process(ctx) {
@@ -189,9 +158,6 @@ export const threadContextProcessor: PromptProcessor = {
   },
 };
 
-/**
- * Injects loaded Slack text/code file contents for the current thread.
- */
 export const fileContextProcessor: PromptProcessor = {
   name: 'file-context',
   process(ctx) {
@@ -213,13 +179,6 @@ export const fileContextProcessor: PromptProcessor = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Phase 3 — User message
-// ---------------------------------------------------------------------------
-
-/**
- * The user's actual mention text.
- */
 export const userMessageProcessor: PromptProcessor = {
   name: 'user-message',
   process(ctx) {
@@ -227,19 +186,13 @@ export const userMessageProcessor: PromptProcessor = {
 
     if (request.resumeHandle) {
       ctx.userMessageParts.push(request.mentionText);
-    } else {
-      ctx.userMessageParts.push(`From <@${request.userId}>:\n${request.mentionText}`);
+      return;
     }
+
+    ctx.userMessageParts.push(`From <@${request.userId}>:\n${request.mentionText}`);
   },
 };
 
-// ---------------------------------------------------------------------------
-// Phase 4 — Image collection
-// ---------------------------------------------------------------------------
-
-/**
- * Collects loaded images and failure notes from thread context.
- */
 export const imageCollectionProcessor: PromptProcessor = {
   name: 'image-collection',
   process(ctx) {

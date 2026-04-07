@@ -62,7 +62,7 @@ describe('resolveAndPersistSession', () => {
   it('patches existing session and returns resume handle', () => {
     const existing: SessionRecord = {
       channelId: 'C123',
-      claudeSessionId: 'session-1',
+      providerSessionId: 'session-1',
       createdAt: new Date().toISOString(),
       rootMessageTs: 'ts1',
       threadTs: 'ts1',
@@ -82,7 +82,7 @@ describe('resolveAndPersistSession', () => {
   it('resets session when workspace changes', () => {
     const existing: SessionRecord = {
       channelId: 'C123',
-      claudeSessionId: 'session-1',
+      providerSessionId: 'session-1',
       createdAt: new Date().toISOString(),
       rootMessageTs: 'ts1',
       threadTs: 'ts1',
@@ -97,13 +97,13 @@ describe('resolveAndPersistSession', () => {
     const result = resolveAndPersistSession('ts1', 'C123', 'ts1', WORKSPACE, false, store);
 
     expect(result.resumeHandle).toBeUndefined();
-    expect(store.get('ts1')?.claudeSessionId).toBeUndefined();
+    expect(store.get('ts1')?.providerSessionId).toBeUndefined();
   });
 
   it('resets session when forceNewSession is true', () => {
     const existing: SessionRecord = {
       channelId: 'C123',
-      claudeSessionId: 'session-1',
+      providerSessionId: 'session-1',
       createdAt: new Date().toISOString(),
       rootMessageTs: 'ts1',
       threadTs: 'ts1',
@@ -133,7 +133,7 @@ describe('resolveAndPersistSession', () => {
   it('preserves existing workspace when patching without new workspace', () => {
     const existing: SessionRecord = {
       channelId: 'C123',
-      claudeSessionId: 'session-1',
+      providerSessionId: 'session-1',
       createdAt: new Date().toISOString(),
       rootMessageTs: 'ts1',
       threadTs: 'ts1',

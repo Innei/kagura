@@ -403,7 +403,7 @@ describe('handleSessionCommand', () => {
         makeSession('1712345678.000100', {
           workspaceLabel: 'my-project',
           workspacePath: '/repos/my-project',
-          claudeSessionId: 'claude-session-abcdef1234567890',
+          providerSessionId: 'claude-session-abcdef1234567890',
         }),
       ],
     });
@@ -422,7 +422,7 @@ describe('handleSessionCommand', () => {
     expect(result.text).toContain('No session found');
   });
 
-  it('shows session without workspace or claude session', () => {
+  it('shows session without workspace or provider session', () => {
     const deps = createTestDeps({
       sessionRecords: [makeSession('ts-bare')],
     });

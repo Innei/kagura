@@ -5,9 +5,10 @@ import {
   RecallMemoryToolInputSchema,
 } from '../schemas/memory-tools.js';
 
-export const RECALL_MEMORY_TOOL_NAME = 'recall_memory';
-export const RECALL_MEMORY_TOOL_DESCRIPTION =
-  'Retrieve memories from previous sessions. Supports both global (cross-workspace) and workspace-scoped memories.';
+export {
+  RECALL_MEMORY_TOOL_DESCRIPTION,
+  RECALL_MEMORY_TOOL_NAME,
+} from '~/agent/slack-runtime-tools.js';
 
 export function parseRecallMemoryToolInput(input: unknown): RecallMemoryToolInput {
   return zodParse(RecallMemoryToolInputSchema, input, 'RecallMemoryToolInput');

@@ -245,8 +245,8 @@ async function waitForResumeAssertions(input: {
     }
 
     const sessionRow = readSessionRow(input.rootMessage.ts);
-    if (sessionRow?.claudeSessionId) {
-      input.result.firstPersistedSessionId ??= sessionRow.claudeSessionId;
+    if (sessionRow?.providerSessionId) {
+      input.result.firstPersistedSessionId ??= sessionRow.providerSessionId;
       input.result.matched.firstSessionPersisted = true;
     }
 
@@ -345,7 +345,7 @@ function findSecondReply(
 
 function readSessionRow(
   threadTs: string,
-): { claudeSessionId?: string | undefined; threadTs: string } | undefined {
+): { providerSessionId?: string | undefined; threadTs: string } | undefined {
   const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
   const sqlite = new Database(dbPath, { readonly: true });
 
@@ -353,12 +353,12 @@ function readSessionRow(
     const row = sqlite
       .prepare(
         `
-          SELECT thread_ts AS threadTs, claude_session_id AS claudeSessionId
+          SELECT thread_ts AS threadTs, claude_session_id AS providerSessionId
           FROM sessions
           WHERE thread_ts = ?
         `,
       )
-      .get(threadTs) as { claudeSessionId?: string | null; threadTs: string } | undefined;
+      .get(threadTs) as { providerSessionId?: string | null; threadTs: string } | undefined;
 
     if (!row) {
       return undefined;
@@ -366,7 +366,7 @@ function readSessionRow(
 
     return {
       threadTs: row.threadTs,
-      ...(row.claudeSessionId ? { claudeSessionId: row.claudeSessionId } : {}),
+      ...(row.providerSessionId ? { providerSessionId: row.providerSessionId } : {}),
     };
   } finally {
     sqlite.close();

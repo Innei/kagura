@@ -6,7 +6,8 @@ export const sessions = sqliteTable('sessions', {
   rootMessageTs: text('root_message_ts').notNull(),
   bootstrapMessageTs: text('bootstrap_message_ts'),
   streamMessageTs: text('stream_message_ts'),
-  claudeSessionId: text('claude_session_id'),
+  // Physical column name is kept for backward compatibility with existing SQLite files.
+  providerSessionId: text('claude_session_id'),
   agentProvider: text('agent_provider'),
   workspaceRepoId: text('workspace_repo_id'),
   workspaceRepoPath: text('workspace_repo_path'),

@@ -349,7 +349,7 @@ describe('Slack loading status test', () => {
       },
     ]);
 
-    expect(sessionStore.get(threadTs)?.claudeSessionId).toBe('session-1');
+    expect(sessionStore.get(threadTs)?.providerSessionId).toBe('session-1');
   });
 
   it('emits stopped lifecycle when the executor abort signal fires', async () => {

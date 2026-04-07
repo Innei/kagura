@@ -32,7 +32,6 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
-  readonly terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {
@@ -43,6 +42,7 @@ export interface ActivitySink {
       toolUseId?: string | undefined;
     },
   ) => Promise<AgentUserInputResponse>;
+  readonly terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   readonly toolHistory: Map<string, number>;
 }
 
@@ -248,7 +248,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     event: Extract<AgentExecutionEvent, { type: 'lifecycle' }>,
   ): Promise<void> => {
     if (event.resumeHandle) {
-      sessionStore.patch(threadTs, { claudeSessionId: event.resumeHandle });
+      sessionStore.patch(threadTs, { providerSessionId: event.resumeHandle });
     }
     if (event.phase === 'started') return;
     if (event.phase === 'completed') {

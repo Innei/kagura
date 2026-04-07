@@ -1,7 +1,8 @@
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { runPromptPipeline } from '~/agent/providers/claude-code/prompt-pipeline/index.js';
+import { assemblePrompt } from '~/agent/prompt/index.js';
+import { createClaudePromptInput } from '~/agent/providers/claude-code/prompt-input.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
 
 function baseRequest(
@@ -47,13 +48,13 @@ async function collectUserMessages(
   return out;
 }
 
-describe('runPromptPipeline', () => {
+describe('prompt assembly', () => {
   describe('system prompt stability', () => {
     it('produces identical system prompts for different threads', () => {
       const req1 = baseRequest({ channelId: 'C1', threadTs: '100.000' });
       const req2 = baseRequest({ channelId: 'C2', threadTs: '200.000' });
-      const { systemPrompt: sp1 } = runPromptPipeline(req1);
-      const { systemPrompt: sp2 } = runPromptPipeline(req2);
+      const { systemPrompt: sp1 } = assemblePrompt(req1);
+      const { systemPrompt: sp2 } = assemblePrompt(req2);
       expect(sp1).toBe(sp2);
     });
 
@@ -82,8 +83,8 @@ describe('runPromptPipeline', () => {
           ],
         },
       });
-      const { systemPrompt: sp1 } = runPromptPipeline(reqNoMemory);
-      const { systemPrompt: sp2 } = runPromptPipeline(reqWithMemory);
+      const { systemPrompt: sp1 } = assemblePrompt(reqNoMemory);
+      const { systemPrompt: sp2 } = assemblePrompt(reqWithMemory);
       expect(sp1).toBe(sp2);
     });
 
@@ -94,21 +95,21 @@ describe('runPromptPipeline', () => {
         workspaceLabel: 'my-project',
         workspaceRepoId: 'repo-123',
       });
-      const { systemPrompt: sp1 } = runPromptPipeline(reqNoWorkspace);
-      const { systemPrompt: sp2 } = runPromptPipeline(reqWithWorkspace);
+      const { systemPrompt: sp1 } = assemblePrompt(reqNoWorkspace);
+      const { systemPrompt: sp2 } = assemblePrompt(reqWithWorkspace);
       expect(sp1).toBe(sp2);
     });
 
     it('produces identical system prompts for new vs resume sessions', () => {
       const reqNew = baseRequest();
       const reqResume = baseRequest({ resumeHandle: 'session-abc' });
-      const { systemPrompt: sp1 } = runPromptPipeline(reqNew);
-      const { systemPrompt: sp2 } = runPromptPipeline(reqResume);
+      const { systemPrompt: sp1 } = assemblePrompt(reqNew);
+      const { systemPrompt: sp2 } = assemblePrompt(reqResume);
       expect(sp1).toBe(sp2);
     });
 
     it('advertises Slack attachment read/write capability to the model', () => {
-      const { systemPrompt } = runPromptPipeline(baseRequest());
+      const { systemPrompt } = assemblePrompt(baseRequest());
 
       expect(systemPrompt).toContain('Slack attachment capabilities:');
       expect(systemPrompt).toContain(
@@ -127,18 +128,17 @@ describe('runPromptPipeline', () => {
   });
 
   describe('user prompt construction', () => {
-    it('returns a plain string prompt for text-only requests', () => {
+    it('returns assembled user text for text-only requests', () => {
       const request = baseRequest();
-      const { userPrompt } = runPromptPipeline(request);
-      expect(typeof userPrompt).toBe('string');
+      const { userText } = assemblePrompt(request);
+      expect(typeof userText).toBe('string');
     });
 
     it('includes session context with channel and thread', () => {
       const request = baseRequest({ channelId: 'C42', threadTs: '999.000' });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(typeof userPrompt).toBe('string');
-      expect(userPrompt as string).toContain('channel C42');
-      expect(userPrompt as string).toContain('thread 999.000');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('channel C42');
+      expect(userText).toContain('thread 999.000');
     });
 
     it('includes workspace info in context when set', () => {
@@ -147,9 +147,9 @@ describe('runPromptPipeline', () => {
         workspaceLabel: 'my-project',
         workspaceRepoId: 'repo-123',
       });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(userPrompt as string).toContain('/repos/my-project');
-      expect(userPrompt as string).toContain('my-project');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('/repos/my-project');
+      expect(userText).toContain('my-project');
     });
 
     it('includes memory context when memories exist', () => {
@@ -168,9 +168,9 @@ describe('runPromptPipeline', () => {
           ],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(userPrompt as string).toContain('Always reply in Chinese');
-      expect(userPrompt as string).toContain('<conversation_memory>');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('Always reply in Chinese');
+      expect(userText).toContain('<conversation_memory>');
     });
 
     it('includes thread context for new sessions', () => {
@@ -190,9 +190,9 @@ describe('runPromptPipeline', () => {
           renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(userPrompt as string).toContain('<thread_context>');
-      expect(userPrompt as string).toContain('Message 1 | ts=100.000');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('<thread_context>');
+      expect(userText).toContain('Message 1 | ts=100.000');
     });
 
     it('skips thread context for resume sessions', () => {
@@ -213,25 +213,25 @@ describe('runPromptPipeline', () => {
           renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(userPrompt as string).not.toContain('<thread_context>');
+      const { userText } = assemblePrompt(request);
+      expect(userText).not.toContain('<thread_context>');
     });
 
     it('includes user message in <user_message> tags', () => {
       const request = baseRequest({ mentionText: 'Explain the code' });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(userPrompt as string).toContain('<user_message>');
-      expect(userPrompt as string).toContain('Explain the code');
-      expect(userPrompt as string).toContain('</user_message>');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('<user_message>');
+      expect(userText).toContain('Explain the code');
+      expect(userText).toContain('</user_message>');
     });
 
     it('includes user ID for new sessions but not resume', () => {
       const reqNew = baseRequest({ userId: 'U42', mentionText: 'hi' });
       const reqResume = baseRequest({ userId: 'U42', mentionText: 'hi', resumeHandle: 'sess' });
-      const { userPrompt: newPrompt } = runPromptPipeline(reqNew);
-      const { userPrompt: resumePrompt } = runPromptPipeline(reqResume);
-      expect(newPrompt as string).toContain('From <@U42>');
-      expect(resumePrompt as string).not.toContain('From <@U42>');
+      const { userText: newPrompt } = assemblePrompt(reqNew);
+      const { userText: resumePrompt } = assemblePrompt(reqResume);
+      expect(newPrompt).toContain('From <@U42>');
+      expect(resumePrompt).not.toContain('From <@U42>');
     });
 
     it('includes loaded thread files in the user prompt as structured context', () => {
@@ -253,11 +253,10 @@ describe('runPromptPipeline', () => {
         },
       });
 
-      const { userPrompt } = runPromptPipeline(request);
-      expect(typeof userPrompt).toBe('string');
-      expect(userPrompt as string).toContain('<thread_files>');
-      expect(userPrompt as string).toContain('filename=answer.ts');
-      expect(userPrompt as string).toContain('export const answer = 42;');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('<thread_files>');
+      expect(userText).toContain('filename=answer.ts');
+      expect(userText).toContain('export const answer = 42;');
     });
 
     it('includes thread file load failures in the user prompt', () => {
@@ -269,25 +268,23 @@ describe('runPromptPipeline', () => {
         },
       });
 
-      const { userPrompt } = runPromptPipeline(request);
-      expect(typeof userPrompt).toBe('string');
-      expect(userPrompt as string).toContain('<thread_file_load_failures>');
-      expect(userPrompt as string).toContain('Failed to download Slack file F_BAD');
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('<thread_file_load_failures>');
+      expect(userText).toContain('Failed to download Slack file F_BAD');
     });
   });
 
-  describe('multimodal handling', () => {
-    it('appends image load failure note to the string prompt when all images failed to load', () => {
+  describe('Claude provider prompt adaptation', () => {
+    it('appends image load failure note to the assembled user text when all images failed to load', () => {
       const request = baseRequest({
         threadContext: {
           loadedImages: [],
           imageLoadFailures: ['Failed to download Slack image F1 (missing.png): 404'],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
-      expect(typeof userPrompt).toBe('string');
-      expect(userPrompt as string).toContain('Failed to download Slack image F1');
-      expect((userPrompt as string).toLowerCase()).toMatch(/could not be loaded|not be loaded/);
+      const { userText } = assemblePrompt(request);
+      expect(userText).toContain('Failed to download Slack image F1');
+      expect(userText.toLowerCase()).toMatch(/could not be loaded|not be loaded/);
     });
 
     it('returns AsyncIterable<SDKUserMessage> when thread images are present', async () => {
@@ -307,7 +304,7 @@ describe('runPromptPipeline', () => {
           ],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
+      const { userPrompt } = createClaudePromptInput(request);
       expect(typeof userPrompt).toBe('object');
       expect(typeof (userPrompt as AsyncIterable<SDKUserMessage>)[Symbol.asyncIterator]).toBe(
         'function',
@@ -334,7 +331,7 @@ describe('runPromptPipeline', () => {
           ],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
+      const { userPrompt } = createClaudePromptInput(request);
       const messages = await collectUserMessages(userPrompt);
       const primary = messages[0];
       expect(primary?.type).toBe('user');
@@ -362,7 +359,7 @@ describe('runPromptPipeline', () => {
           imageLoadFailures: ['Failed to download Slack image F_BAD (x.png): 404'],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
+      const { userPrompt } = createClaudePromptInput(request);
       const messages = await collectUserMessages(userPrompt);
       const primary = messages[0];
       expect(typeof primary?.message.content).toBe('string');
@@ -399,7 +396,7 @@ describe('runPromptPipeline', () => {
           ],
         },
       });
-      const { userPrompt } = runPromptPipeline(request);
+      const { userPrompt } = createClaudePromptInput(request);
       const messages = await collectUserMessages(userPrompt);
       expect(messages).toHaveLength(3);
 
