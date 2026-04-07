@@ -27,7 +27,7 @@ FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/bot/package.json ./apps/bot/package.json
 
-RUN pnpm install --prod --frozen-lockfile --filter @slack-cc-bot/bot
+RUN pnpm --filter @slack-cc-bot/bot deploy --prod /app/deploy
 
 FROM base AS runtime
 
@@ -39,8 +39,8 @@ RUN apt-get update \
   && groupadd --system app \
   && useradd --system --gid app --create-home app
 
-COPY --from=build --chown=app:app /app/apps/bot/package.json ./package.json
-COPY --from=prod-deps --chown=app:app /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=app:app /app/deploy/package.json ./package.json
+COPY --from=prod-deps --chown=app:app /app/deploy/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/apps/bot/dist ./dist
 
 RUN mkdir -p /app/data && chown -R app:app /app/data /pnpm && chmod 0777 /app/data
