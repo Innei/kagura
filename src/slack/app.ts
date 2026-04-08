@@ -20,6 +20,12 @@ import {
 } from './ingress/app-mention-handler.js';
 import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home-tab-handler.js';
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
+import type { SlackPermissionBridge } from './interaction/permission-bridge.js';
+import {
+  createPermissionActionHandler,
+  PERMISSION_APPROVE_ACTION_ID,
+  PERMISSION_DENY_ACTION_ID,
+} from './interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from './interaction/user-input-bridge.js';
 import {
   createStopMessageActionHandler,
@@ -43,6 +49,7 @@ export interface SlackApplicationDependencies {
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  permissionBridge: SlackPermissionBridge;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
@@ -69,6 +76,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     sessionStore: deps.sessionStore,
     claudeExecutor: defaultExecutor,
     providerRegistry: deps.providerRegistry,
+    permissionBridge: deps.permissionBridge,
     threadExecutionRegistry: deps.threadExecutionRegistry,
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,
@@ -121,6 +129,8 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   );
   app.view(WORKSPACE_MODAL_CALLBACK_ID, createWorkspaceSelectionViewHandler(ingressDeps));
   app.action(WORKSPACE_PICKER_ACTION_ID, createWorkspacePickerActionHandler(ingressDeps) as any);
+  app.action(PERMISSION_APPROVE_ACTION_ID, createPermissionActionHandler(deps.permissionBridge, true) as any);
+  app.action(PERMISSION_DENY_ACTION_ID, createPermissionActionHandler(deps.permissionBridge, false) as any);
   app.assistant(assistant);
 
   app.error(async (error) => {

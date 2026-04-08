@@ -70,13 +70,13 @@ describe('thread reply ingress', () => {
     expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
     expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(
-      'Skipping %s for thread %s because bot-authored message does not mention this app',
+      'Skipping %s for thread %s because message was authored by this app itself',
       'thread reply',
       threadTs,
     );
   });
 
-  it('allows bot-authored thread replies when they mention the bot explicitly', async () => {
+  it('ignores self-authored bot thread replies even when they mention the bot explicitly', async () => {
     const threadTs = '1712345678.000103';
     const { claudeExecutor, client, handler, renderer, threadContextLoader } =
       createThreadReplyTestHarness(threadTs);
@@ -95,17 +95,9 @@ describe('thread reply ingress', () => {
     });
 
     expect(client.auth.test).toHaveBeenCalledOnce();
-    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
-    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
-    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
-    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
-      .calls[0]!;
-    expect(request).toMatchObject({
-      channelId: 'C123',
-      mentionText: '<@U_BOT> please continue the thread',
-      threadTs,
-      userId: 'U_BOT',
-    });
+    expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
+    expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
   it('deduplicates a thread self-mention that arrives through both app_mention and message ingress', async () => {

@@ -68,7 +68,7 @@ describe('shouldSkipBotAuthoredMessage', () => {
     expect(result).toBe(true);
   });
 
-  it('allows bot-authored messages that explicitly mention the bot', () => {
+  it('skips self-authored bot messages even when they explicitly mention the bot', () => {
     const logger = createTestLogger();
     const result = shouldSkipBotAuthoredMessage(
       logger,
@@ -77,6 +77,21 @@ describe('shouldSkipBotAuthoredMessage', () => {
       {
         text: '<@U_BOT> continue please',
         user: 'U_BOT',
+      },
+      'U_BOT',
+    );
+    expect(result).toBe(true);
+  });
+
+  it('allows third-party bot messages that explicitly mention the bot', () => {
+    const logger = createTestLogger();
+    const result = shouldSkipBotAuthoredMessage(
+      logger,
+      'test',
+      'ts1',
+      {
+        bot_id: 'B_OTHER',
+        text: '<@U_BOT> continue please',
       },
       'U_BOT',
     );

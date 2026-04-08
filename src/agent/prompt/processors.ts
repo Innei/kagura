@@ -33,6 +33,12 @@ export const toolDeclarationProcessor: PromptProcessor = {
       `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,
+      '- AskUserQuestion: pause and ask the Slack user for a required confirmation, disambiguation, or choice before proceeding.',
+      '',
+      'CRITICAL USER-CONFIRMATION RULES:',
+      '- If you need confirmation, approval, disambiguation, or a choice from the user, you MUST use AskUserQuestion instead of assuming an answer.',
+      '- Never say or imply that the user already confirmed unless that confirmation is present in the thread context or returned by AskUserQuestion.',
+      '- If you ask the user a question in normal assistant text, stop there and wait; do not continue as if the user answered.',
       '',
       ...SLACK_ATTACHMENT_CAPABILITY_LINES,
     );

@@ -1,6 +1,8 @@
 import type {
   AgentActivityState,
   AgentExecutionEvent,
+  AgentPermissionRequest,
+  AgentPermissionResponse,
   AgentUserInputQuestion,
   AgentUserInputRequest,
   AgentUserInputResponse,
@@ -14,6 +16,7 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 
+import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -27,6 +30,7 @@ export interface ActivitySinkOptions {
   sessionStore: SessionStore;
   threadTs: string;
   userId?: string;
+  permissionBridge?: SlackPermissionBridge;
   userInputBridge?: SlackUserInputBridge;
   workspaceLabel?: string;
 }
@@ -34,6 +38,12 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestPermission?: (
+    request: AgentPermissionRequest,
+    options?: {
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {
@@ -61,6 +71,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     sessionStore,
     threadTs,
     userId,
+    permissionBridge,
     userInputBridge,
     workspaceLabel,
   } = options;
@@ -288,6 +299,50 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   return {
     toolHistory,
+    ...(permissionBridge
+      ? {
+          requestPermission: async (
+            request: AgentPermissionRequest,
+            requestOptions?: {
+              signal?: AbortSignal | undefined;
+            },
+          ): Promise<AgentPermissionResponse> => {
+            await renderer
+              .setUiState(client, channel, {
+                threadTs,
+                status: 'Awaiting permission...',
+                loadingMessages: [
+                  truncateForSlackUi(`Waiting for approval for ${request.toolName}...`, 50),
+                  ...(request.description ? [truncateForSlackUi(request.description, 50)] : []),
+                ],
+                clear: false,
+              })
+              .catch((error) => {
+                logger.warn('Failed to publish permission waiting UI state: %s', String(error));
+              });
+
+            const defaultState = createDefaultThinkingState(threadTs);
+            try {
+              return await permissionBridge.requestPermission(client, {
+                channelId: channel,
+                description: request.description,
+                expectedUserId: userId,
+                input: request.input,
+                signal: requestOptions?.signal,
+                threadTs,
+                toolName: request.toolName,
+              });
+            } finally {
+              await renderer.setUiState(client, channel, {
+                threadTs: defaultState.threadTs,
+                status: defaultState.status,
+                loadingMessages: defaultState.activities,
+                clear: false,
+              });
+            }
+          },
+        }
+      : {}),
     ...(userInputBridge
       ? {
           requestUserInput: async (
