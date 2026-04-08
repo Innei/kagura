@@ -69,8 +69,17 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${greeting}*\nYour AI-powered coding companion in Slack. Mention me, start a thread, or use the Messages tab to get started.`,
+            text: `*${greeting}*\n🎭 *Kagura* (神楽) — the divine dance of AI in Slack. Every thread a stage, every response a dance.`,
           },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '_Named after the celestial dance that drew Amaterasu from the heavenly rock cave — bringing light where there was darkness._',
+            },
+          ],
         },
         {
           type: 'context',
@@ -81,15 +90,15 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
         // --- Getting Started ---
         {
           type: 'header',
-          text: { type: 'plain_text', text: '⚡ Getting Started', emoji: true },
+          text: { type: 'plain_text', text: '⚡ How to Use', emoji: true },
         },
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
             text: [
-              '💬 *Chat* — Click the *Messages* tab above to start a conversation',
               `📌 *Mention* — Type ${botMention} in any channel to ask a question`,
+              '💬 *Chat* — Click the *Messages* tab above to start a conversation',
               '🧵 *Thread* — Reply in an existing thread to continue the conversation',
             ].join('\n'),
           },
@@ -133,9 +142,9 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
             {
               type: 'mrkdwn',
               text:
-                'Version `' +
+                '🎭 Kagura `' +
                 gitShort +
-                '`  ·  `/usage` detailed stats  ·  `/workspace` manage repos  ·  `/memory` manage memories',
+                '`  ·  `/usage` stats  ·  `/workspace` repos  ·  `/memory` memories  ·  `/version` build info',
             },
           ],
         },
