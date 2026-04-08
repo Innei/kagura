@@ -132,12 +132,15 @@ describe('createPipeline', () => {
       ],
     });
 
-    const result = await pipeline.run({
-      messages: [
-        { role: 'user', content: 'old Q' },
-        { role: 'assistant', content: 'old A' },
-      ],
-    });
+    const result = await pipeline.run(
+      {},
+      {
+        messages: [
+          { role: 'user', content: 'old Q' },
+          { role: 'assistant', content: 'old A' },
+        ],
+      },
+    );
 
     expect(result.messages.map((m) => m.content)).toEqual(['First', 'old Q', 'old A', 'Last']);
   });

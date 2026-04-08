@@ -79,12 +79,14 @@ describe('Full pipeline integration', () => {
         userId: 'U123',
         mentionText: 'Explain the bug.',
         contextMemories: { preferences: ['Reply in English'], global: [], workspace: [] },
+      },
+      claudeFormatter,
+      {
         messages: [
           { role: 'user', content: 'check the logs' },
           { role: 'assistant', content: 'I found an error in line 42...' },
         ],
       },
-      claudeFormatter,
     );
 
     expect(payload.system).toContain('helpful coding assistant');

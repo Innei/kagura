@@ -27,11 +27,16 @@ function sortPluginsBySlot(plugins: PluginDef[]): PluginDef[] {
   return indexed.map((x) => x.p);
 }
 
+interface PipelineOptions {
+  messages?: Message[];
+}
+
 interface Pipeline<TInput> {
-  run: (input: TInput & { messages?: Message[] }) => Promise<PromptResult>;
+  run: (input: TInput, options?: PipelineOptions) => Promise<PromptResult>;
   runWith: <TOutput>(
-    input: TInput & { messages?: Message[] },
+    input: TInput,
     formatter: Formatter<TOutput>,
+    options?: PipelineOptions,
   ) => Promise<TOutput>;
 }
 
@@ -41,9 +46,9 @@ export function createPipeline<TInput extends z.ZodType>(config: {
 }): Pipeline<z.infer<TInput>> {
   const sorted = sortPluginsBySlot(config.plugins);
 
-  async function run(input: z.infer<TInput> & { messages?: Message[] }): Promise<PromptResult> {
+  async function run(input: z.infer<TInput>, options?: PipelineOptions): Promise<PromptResult> {
     const parsed = config.input.parse(input);
-    const messages = input.messages ?? [];
+    const messages = options?.messages ?? [];
 
     const writers = new Map<Slot, SlotWriterInternal>();
     const trace: TraceEntry[] = [];
@@ -80,10 +85,11 @@ export function createPipeline<TInput extends z.ZodType>(config: {
   return {
     run,
     async runWith<TOutput>(
-      input: z.infer<TInput> & { messages?: Message[] },
+      input: z.infer<TInput>,
       formatter: Formatter<TOutput>,
+      options?: PipelineOptions,
     ): Promise<TOutput> {
-      const result = await run(input);
+      const result = await run(input, options);
       return formatter.format(result);
     },
   };
