@@ -644,6 +644,84 @@ describe('createActivitySink', () => {
     );
   });
 
+
+  it('truncates permission waiting UI messages to Slack limits', async () => {
+    const renderer = createRendererStub();
+    const permissionBridge = {
+      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
+    };
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      permissionBridge: permissionBridge as any,
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await expect(
+      sink.requestPermission?.({
+        toolName: 'mcp__slack-ui__save_memory',
+        input: { category: 'context', content: 'hello' },
+      }),
+    ).resolves.toEqual({ allowed: true });
+
+    expect(renderer.setUiState).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      expect.objectContaining({
+        threadTs: 'ts1',
+        status: 'Awaiting permission...',
+        loadingMessages: expect.arrayContaining([expect.any(String)]),
+      }),
+    );
+
+    const firstCall = vi.mocked(renderer.setUiState).mock.calls[0]?.[2];
+    expect(firstCall?.loadingMessages?.[0]?.length).toBeLessThanOrEqual(50);
+    expect(permissionBridge.requestPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channelId: 'C123',
+        threadTs: 'ts1',
+        toolName: 'mcp__slack-ui__save_memory',
+      }),
+    );
+  });
+
+  it('still requests permission when Slack UI status update fails', async () => {
+    const renderer = createRendererStub();
+    vi.mocked(renderer.setUiState).mockRejectedValueOnce(
+      new Error('bolt-app must be less than 51 characters'),
+    );
+    const logger = createTestLogger();
+    const permissionBridge = {
+      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
+    };
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger,
+      permissionBridge: permissionBridge as any,
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await expect(
+      sink.requestPermission?.({
+        toolName: 'mcp__slack-ui__save_memory',
+        input: { category: 'context', content: 'hello' },
+      }),
+    ).resolves.toEqual({ allowed: true });
+
+    expect(permissionBridge.requestPermission).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Failed to publish permission waiting UI state: %s',
+      'Error: bolt-app must be less than 51 characters',
+    );
+  });
+
   it('persists analytics on finalize when lifecycle completed and usage info available', async () => {
     const analyticsStore = createMockAnalyticsStore();
     const sink = createActivitySink({

@@ -239,6 +239,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     logger: deps.logger,
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
+    ...(deps.permissionBridge ? { permissionBridge: deps.permissionBridge } : {}),
     threadTs,
     userId: message.user,
     userInputBridge: deps.userInputBridge,

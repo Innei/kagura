@@ -138,8 +138,24 @@ export interface AgentActivityState {
   threadTs: string;
 }
 
+export interface AgentPermissionRequest {
+  description?: string | undefined;
+  input: Record<string, unknown>;
+  toolName: string;
+}
+
+export interface AgentPermissionResponse {
+  allowed: boolean;
+}
+
 export interface AgentExecutionSink {
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestPermission?: (
+    request: AgentPermissionRequest,
+    options?: {
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {

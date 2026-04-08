@@ -125,6 +125,18 @@ describe('prompt assembly', () => {
         'Do not claim that you cannot upload files or images to Slack when this flow applies.',
       );
     });
+
+    it('instructs the model to use AskUserQuestion for confirmation instead of assuming user consent', () => {
+      const { systemPrompt } = assemblePrompt(baseRequest());
+
+      expect(systemPrompt).toContain('AskUserQuestion: pause and ask the Slack user');
+      expect(systemPrompt).toContain(
+        'If you need confirmation, approval, disambiguation, or a choice from the user, you MUST use AskUserQuestion instead of assuming an answer.',
+      );
+      expect(systemPrompt).toContain(
+        'Never say or imply that the user already confirmed unless that confirmation is present in the thread context or returned by AskUserQuestion.',
+      );
+    });
   });
 
   describe('user prompt construction', () => {

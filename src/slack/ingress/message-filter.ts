@@ -34,8 +34,17 @@ export function shouldSkipBotAuthoredMessage(
     return true;
   }
 
-  const botAuthored =
-    Boolean(message.bot_id) || message.subtype === 'bot_message' || message.user === botUserId;
+  if (botUserId && message.user === botUserId) {
+    runtimeInfo(
+      logger,
+      'Skipping %s for thread %s because message was authored by this app itself',
+      logLabel,
+      threadTs,
+    );
+    return true;
+  }
+
+  const botAuthored = Boolean(message.bot_id) || message.subtype === 'bot_message';
   if (!botAuthored) {
     return false;
   }
