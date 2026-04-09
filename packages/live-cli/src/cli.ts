@@ -11,6 +11,24 @@ import { promptInteractive } from './prompt.js';
 import { formatSummary, runScenarios } from './runner.js';
 import type { LiveE2EScenario } from './types.js';
 
+const isTTY = process.stdout.isTTY === true;
+
+function quietSpinner() {
+  let current = '';
+  return {
+    start(msg: string) {
+      current = msg;
+    },
+    stop(msg: string) {
+      console.info(msg);
+      current = '';
+    },
+    message(msg: string) {
+      current = msg;
+    },
+  };
+}
+
 function resolveLiveDir(): string {
   const rootDir = process.env.LIVE_E2E_DIR;
   if (rootDir) return path.resolve(rootDir);
@@ -71,11 +89,13 @@ async function actionRun(
     selected = all;
   }
 
-  p.intro(
-    pc.bold(`Running ${selected.length} scenario(s): ${selected.map((s) => s.id).join(', ')}`),
-  );
+  if (isTTY) {
+    p.intro(
+      pc.bold(`Running ${selected.length} scenario(s): ${selected.map((s) => s.id).join(', ')}`),
+    );
+  }
 
-  const spinner = p.spinner();
+  const spinner = isTTY ? p.spinner() : quietSpinner();
 
   const results = await runScenarios(
     selected,
@@ -99,11 +119,15 @@ async function actionRun(
   console.info(summary);
 
   const anyFailed = results.some((r) => !r.passed);
+  if (isTTY) {
+    if (anyFailed) {
+      p.outro(pc.red('Some scenarios failed.'));
+    } else {
+      p.outro(pc.green('All scenarios passed!'));
+    }
+  }
   if (anyFailed) {
-    p.outro(pc.red('Some scenarios failed.'));
     process.exitCode = 1;
-  } else {
-    p.outro(pc.green('All scenarios passed!'));
   }
 }
 
