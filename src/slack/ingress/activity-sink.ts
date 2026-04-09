@@ -16,6 +16,7 @@ import type { SessionStore } from '~/session/types.js';
 
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
+import { getShuffledThinkingMessages } from '../thinking-messages.js';
 import type { SlackWebClientLike } from '../types.js';
 
 export interface ActivitySinkOptions {
@@ -265,7 +266,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         progressMessageActive = false;
         return;
       }
-      await safeRender('clear Slack UI state', () => renderer.clearUiState(client, channel, threadTs));
+      await safeRender('clear Slack UI state', () =>
+        renderer.clearUiState(client, channel, threadTs),
+      );
       return;
     }
 
@@ -561,12 +564,8 @@ function formatUserInputQuestionMessage(
 function createDefaultThinkingState(threadTs: string): AgentActivityState {
   return {
     threadTs,
-    status: 'Thinking...',
-    activities: [
-      'Reading the thread context...',
-      'Planning the next steps...',
-      'Generating a response...',
-    ],
+    status: 'is thinking...',
+    activities: getShuffledThinkingMessages(),
     clear: false,
   };
 }

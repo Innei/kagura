@@ -45,11 +45,11 @@ export interface SlackApplicationDependencies {
   analyticsStore: SessionAnalyticsStore;
   logger: AppLogger;
   memoryStore: MemoryStore;
+  permissionBridge: SlackPermissionBridge;
   providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
-  permissionBridge: SlackPermissionBridge;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
@@ -87,6 +87,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   });
 
   const homeTabHandler = createHomeTabHandler({
+    analyticsStore: deps.analyticsStore,
     logger: deps.logger.withTag('slack:home'),
     memoryStore: deps.memoryStore,
     providerRegistry: deps.providerRegistry,
@@ -129,8 +130,14 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   );
   app.view(WORKSPACE_MODAL_CALLBACK_ID, createWorkspaceSelectionViewHandler(ingressDeps));
   app.action(WORKSPACE_PICKER_ACTION_ID, createWorkspacePickerActionHandler(ingressDeps) as any);
-  app.action(PERMISSION_APPROVE_ACTION_ID, createPermissionActionHandler(deps.permissionBridge, true) as any);
-  app.action(PERMISSION_DENY_ACTION_ID, createPermissionActionHandler(deps.permissionBridge, false) as any);
+  app.action(
+    PERMISSION_APPROVE_ACTION_ID,
+    createPermissionActionHandler(deps.permissionBridge, true) as any,
+  );
+  app.action(
+    PERMISSION_DENY_ACTION_ID,
+    createPermissionActionHandler(deps.permissionBridge, false) as any,
+  );
   app.assistant(assistant);
 
   app.error(async (error) => {

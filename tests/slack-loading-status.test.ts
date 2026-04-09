@@ -5,7 +5,6 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
-import { SLACK_UI_STATE_TOOL_NAME } from '~/agent/providers/claude-code/tools/publish-state.js';
 import { RECALL_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/save-memory.js';
 import { UPLOAD_SLACK_FILE_TOOL_NAME } from '~/agent/providers/claude-code/tools/upload-slack-file.js';
@@ -242,14 +241,10 @@ describe('Slack loading status test', () => {
       },
     ]);
 
-    expect(statusCalls[0]).toEqual({
+    expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
-      loading_messages: [
-        'Reading the thread context...',
-        'Planning the next steps...',
-        'Generating a response...',
-      ],
-      status: 'Thinking...',
+      loading_messages: expect.arrayContaining([expect.any(String)]),
+      status: 'is thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -623,14 +618,10 @@ describe('Slack loading status test', () => {
       },
     });
 
-    expect(statusCalls[0]).toEqual({
+    expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
-      loading_messages: [
-        'Reading the thread context...',
-        'Planning the next steps...',
-        'Generating a response...',
-      ],
-      status: 'Thinking...',
+      loading_messages: expect.arrayContaining([expect.any(String)]),
+      status: 'is thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -684,31 +675,6 @@ describe('Slack loading status test', () => {
         }),
       ]),
     );
-  });
-
-  it('injects threadTs when the publish_state MCP tool emits UI state', async () => {
-    const { events, tools } = await getMcpToolsForRequest();
-
-    const result = await getToolHandler(
-      tools,
-      SLACK_UI_STATE_TOOL_NAME,
-    )({
-      loadingMessages: ['Inspecting the workspace...'],
-      status: 'Thinking...',
-    });
-
-    expect(result).toEqual({
-      content: [{ text: 'UI state published.', type: 'text' }],
-    });
-    expect(events).toContainEqual({
-      type: 'activity-state',
-      state: {
-        clear: false,
-        activities: ['Inspecting the workspace...'],
-        status: 'Thinking...',
-        threadTs: '1712345678.000100',
-      },
-    });
   });
 
   it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {

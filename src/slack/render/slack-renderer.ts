@@ -6,8 +6,21 @@ import type { GeneratedImageFile, GeneratedOutputFile, SessionUsageInfo } from '
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
+import {
+  getShuffledThinkingMessages,
+  rotateThinkingStatus,
+  THINKING_STATUS_MESSAGES,
+} from '../thinking-messages.js';
 import type { SlackBlock, SlackFilesUploadV2Response, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
+
+const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
+
+const THINKING_STATUS_SET = new Set<string>(THINKING_STATUS_MESSAGES);
+
+function isThinkingStatus(status: string | undefined): boolean {
+  return !status || status === 'is thinking...' || THINKING_STATUS_SET.has(status);
+}
 
 interface RendererUiState {
   clear: boolean;
@@ -18,21 +31,11 @@ interface RendererUiState {
   toolHistory?: Map<string, number> | undefined;
 }
 
-const DEFAULT_LOADING_MESSAGES = [
-  'Reading the thread context...',
-  'Planning the next steps...',
-  'Generating a response...',
-] as const;
-
 const DEFAULT_PROGRESS_STATUS = 'Working on your request...';
 const DEFAULT_SLACK_OPERATION_TIMEOUT_MS = 15_000;
 
 export class SlackRenderTimeoutError extends Error {
-  constructor(
-    action: string,
-    context: string,
-    timeoutMs: number,
-  ) {
+  constructor(action: string, context: string, timeoutMs: number) {
     super(`Slack render ${action} timed out after ${timeoutMs}ms (${context})`);
     this.name = 'SlackRenderTimeoutError';
   }
@@ -40,6 +43,7 @@ export class SlackRenderTimeoutError extends Error {
 
 export class SlackRenderer {
   private readonly operationTimeoutMs: number;
+  private readonly activeThinkingRotations = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(
     private readonly logger: AppLogger,
@@ -97,14 +101,34 @@ export class SlackRenderer {
     client: SlackWebClientLike,
     channelId: string,
     threadTs: string,
-    loadingMessages: readonly string[] = DEFAULT_LOADING_MESSAGES,
+    loadingMessages?: readonly string[],
   ): Promise<void> {
+    this.stopThinkingRotation(threadTs);
+
     await this.setUiState(client, channelId, {
       threadTs,
-      status: 'Thinking...',
-      loadingMessages: [...loadingMessages],
+      status: 'is thinking...',
+      loadingMessages: loadingMessages ? [...loadingMessages] : getShuffledThinkingMessages(),
       clear: false,
     });
+
+    let rotationIndex = 0;
+    const timer = setInterval(() => {
+      rotationIndex++;
+      const status = rotateThinkingStatus(rotationIndex);
+      client.assistant.threads
+        .setStatus({ channel_id: channelId, thread_ts: threadTs, status })
+        .catch(() => {});
+    }, THINKING_STATUS_ROTATION_INTERVAL_MS);
+    this.activeThinkingRotations.set(threadTs, timer);
+  }
+
+  private stopThinkingRotation(threadTs: string): void {
+    const timer = this.activeThinkingRotations.get(threadTs);
+    if (timer) {
+      clearInterval(timer);
+      this.activeThinkingRotations.delete(threadTs);
+    }
   }
 
   async setUiState(
@@ -112,6 +136,10 @@ export class SlackRenderer {
     channelId: string,
     state: RendererUiState,
   ): Promise<void> {
+    if (!isThinkingStatus(state.status)) {
+      this.stopThinkingRotation(state.threadTs);
+    }
+
     if (state.clear) {
       await this.clearUiState(client, channelId, state.threadTs);
       return;
@@ -144,6 +172,8 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
   ): Promise<void> {
+    this.stopThinkingRotation(threadTs);
+
     await this.withSlackTiming(
       'assistant.threads.setStatus',
       `channel=${channelId} thread=${threadTs} clear=true`,

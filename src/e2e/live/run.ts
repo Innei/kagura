@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
+import { THINKING_LOADING_MESSAGES } from '~/slack/thinking-messages.js';
 
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import type { LiveE2EScenario } from './scenario.js';
@@ -367,11 +368,9 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
     return false;
   }
 
-  const defaultMessages = new Set([
-    'Reading the thread context...',
-    'Planning the next steps...',
-    'Generating a response...',
-    'Thinking...',
+  const defaultMessages = new Set<string>([
+    ...THINKING_LOADING_MESSAGES,
+    'is thinking...',
     'Authenticating Claude...',
     'Compacting conversation context...',
     'Retrying Claude API request...',
@@ -391,7 +390,7 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
 
 function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: LiveE2EResult): void {
   if (record.kind === 'status') {
-    if (record.status === 'Thinking...') {
+    if (record.status === 'is thinking...') {
       result.matched.fallbackStatusObserved = true;
     }
 

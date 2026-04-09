@@ -77,6 +77,24 @@ function createMockProviderRegistry(
   };
 }
 
+function createMockAnalyticsStore() {
+  return {
+    getOverview: () => ({
+      totalSessions: 0,
+      totalCostUSD: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      avgDurationMs: 0,
+      cacheHitRate: 0,
+    }),
+    getByModel: () => [],
+    getRecentSessions: () => [],
+    upsert: vi.fn(),
+  };
+}
+
 function createMockClient() {
   return {
     assistant: { threads: { setStatus: vi.fn() } },
@@ -99,6 +117,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(5),
       providerRegistry: createMockProviderRegistry(),
@@ -127,6 +146,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),
@@ -147,6 +167,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(10),
       providerRegistry: createMockProviderRegistry(),
@@ -180,6 +201,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),
@@ -201,6 +223,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(['claude-code', 'openai'], 'claude-code'),
@@ -228,6 +251,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),
@@ -248,6 +272,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),
@@ -270,6 +295,7 @@ describe('Home Tab Handler', () => {
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),
@@ -292,6 +318,7 @@ describe('Home Tab Handler', () => {
     const logger = createTestLogger();
 
     const handler = createHomeTabHandler({
+      analyticsStore: createMockAnalyticsStore(),
       logger,
       memoryStore: createMockMemoryStore(),
       providerRegistry: createMockProviderRegistry(),

@@ -97,7 +97,11 @@ export function createThreadExecutionRegistry(options?: {
       }
 
       rememberMessage(messageTs, threadTs);
-      logger?.info('Thread execution registry claimed message %s for thread %s', messageTs, threadTs);
+      logger?.info(
+        'Thread execution registry claimed message %s for thread %s',
+        messageTs,
+        threadTs,
+      );
       return true;
     },
 
@@ -140,7 +144,11 @@ export function createThreadExecutionRegistry(options?: {
 
     trackMessage(messageTs, threadTs) {
       rememberMessage(messageTs, threadTs);
-      logger?.info('Thread execution registry tracked message %s for thread %s', messageTs, threadTs);
+      logger?.info(
+        'Thread execution registry tracked message %s for thread %s',
+        messageTs,
+        threadTs,
+      );
     },
 
     async stopByMessage(messageTs, reason) {

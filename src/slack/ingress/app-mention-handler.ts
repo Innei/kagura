@@ -72,7 +72,11 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const client = args.client as SlackWebClientLike;
 
     if (!threadTs) {
-      runtimeInfo(deps.logger, 'Ignoring message event %s because it is not a thread reply', message.ts);
+      runtimeInfo(
+        deps.logger,
+        'Ignoring message event %s because it is not a thread reply',
+        message.ts,
+      );
       return;
     }
 

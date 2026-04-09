@@ -8,16 +8,11 @@ import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
 
+import { THINKING_LOADING_MESSAGES } from '../../slack/thinking-messages.js';
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
-
-const DEFAULT_LOADING_MESSAGES = [
-  'Reading the thread context...',
-  'Planning the next steps...',
-  'Generating a response...',
-];
 
 interface NoThinkingAfterReplyResult {
   assistantReplyText?: string;
@@ -149,12 +144,14 @@ async function main(): Promise<void> {
 function isDefaultThinkingStatus(record: SlackStatusProbeRecord): boolean {
   if (record.kind !== 'status') return false;
   if (record.clear) return false;
-  if (record.status !== 'Thinking...') return false;
+  if (record.status !== 'is thinking...') return false;
 
   const messages = record.loadingMessages ?? [];
   if (messages.length === 0) return true;
 
-  return messages.every((m) => DEFAULT_LOADING_MESSAGES.includes(m));
+  return messages.every((m) =>
+    THINKING_LOADING_MESSAGES.includes(m as (typeof THINKING_LOADING_MESSAGES)[number]),
+  );
 }
 
 function analyzeProbeSequence(result: NoThinkingAfterReplyResult): void {
