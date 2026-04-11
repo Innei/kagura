@@ -220,3 +220,63 @@ describe('SlackRenderer timeouts', () => {
     await expectation;
   });
 });
+
+describe('SlackRenderer.postThreadReply', () => {
+  it('prepends only the workspace label context when tool history is omitted', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.postThreadReply(client, 'C1', 'ts-root', 'Hello from Slack.', {
+      workspaceLabel: 'repo/worktree',
+    });
+
+    expect(imagePostCalls).toHaveLength(1);
+    expect(imagePostCalls[0]).toMatchObject({
+      channel: 'C1',
+      thread_ts: 'ts-root',
+      text: 'Hello from Slack.',
+    });
+    expect(imagePostCalls[0]!.blocks?.[0]).toMatchObject({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree_' }],
+    });
+    const contextTexts = imagePostCalls[0]!.blocks
+      ?.filter((block) => block.type === 'context')
+      .flatMap((block) =>
+        (block.elements ?? [])
+          .map((element) => ('text' in element && typeof element.text === 'string' ? element.text : ''))
+          .filter(Boolean),
+      );
+    expect(contextTexts).toEqual(['_Working in repo/worktree_']);
+  });
+});
+
+describe('SlackRenderer.finalizeThreadProgressMessage', () => {
+  it('replaces retained progress content with a generic done message', async () => {
+    const { client } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.finalizeThreadProgressMessage(
+      client,
+      'C1',
+      'ts-root',
+      'progress-ts',
+      new Map([
+        ['Reading', 3],
+        ['Searching', 1],
+      ]),
+    );
+
+    expect(client.chat.update).toHaveBeenCalledWith({
+      channel: 'C1',
+      ts: 'progress-ts',
+      text: '✅ Done',
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: '✅ Done' }],
+        },
+      ],
+    });
+  });
+});

@@ -290,10 +290,9 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     progressMessageTs: string,
-    toolHistory?: Map<string, number>,
+    _toolHistory?: Map<string, number>,
   ): Promise<void> {
-    const summaryLine = formatToolHistorySummary(toolHistory) ?? 'Done';
-    const text = `\u2705 ${summaryLine}`;
+    const text = '\u2705 Done';
     const blocks: SlackBlock[] = [
       {
         type: 'context',

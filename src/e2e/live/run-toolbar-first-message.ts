@@ -26,7 +26,7 @@ interface ToolbarFirstMessageResult {
   failureMessage?: string;
   firstReply?: ToolbarFirstMessageReply;
   matched: {
-    firstReplyHasToolHistory: boolean;
+    firstReplyHasNoToolHistory: boolean;
     firstReplyHasWorkspaceLabel: boolean;
     firstReplyObserved: boolean;
     secondReplyHasNoToolHistory: boolean;
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     botUserId: botIdentity.user_id,
     channelId: env.SLACK_E2E_CHANNEL_ID,
     matched: {
-      firstReplyHasToolHistory: false,
+      firstReplyHasNoToolHistory: false,
       firstReplyHasWorkspaceLabel: false,
       firstReplyObserved: false,
       secondReplyHasNoToolHistory: false,
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
         result.matched.firstReplyHasWorkspaceLabel = hasWorkspaceLabelContext(
           firstReply.contextTexts,
         );
-        result.matched.firstReplyHasToolHistory = hasToolHistoryContext(firstReply.contextTexts);
+        result.matched.firstReplyHasNoToolHistory = !hasToolHistoryContext(firstReply.contextTexts);
       }
 
       if (secondReply) {
@@ -239,8 +239,8 @@ function assertResult(result: ToolbarFirstMessageResult): void {
   if (!result.matched.firstReplyHasWorkspaceLabel) {
     failures.push('first assistant reply does not contain a workspace label context block');
   }
-  if (!result.matched.firstReplyHasToolHistory) {
-    failures.push('first assistant reply does not contain a tool history context block');
+  if (!result.matched.firstReplyHasNoToolHistory) {
+    failures.push('first assistant reply unexpectedly contains a tool history context block');
   }
   if (!result.matched.secondReplyHasNoWorkspaceLabel) {
     failures.push('second assistant reply unexpectedly repeated the workspace label context block');
@@ -274,8 +274,8 @@ export const scenario: LiveE2EScenario = {
   id: 'toolbar-first-message',
   title: 'Toolbar Only On First Assistant Message',
   description:
-    'Force one execution to emit two assistant messages after workspace-bound tool use and verify that the workspace label and tool-history toolbar appear only on the first assistant message.',
-  keywords: ['toolbar', 'workspace-label', 'tool-history', 'multi-message', 'turn'],
+    'Force one execution to emit two assistant messages after workspace-bound tool use and verify that only the workspace label appears on the first assistant message, with no retained tool-history toolbar on either reply.',
+  keywords: ['toolbar', 'workspace-label', 'tool-history', 'multi-message', 'cleanup'],
   run: main,
 };
 
