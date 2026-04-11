@@ -25,7 +25,7 @@ interface ToolProgressResult {
     progressMessagePosted: boolean;
     progressMessageUpdated: boolean;
     noProgressDeleteDuringExecution: boolean;
-    toolHistoryInReply: boolean;
+    noToolHistoryInReply: boolean;
   };
   passed: boolean;
   probePath: string;
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
       progressMessagePosted: false,
       progressMessageUpdated: false,
       noProgressDeleteDuringExecution: true,
-      toolHistoryInReply: false,
+      noToolHistoryInReply: false,
     },
     passed: false,
     probePath: env.SLACK_E2E_STATUS_PROBE_PATH,
@@ -115,9 +115,7 @@ async function main(): Promise<void> {
           result.matched.replyContainsMarker = true;
           result.replyBlocks = message.blocks ?? [];
 
-          if (hasToolHistoryContextBlock(message.blocks)) {
-            result.matched.toolHistoryInReply = true;
-          }
+          result.matched.noToolHistoryInReply = !hasToolHistoryContextBlock(message.blocks);
         }
       }
 
@@ -144,7 +142,7 @@ async function main(): Promise<void> {
     console.info('Progress posted: %s', result.matched.progressMessagePosted);
     console.info('Progress updated: %s', result.matched.progressMessageUpdated);
     console.info('No mid-execution delete: %s', result.matched.noProgressDeleteDuringExecution);
-    console.info('Tool history in reply: %s', result.matched.toolHistoryInReply);
+    console.info('No tool history in reply: %s', result.matched.noToolHistoryInReply);
   } catch (error) {
     result.failureMessage = error instanceof Error ? error.message : String(error);
     caughtError = error;
@@ -220,10 +218,8 @@ function assertResult(result: ToolProgressResult): void {
   if (!result.matched.noProgressDeleteDuringExecution) {
     failures.push('progress message was deleted during execution — expected update-in-place only');
   }
-  if (!result.matched.toolHistoryInReply) {
-    failures.push(
-      'final reply does not contain a tool history context block (expected verb-count summary)',
-    );
+  if (!result.matched.noToolHistoryInReply) {
+    failures.push('final reply still contains a tool history context block');
   }
 
   if (failures.length > 0) {
@@ -252,7 +248,7 @@ export const scenario: LiveE2EScenario = {
   title: 'Tool Progress Stability',
   description:
     'Verify that progress messages use stable context-only layout, are never deleted mid-execution, ' +
-    'and the final reply includes a tool history summary context block.',
+    'and the final reply does not retain tool-history context blocks after completion.',
   keywords: ['progress', 'tool', 'history', 'context', 'stable', 'flicker'],
   run: main,
 };

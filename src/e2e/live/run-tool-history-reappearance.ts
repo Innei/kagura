@@ -23,20 +23,16 @@ interface ToolHistoryReappearanceResult {
     assistantReplied: boolean;
     progressMessagePosted: boolean;
     progressMessageUpdated: boolean;
-    readingCountCaptured: boolean;
-    readingCountSufficient: boolean;
+    noToolHistoryInReply: boolean;
     replyContainsMarker: boolean;
-    toolHistoryInReply: boolean;
   };
   passed: boolean;
   probePath: string;
   probeRecords: SlackStatusProbeRecord[];
-  readingCount?: number;
   replyBlocks?: unknown[];
   rootMessageTs?: string;
   runId: string;
   targetRepo: string;
-  toolHistorySummary?: string;
 }
 
 async function main(): Promise<void> {
@@ -63,10 +59,8 @@ async function main(): Promise<void> {
       assistantReplied: false,
       progressMessagePosted: false,
       progressMessageUpdated: false,
-      readingCountCaptured: false,
-      readingCountSufficient: false,
+      noToolHistoryInReply: false,
       replyContainsMarker: false,
-      toolHistoryInReply: false,
     },
     passed: false,
     probePath: env.SLACK_E2E_STATUS_PROBE_PATH,
@@ -121,20 +115,7 @@ async function main(): Promise<void> {
           result.matched.replyContainsMarker = true;
           result.replyBlocks = message.blocks ?? [];
 
-          const toolHistorySummary = extractToolHistorySummary(message.blocks);
-          if (toolHistorySummary) {
-            result.toolHistorySummary = toolHistorySummary;
-            result.matched.toolHistoryInReply = true;
-          }
-
-          const readingCount =
-            extractVerbCount(toolHistorySummary, 'Read') ??
-            extractVerbCount(toolHistorySummary, 'Reading');
-          if (readingCount !== undefined) {
-            result.readingCount = readingCount;
-            result.matched.readingCountCaptured = true;
-            result.matched.readingCountSufficient = readingCount >= 3;
-          }
+          result.matched.noToolHistoryInReply = !hasToolHistoryContextBlock(message.blocks);
         }
       }
 
@@ -158,8 +139,7 @@ async function main(): Promise<void> {
     console.info('Live tool-history-reappearance E2E passed.');
     console.info('Root thread: %s', result.rootMessageTs);
     console.info('Assistant reply: %s', result.assistantReplyTs);
-    console.info('Reading count: %s', result.readingCount);
-    console.info('Tool history summary: %s', result.toolHistorySummary);
+    console.info('No tool history in reply: %s', result.matched.noToolHistoryInReply);
   } catch (error) {
     result.failureMessage = error instanceof Error ? error.message : String(error);
     caughtError = error;
@@ -193,10 +173,10 @@ function analyzeProbeRecords(result: ToolHistoryReappearanceResult): void {
   }
 }
 
-function extractToolHistorySummary(
+function hasToolHistoryContextBlock(
   blocks?: Array<{ elements?: Array<Record<string, unknown>>; type?: string }>,
-): string | undefined {
-  if (!blocks) return undefined;
+): boolean {
+  if (!blocks) return false;
 
   for (const block of blocks) {
     if (block.type !== 'context') continue;
@@ -204,21 +184,12 @@ function extractToolHistorySummary(
       const text = typeof element.text === 'string' ? element.text.trim() : '';
       if (!text || text.includes('Working in')) continue;
       if (/\b[A-Z][a-z]+ x\d+\b/.test(text)) {
-        return text;
+        return true;
       }
     }
   }
 
-  return undefined;
-}
-
-function extractVerbCount(summary: string | undefined, verb: string): number | undefined {
-  if (!summary) return undefined;
-  const match = summary.match(new RegExp(`\\b${verb} x(\\d+)\\b`));
-  if (!match) return undefined;
-
-  const parsed = Number.parseInt(match[1]!, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return false;
 }
 
 function assertResult(result: ToolHistoryReappearanceResult): void {
@@ -236,16 +207,8 @@ function assertResult(result: ToolHistoryReappearanceResult): void {
   if (!result.matched.progressMessageUpdated) {
     failures.push('progress message was never updated during execution');
   }
-  if (!result.matched.toolHistoryInReply) {
-    failures.push('final reply does not contain a tool history context block');
-  }
-  if (!result.matched.readingCountCaptured) {
-    failures.push('tool history summary does not expose a Read/Reading count');
-  }
-  if (!result.matched.readingCountSufficient) {
-    failures.push(
-      `expected Read/Reading count to be at least 3 after re-reading the same file; got ${result.readingCount ?? 'none'}`,
-    );
+  if (!result.matched.noToolHistoryInReply) {
+    failures.push('final reply still contains a tool history context block');
   }
 
   if (failures.length > 0) {
@@ -271,10 +234,10 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'tool-history-reappearance',
-  title: 'Repeated Tool Activity Reappears In History',
+  title: 'Repeated Tool Activity Stays Out Of Final Reply',
   description:
-    'Verify that when the same file-reading activity reappears after a different read, the final tool-history summary increments Reading accordingly.',
-  keywords: ['tool', 'history', 'reading', 'reappearance', 'progress', 'count'],
+    'Verify that repeated file-reading activity still drives progress updates during execution, without leaking tool-history context into the final reply.',
+  keywords: ['tool', 'history', 'reading', 'reappearance', 'progress', 'cleanup'],
   run: main,
 };
 

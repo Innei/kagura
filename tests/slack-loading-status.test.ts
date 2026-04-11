@@ -322,10 +322,6 @@ describe('Slack loading status test', () => {
           type: 'context',
         },
         {
-          elements: [{ text: expect.stringContaining('Running'), type: 'mrkdwn' }],
-          type: 'context',
-        },
-        {
           elements: [
             {
               elements: [{ text: 'Updated loading messages.', type: 'text' }],

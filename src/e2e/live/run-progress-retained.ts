@@ -24,6 +24,7 @@ interface ProgressRetainedResult {
   matched: {
     assistantReplied: boolean;
     progressMessageFinalized: boolean;
+    progressMessageHasNoToolHistory: boolean;
     progressMessagePosted: boolean;
     progressMessageRetainedInThread: boolean;
   };
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
     matched: {
       assistantReplied: false,
       progressMessageFinalized: false,
+      progressMessageHasNoToolHistory: false,
       progressMessagePosted: false,
       progressMessageRetainedInThread: false,
     },
@@ -133,6 +135,10 @@ async function main(): Promise<void> {
           result.matched.progressMessageRetainedInThread = true;
           result.finalizedMessageText = retained.text ?? undefined;
           result.finalizedMessageBlocks = retained.blocks ?? undefined;
+          result.matched.progressMessageHasNoToolHistory = !containsToolHistory(
+            retained.text,
+            retained.blocks,
+          );
         }
         break;
       }
@@ -150,6 +156,7 @@ async function main(): Promise<void> {
     console.info('Assistant reply: %s', result.assistantReplyTs);
     console.info('Progress finalized: %s', result.matched.progressMessageFinalized);
     console.info('Retained in thread: %s', result.matched.progressMessageRetainedInThread);
+    console.info('Retained progress has no tool history: %s', result.matched.progressMessageHasNoToolHistory);
   } catch (error) {
     result.failureMessage = error instanceof Error ? error.message : String(error);
     caughtError = error;
@@ -199,6 +206,24 @@ function findMessageByTs(
   return { text: msg.text, blocks: msg.blocks };
 }
 
+function containsToolHistory(text?: string, blocks?: unknown[]): boolean {
+  if (typeof text === 'string' && /\b[A-Z][a-z]+ x\d+\b/.test(text)) {
+    return true;
+  }
+
+  for (const block of (blocks ?? []) as Array<{ elements?: Array<Record<string, unknown>>; type?: string }>) {
+    if (block.type !== 'context') continue;
+    for (const element of block.elements ?? []) {
+      const value = typeof element.text === 'string' ? element.text : '';
+      if (/\b[A-Z][a-z]+ x\d+\b/.test(value)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function assertResult(result: ProgressRetainedResult): void {
   const failures: string[] = [];
 
@@ -213,6 +238,9 @@ function assertResult(result: ProgressRetainedResult): void {
   }
   if (!result.matched.progressMessageRetainedInThread) {
     failures.push('finalized progress message is not visible in thread replies');
+  }
+  if (!result.matched.progressMessageHasNoToolHistory) {
+    failures.push('finalized progress message still contains tool-history summary text');
   }
 
   if (failures.length > 0) {
@@ -240,8 +268,8 @@ export const scenario: LiveE2EScenario = {
   id: 'progress-retained',
   title: 'Progress Message Retained After Reply',
   description:
-    'Verify that the progress message is finalized (not deleted) when the assistant replies, and remains visible in the thread.',
-  keywords: ['progress', 'retained', 'finalize', 'height', 'collapse'],
+    'Verify that the progress message is finalized (not deleted) when the assistant replies, remains visible in the thread, and no longer shows tool-history summary text after completion.',
+  keywords: ['progress', 'retained', 'finalize', 'cleanup', 'collapse'],
   run: main,
 };
 

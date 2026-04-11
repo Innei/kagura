@@ -604,7 +604,7 @@ describe('createActivitySink', () => {
     );
   });
 
-  it('only includes toolbar (workspaceLabel + toolHistory) on the first message of a turn', async () => {
+  it('only includes workspaceLabel on the first message of a turn', async () => {
     const renderer = createRendererStub();
     const postThreadReply = vi.mocked(renderer.postThreadReply);
     const sink = createActivitySink({
@@ -628,14 +628,14 @@ describe('createActivitySink', () => {
       },
     });
 
-    // First message should include toolbar
+    // First message should include workspace label only
     await sink.onEvent({ type: 'assistant-message', text: 'First message' });
     expect(postThreadReply).toHaveBeenLastCalledWith(
       expect.anything(),
       'C123',
       'ts1',
       'First message',
-      expect.objectContaining({ workspaceLabel: 'my-workspace' }),
+      { workspaceLabel: 'my-workspace' },
     );
 
     // Simulate more tool activity between messages

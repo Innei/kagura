@@ -172,7 +172,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     try {
       await renderer.postThreadReply(client, channel, threadTs, text, {
         ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
-        ...(includeToolbar && toolHistory.size > 0 ? { toolHistory } : {}),
       });
       hasSentToolbarInTurn = true;
     } catch (error) {
