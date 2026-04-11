@@ -244,7 +244,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'Thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -270,7 +270,7 @@ describe('Slack loading status test', () => {
       channel: 'C123',
       thread_ts: threadTs,
     });
-    expect(firstPost.text).not.toBe('Thinking... — Thinking...');
+    expect(firstPost.text).not.toBe('Working on your request... — Working on your request...');
     expect(firstPost.blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -617,7 +617,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'Thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -671,6 +671,31 @@ describe('Slack loading status test', () => {
         }),
       ]),
     );
+  });
+
+  it('injects threadTs when the publish_state MCP tool emits UI state', async () => {
+    const { events, tools } = await getMcpToolsForRequest();
+
+    const result = await getToolHandler(
+      tools,
+      SLACK_UI_STATE_TOOL_NAME,
+    )({
+      loadingMessages: ['Inspecting the workspace...'],
+      status: 'Thinking...',
+    });
+
+    expect(result).toEqual({
+      content: [{ text: 'UI state published.', type: 'text' }],
+    });
+    expect(events).toContainEqual({
+      type: 'activity-state',
+      state: {
+        clear: false,
+        activities: ['Inspecting the workspace...'],
+        status: 'Thinking...',
+        threadTs: '1712345678.000100',
+      },
+    });
   });
 
   it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {

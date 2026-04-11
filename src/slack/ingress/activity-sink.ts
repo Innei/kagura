@@ -563,7 +563,7 @@ function formatUserInputQuestionMessage(
 function createDefaultThinkingState(threadTs: string): AgentActivityState {
   return {
     threadTs,
-    status: 'is thinking...',
+    status: 'Thinking...',
     activities: getShuffledThinkingMessages(),
     clear: false,
   };
