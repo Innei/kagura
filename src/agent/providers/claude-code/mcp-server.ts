@@ -8,9 +8,11 @@ import type {
   AgentExecutionSink,
   GeneratedOutputFile,
 } from '~/agent/types.js';
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryScope, MemoryStore } from '~/memory/types.js';
 
+import { SetChannelDefaultWorkspaceToolInputSchema } from './schemas/channel-preference-tools.js';
 import { RecallMemoryToolInputSchema, SaveMemoryToolInputSchema } from './schemas/memory-tools.js';
 import { UploadSlackFileToolInputSchema } from './schemas/upload-slack-file.js';
 import {
@@ -24,6 +26,11 @@ import {
   SAVE_MEMORY_TOOL_NAME,
 } from './tools/save-memory.js';
 import {
+  parseSetChannelDefaultWorkspaceToolInput,
+  SET_CHANNEL_DEFAULT_WORKSPACE_TOOL_DESCRIPTION,
+  SET_CHANNEL_DEFAULT_WORKSPACE_TOOL_NAME,
+} from './tools/set-channel-default-workspace.js';
+import {
   parseUploadSlackFileToolInput,
   UPLOAD_SLACK_FILE_TOOL_DESCRIPTION,
   UPLOAD_SLACK_FILE_TOOL_NAME,
@@ -33,6 +40,7 @@ import type { ResolvedMemoryScope } from './types.js';
 export function createAnthropicAgentSdkMcpServer(
   logger: AppLogger,
   memoryStore: MemoryStore,
+  channelPreferenceStore: ChannelPreferenceStore,
   request: AgentExecutionRequest,
   sink: AgentExecutionSink,
 ) {
@@ -41,6 +49,7 @@ export function createAnthropicAgentSdkMcpServer(
     tools: [
       createRecallMemoryTool(logger, memoryStore, request),
       createSaveMemoryTool(logger, memoryStore, request),
+      createSetChannelDefaultWorkspaceTool(logger, channelPreferenceStore, request),
       createUploadSlackFileTool(logger, request, sink),
     ],
   });
@@ -105,6 +114,33 @@ function createSaveMemoryTool(
         return createTextToolResult(`Memory saved (${resolvedScope.scope}): ${saved.id}`);
       } catch (error) {
         return createToolValidationErrorResult(logger, SAVE_MEMORY_TOOL_NAME, error);
+      }
+    },
+  );
+}
+
+function createSetChannelDefaultWorkspaceTool(
+  logger: AppLogger,
+  channelPreferenceStore: ChannelPreferenceStore,
+  request: AgentExecutionRequest,
+) {
+  return tool(
+    SET_CHANNEL_DEFAULT_WORKSPACE_TOOL_NAME,
+    SET_CHANNEL_DEFAULT_WORKSPACE_TOOL_DESCRIPTION,
+    SetChannelDefaultWorkspaceToolInputSchema.shape,
+    async (args) => {
+      try {
+        const input = parseSetChannelDefaultWorkspaceToolInput(args);
+        channelPreferenceStore.upsert(request.channelId, input.workspaceInput);
+        return createTextToolResult(
+          `Channel ${request.channelId} default workspace set to: ${input.workspaceInput}`,
+        );
+      } catch (error) {
+        return createToolValidationErrorResult(
+          logger,
+          SET_CHANNEL_DEFAULT_WORKSPACE_TOOL_NAME,
+          error,
+        );
       }
     },
   );

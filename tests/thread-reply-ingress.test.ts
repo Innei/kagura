@@ -364,6 +364,7 @@ function createThreadReplyTestHarness(threadTs: string): {
   } as unknown as WorkspaceResolver;
   const handler = createThreadReplyHandler({
     analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+    channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,
     memoryStore: createMemoryStore(),
@@ -436,6 +437,7 @@ function createDualIngressTestHarness(
   } as unknown as WorkspaceResolver;
   const deps = {
     analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+    channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,
     memoryStore: createMemoryStore(),

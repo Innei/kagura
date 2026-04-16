@@ -44,3 +44,10 @@ export const sessionAnalytics = sqliteTable('session_analytics', {
   modelUsageJson: text('model_usage_json'),
   createdAt: text('created_at').notNull(),
 });
+
+export const channelPreferences = sqliteTable('channel_preferences', {
+  channelId: text('channel_id').primaryKey(),
+  defaultWorkspaceInput: text('default_workspace_input'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

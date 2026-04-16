@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { SessionRecord } from '~/session/types.js';
 import {
   buildWorkspaceResolutionBlocks,
@@ -8,6 +9,22 @@ import {
 } from '~/slack/ingress/workspace-resolution.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace, WorkspaceResolution } from '~/workspace/types.js';
+
+function createMockChannelPreferenceStore(value: string | undefined): ChannelPreferenceStore {
+  return {
+    get: vi.fn().mockReturnValue(
+      value
+        ? {
+            channelId: 'C123',
+            createdAt: new Date().toISOString(),
+            defaultWorkspaceInput: value,
+            updatedAt: new Date().toISOString(),
+          }
+        : undefined,
+    ),
+    upsert: vi.fn(),
+  };
+}
 
 describe('resolveWorkspaceForConversation', () => {
   it('returns the override when provided', () => {
@@ -27,8 +44,16 @@ describe('resolveWorkspaceForConversation', () => {
       workspacePath: '/tmp/repo',
     };
     const resolver = { resolveFromText: vi.fn() } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore(undefined);
 
-    const result = resolveWorkspaceForConversation('some text', undefined, resolver, override);
+    const result = resolveWorkspaceForConversation(
+      'some text',
+      undefined,
+      resolver,
+      preferenceStore,
+      'C123',
+      override,
+    );
 
     expect(result).toEqual({ status: 'unique', workspace: override });
     expect(resolver.resolveFromText).not.toHaveBeenCalled();
@@ -47,8 +72,15 @@ describe('resolveWorkspaceForConversation', () => {
       workspaceRepoPath: '/tmp/my-repo',
     };
     const resolver = { resolveFromText: vi.fn() } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore(undefined);
 
-    const result = resolveWorkspaceForConversation('text', session, resolver);
+    const result = resolveWorkspaceForConversation(
+      'text',
+      session,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
 
     expect(result.status).toBe('unique');
     expect(resolver.resolveFromText).not.toHaveBeenCalled();
@@ -59,11 +91,115 @@ describe('resolveWorkspaceForConversation', () => {
     const resolver = {
       resolveFromText: vi.fn().mockReturnValue(missing),
     } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore(undefined);
 
-    const result = resolveWorkspaceForConversation('hello', undefined, resolver);
+    const result = resolveWorkspaceForConversation(
+      'hello',
+      undefined,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
 
     expect(result).toEqual(missing);
     expect(resolver.resolveFromText).toHaveBeenCalledWith('hello', 'auto');
+  });
+
+  it('falls back to channel preference when resolver returns missing', () => {
+    const missing: WorkspaceResolution = { status: 'missing', query: 'hello', reason: 'no match' };
+    const unique: WorkspaceResolution = {
+      status: 'unique',
+      workspace: {
+        input: 'my-repo',
+        matchKind: 'repo',
+        repo: {
+          aliases: [],
+          id: 'my-repo',
+          label: 'my-repo',
+          name: 'my-repo',
+          relativePath: 'my-repo',
+          repoPath: '/tmp/my-repo',
+        },
+        source: 'manual',
+        workspaceLabel: 'my-repo',
+        workspacePath: '/tmp/my-repo',
+      },
+    };
+    const resolver = {
+      resolveFromText: vi.fn().mockReturnValue(missing),
+      resolveManualInput: vi.fn().mockReturnValue(unique),
+    } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore('my-repo');
+
+    const result = resolveWorkspaceForConversation(
+      'hello',
+      undefined,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
+
+    expect(result).toEqual(unique);
+    expect(resolver.resolveFromText).toHaveBeenCalledWith('hello', 'auto');
+    expect(preferenceStore.get).toHaveBeenCalledWith('C123');
+    expect(resolver.resolveManualInput).toHaveBeenCalledWith('my-repo', 'manual');
+  });
+
+  it('ignores channel preference when resolver returns unique', () => {
+    const unique: WorkspaceResolution = {
+      status: 'unique',
+      workspace: {
+        input: 'text-match',
+        matchKind: 'repo',
+        repo: {
+          aliases: [],
+          id: 'text-match',
+          label: 'text-match',
+          name: 'text-match',
+          relativePath: 'text-match',
+          repoPath: '/tmp/text-match',
+        },
+        source: 'auto',
+        workspaceLabel: 'text-match',
+        workspacePath: '/tmp/text-match',
+      },
+    };
+    const resolver = {
+      resolveFromText: vi.fn().mockReturnValue(unique),
+      resolveManualInput: vi.fn(),
+    } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore('my-repo');
+
+    const result = resolveWorkspaceForConversation(
+      'text-match',
+      undefined,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
+
+    expect(result).toEqual(unique);
+    expect(resolver.resolveManualInput).not.toHaveBeenCalled();
+  });
+
+  it('ignores channel preference when preference resolution is missing', () => {
+    const missing: WorkspaceResolution = { status: 'missing', query: 'hello', reason: 'no match' };
+    const resolver = {
+      resolveFromText: vi.fn().mockReturnValue(missing),
+      resolveManualInput: vi.fn().mockReturnValue(missing),
+    } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore('unknown-repo');
+
+    const result = resolveWorkspaceForConversation(
+      'hello',
+      undefined,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
+
+    expect(result).toEqual(missing);
+    expect(resolver.resolveManualInput).toHaveBeenCalledWith('unknown-repo', 'manual');
   });
 });
 

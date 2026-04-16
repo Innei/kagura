@@ -54,6 +54,15 @@ export function createDatabase(dbPath: string) {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS channel_preferences (
+      channel_id TEXT PRIMARY KEY,
+      default_workspace_input TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   migrateMemoriesRepoIdNullable(sqlite);
 
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');

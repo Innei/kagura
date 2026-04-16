@@ -131,6 +131,8 @@ export async function resolveWorkspaceStep(
     message.text,
     ctx.existingSession,
     deps.workspaceResolver,
+    deps.channelPreferenceStore,
+    message.channel,
     ctx.options.workspaceOverride,
   );
 

@@ -12,6 +12,7 @@ import type {
   AgentUserInputQuestion,
   AgentUserInputRequest,
 } from '~/agent/types.js';
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
@@ -203,6 +204,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
   constructor(
     private readonly logger: AppLogger,
     private readonly memoryStore: MemoryStore,
+    private readonly channelPreferenceStore: ChannelPreferenceStore,
     private readonly executionProbe?: ClaudeExecutionProbe,
   ) {
     void this.logClaudeAuthStatus();
@@ -252,6 +254,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     const mcpServer = createAnthropicAgentSdkMcpServer(
       this.logger,
       this.memoryStore,
+      this.channelPreferenceStore,
       request,
       sink,
     );

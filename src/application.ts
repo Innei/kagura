@@ -6,6 +6,7 @@ import type { App } from '@slack/bolt';
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
 import { SqliteAnalyticsStore } from '~/analytics/sqlite-analytics-store.js';
+import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
 import { createDatabase } from '~/db/index.js';
 import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
@@ -14,13 +15,13 @@ import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp } from '~/slack/app.js';
-import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
 import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
+import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
@@ -39,6 +40,10 @@ export function createApplication(): RuntimeApplication {
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  const channelPreferenceStore = new SqliteChannelPreferenceStore(
+    db,
+    logger.withTag('channel-preference'),
+  );
   const analyticsStore = new SqliteAnalyticsStore(db, logger.withTag('analytics'));
   memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({
@@ -56,6 +61,7 @@ export function createApplication(): RuntimeApplication {
   const ccExecutor = new ClaudeAgentSdkExecutor(
     logger.withTag('claude:session'),
     memoryStore,
+    channelPreferenceStore,
     executionProbe,
   );
   const providerRegistry = createProviderRegistry(
@@ -69,6 +75,7 @@ export function createApplication(): RuntimeApplication {
 
   const slackApp: App = createSlackApp({
     analyticsStore,
+    channelPreferenceStore,
     logger,
     memoryStore,
     sessionStore,

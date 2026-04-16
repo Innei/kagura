@@ -79,9 +79,11 @@ describe('Workspace picker action test', () => {
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 3 });
-    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
+    const channelPreferenceStore = { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() };
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const deps = {
       analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -195,9 +197,11 @@ describe('Workspace picker action test', () => {
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
+    const channelPreferenceStore = { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() };
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const handler = createAppMentionHandler({
       analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      channelPreferenceStore,
       claudeExecutor: executor,
       logger,
       memoryStore,

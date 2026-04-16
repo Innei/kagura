@@ -1,3 +1,4 @@
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { SessionRecord } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace, WorkspaceResolution } from '~/workspace/types.js';
@@ -11,6 +12,8 @@ export function resolveWorkspaceForConversation(
   messageText: string,
   existingSession: SessionRecord | undefined,
   workspaceResolver: WorkspaceResolver,
+  channelPreferenceStore: ChannelPreferenceStore,
+  channelId: string,
   workspaceOverride?: ResolvedWorkspace,
 ): WorkspaceResolution {
   if (workspaceOverride) {
@@ -48,7 +51,23 @@ export function resolveWorkspaceForConversation(
     };
   }
 
-  return workspaceResolver.resolveFromText(messageText, 'auto');
+  const autoResolution = workspaceResolver.resolveFromText(messageText, 'auto');
+  if (autoResolution.status !== 'missing') {
+    return autoResolution;
+  }
+
+  const preference = channelPreferenceStore.get(channelId);
+  if (preference?.defaultWorkspaceInput) {
+    const preferenceResolution = workspaceResolver.resolveManualInput(
+      preference.defaultWorkspaceInput,
+      'manual',
+    );
+    if (preferenceResolution.status === 'unique') {
+      return preferenceResolution;
+    }
+  }
+
+  return autoResolution;
 }
 
 export function buildWorkspaceResolutionBlocks(

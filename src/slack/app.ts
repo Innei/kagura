@@ -1,9 +1,8 @@
 import { App, Assistant } from '@slack/bolt';
 
-import { createSlackNetworkAgent, createSlackWebClientOptions } from './network-guard.js';
-
 import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
@@ -40,11 +39,13 @@ import {
   WORKSPACE_MODAL_CALLBACK_ID,
 } from './interactions/workspace-message-action.js';
 import { createWorkspacePickerActionHandler } from './interactions/workspace-picker-action.js';
+import { createSlackNetworkAgent, createSlackWebClientOptions } from './network-guard.js';
 import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
 export interface SlackApplicationDependencies {
   analyticsStore: SessionAnalyticsStore;
+  channelPreferenceStore: ChannelPreferenceStore;
   logger: AppLogger;
   memoryStore: MemoryStore;
   permissionBridge: SlackPermissionBridge;
@@ -74,6 +75,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   );
   const ingressDeps = {
     analyticsStore: deps.analyticsStore,
+    channelPreferenceStore: deps.channelPreferenceStore,
     logger: deps.logger.withTag('slack:ingress'),
     memoryStore: deps.memoryStore,
     renderer,
