@@ -42,6 +42,7 @@ export const env = createEnv({
       .default('./artifacts/slack-live-e2e/execution-probe.jsonl'),
     SLACK_E2E_TIMEOUT_MS: optionalPositiveInteger.default(180_000),
     SLACK_E2E_TRIGGER_USER_TOKEN: z.string().min(1).optional(),
+    KAGURA_MCP_SERVER_MODE: z.enum(['client', 'stdio']).default('client'),
   },
   runtimeEnvStrict: {
     NODE_ENV: process.env.NODE_ENV,
@@ -70,6 +71,7 @@ export const env = createEnv({
     SLACK_E2E_EXECUTION_PROBE_PATH: process.env.SLACK_E2E_EXECUTION_PROBE_PATH,
     SLACK_E2E_TIMEOUT_MS: process.env.SLACK_E2E_TIMEOUT_MS,
     SLACK_E2E_TRIGGER_USER_TOKEN: process.env.SLACK_E2E_TRIGGER_USER_TOKEN,
+    KAGURA_MCP_SERVER_MODE: process.env.KAGURA_MCP_SERVER_MODE,
   },
   emptyStringAsUndefined: true,
 });

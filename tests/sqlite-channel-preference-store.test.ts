@@ -22,7 +22,10 @@ describe('SqliteChannelPreferenceStore', () => {
       )
     `);
     db = drizzle(sqlite, { schema });
-    store = new SqliteChannelPreferenceStore(db, createRootLogger().withTag('test'));
+    store = new SqliteChannelPreferenceStore(
+      db as ConstructorParameters<typeof SqliteChannelPreferenceStore>[0],
+      createRootLogger().withTag('test'),
+    );
   });
 
   it('returns undefined when no preference exists', () => {

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppLogger } from '~/logger/index.js';
-import { rotateToken, syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import { rotateToken, syncAppManifest } from '~/slack/commands/manifest-sync.js';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -106,7 +106,7 @@ describe('rotateToken', () => {
   });
 });
 
-describe('syncSlashCommands with token rotation', () => {
+describe('syncAppManifest with token rotation', () => {
   it('uses persisted token if not expired', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-'));
     const tokenStorePath = path.join(tmpDir, 'tokens.json');
@@ -127,6 +127,23 @@ describe('syncSlashCommands with token rotation', () => {
         manifest: {
           features: {
             app_home: { home_tab_enabled: true },
+            assistant_config: {
+              agent_config: { name: 'Kagura' },
+              suggested_prompts: [
+                {
+                  title: 'Summarize a thread',
+                  message: 'Please summarize the latest discussion in this thread.',
+                },
+                {
+                  title: 'Review code changes',
+                  message: 'Please review the recent code changes and call out risks.',
+                },
+                {
+                  title: 'Draft a plan',
+                  message: 'Please create an implementation plan for this task.',
+                },
+              ],
+            },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'test' },
@@ -147,7 +164,13 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+              bot_events: [
+                'app_home_opened',
+                'app_mention',
+                'assistant_thread_started',
+                'message.channels',
+                'message.im',
+              ],
             },
           },
         },
@@ -155,7 +178,7 @@ describe('syncSlashCommands with token rotation', () => {
     );
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       logger,
       tokenStorePath,
@@ -196,6 +219,23 @@ describe('syncSlashCommands with token rotation', () => {
           manifest: {
             features: {
               app_home: { home_tab_enabled: true },
+              assistant_config: {
+                agent_config: { name: 'Kagura' },
+                suggested_prompts: [
+                  {
+                    title: 'Summarize a thread',
+                    message: 'Please summarize the latest discussion in this thread.',
+                  },
+                  {
+                    title: 'Review code changes',
+                    message: 'Please review the recent code changes and call out risks.',
+                  },
+                  {
+                    title: 'Draft a plan',
+                    message: 'Please create an implementation plan for this task.',
+                  },
+                ],
+              },
               bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
                 { command: '/usage', description: 'test' },
@@ -216,15 +256,22 @@ describe('syncSlashCommands with token rotation', () => {
             },
             settings: {
               event_subscriptions: {
-                bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+                bot_events: [
+                  'app_home_opened',
+                  'app_mention',
+                  'assistant_thread_started',
+                  'message.channels',
+                  'message.im',
+                ],
               },
             },
           },
         }),
-      );
+      )
+      .mockResolvedValueOnce(slackOk({}));
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       logger,
       tokenStorePath,
@@ -296,7 +343,7 @@ describe('syncSlashCommands with token rotation', () => {
       );
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       configToken: 'xoxe.xoxp-env-stale',
       logger,
@@ -328,7 +375,7 @@ describe('syncSlashCommands with token rotation', () => {
       .mockResolvedValueOnce(slackOk({}));
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       configToken: 'xoxe.xoxp-direct',
       logger,
@@ -370,6 +417,23 @@ describe('syncSlashCommands with token rotation', () => {
         manifest: {
           features: {
             app_home: { home_tab_enabled: true },
+            assistant_config: {
+              agent_config: { name: 'Kagura' },
+              suggested_prompts: [
+                {
+                  title: 'Summarize a thread',
+                  message: 'Please summarize the latest discussion in this thread.',
+                },
+                {
+                  title: 'Review code changes',
+                  message: 'Please review the recent code changes and call out risks.',
+                },
+                {
+                  title: 'Draft a plan',
+                  message: 'Please create an implementation plan for this task.',
+                },
+              ],
+            },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'x' },
@@ -390,7 +454,13 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+              bot_events: [
+                'app_home_opened',
+                'app_mention',
+                'assistant_thread_started',
+                'message.channels',
+                'message.im',
+              ],
             },
           },
         },
@@ -398,7 +468,7 @@ describe('syncSlashCommands with token rotation', () => {
     );
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       configToken: 'xoxe.xoxp-token',
       logger,
@@ -445,7 +515,7 @@ describe('syncSlashCommands with token rotation', () => {
       .mockResolvedValueOnce(slackOk({}));
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       configToken: 'xoxe.xoxp-token',
       logger,
@@ -458,8 +528,187 @@ describe('syncSlashCommands with token rotation', () => {
     const [, updateInit] = updateCall as [string, RequestInit];
     const body = JSON.parse(updateInit.body as string);
     expect(body.manifest.settings.event_subscriptions.bot_events).toEqual(
-      expect.arrayContaining(['app_home_opened', 'app_mention', 'message.channels', 'message.im']),
+      expect.arrayContaining([
+        'app_home_opened',
+        'app_mention',
+        'assistant_thread_started',
+        'message.channels',
+        'message.im',
+      ]),
     );
+  });
+
+  it('adds assistant_config when missing', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-assistant-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              app_home: { home_tab_enabled: true },
+              bot_user: { display_name: 'cc-001', always_online: true },
+              slash_commands: [
+                { command: '/usage', description: 'x' },
+                { command: '/workspace', description: 'x' },
+                { command: '/memory', description: 'x' },
+                { command: '/session', description: 'x' },
+                { command: '/provider', description: 'x' },
+                { command: '/version', description: 'x' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'x',
+                },
+              ],
+            },
+            settings: {
+              event_subscriptions: {
+                bot_events: [
+                  'app_home_opened',
+                  'app_mention',
+                  'assistant_thread_started',
+                  'message.channels',
+                  'message.im',
+                ],
+              },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(slackOk({}));
+
+    const logger = createTestLogger();
+    await syncAppManifest({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-token',
+      logger,
+      tokenStorePath,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const updateCall = fetchMock.mock.calls[1];
+    expect(updateCall).toBeDefined();
+    const [, updateInit] = updateCall as [string, RequestInit];
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.manifest.features.assistant_config).toEqual({
+      agent_config: { name: 'Kagura' },
+      suggested_prompts: [
+        {
+          title: 'Summarize a thread',
+          message: 'Please summarize the latest discussion in this thread.',
+        },
+        {
+          title: 'Review code changes',
+          message: 'Please review the recent code changes and call out risks.',
+        },
+        {
+          title: 'Draft a plan',
+          message: 'Please create an implementation plan for this task.',
+        },
+      ],
+    });
+  });
+
+  it('merges assistant_config instead of overwriting unrelated fields', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-assistant-merge-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              app_home: { home_tab_enabled: true },
+              assistant_config: {
+                agent_config: {
+                  icon: ':sparkles:',
+                  name: 'Legacy',
+                },
+                custom_field: 'keep-me',
+                suggested_prompts: [
+                  {
+                    title: 'Existing prompt',
+                    message: 'Keep this custom prompt.',
+                  },
+                ],
+              },
+              bot_user: { display_name: 'cc-001', always_online: true },
+              slash_commands: [
+                { command: '/usage', description: 'x' },
+                { command: '/workspace', description: 'x' },
+                { command: '/memory', description: 'x' },
+                { command: '/session', description: 'x' },
+                { command: '/provider', description: 'x' },
+                { command: '/version', description: 'x' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'x',
+                },
+              ],
+            },
+            settings: {
+              event_subscriptions: {
+                bot_events: [
+                  'app_home_opened',
+                  'app_mention',
+                  'assistant_thread_started',
+                  'message.channels',
+                  'message.im',
+                ],
+              },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(slackOk({}));
+
+    const logger = createTestLogger();
+    await syncAppManifest({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-token',
+      logger,
+      tokenStorePath,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const updateCall = fetchMock.mock.calls[1];
+    expect(updateCall).toBeDefined();
+    const [, updateInit] = updateCall as [string, RequestInit];
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.manifest.features.assistant_config).toEqual({
+      agent_config: {
+        icon: ':sparkles:',
+        name: 'Kagura',
+      },
+      custom_field: 'keep-me',
+      suggested_prompts: [
+        {
+          title: 'Existing prompt',
+          message: 'Keep this custom prompt.',
+        },
+        {
+          title: 'Summarize a thread',
+          message: 'Please summarize the latest discussion in this thread.',
+        },
+        {
+          title: 'Review code changes',
+          message: 'Please review the recent code changes and call out risks.',
+        },
+        {
+          title: 'Draft a plan',
+          message: 'Please create an implementation plan for this task.',
+        },
+      ],
+    });
   });
 
   it('enables always_online when bot_user has it disabled', async () => {
@@ -495,7 +744,7 @@ describe('syncSlashCommands with token rotation', () => {
       .mockResolvedValueOnce(slackOk({}));
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       configToken: 'xoxe.xoxp-token',
       logger,
@@ -519,7 +768,7 @@ describe('syncSlashCommands with token rotation', () => {
     const tokenStorePath = path.join(tmpDir, 'tokens.json');
 
     const logger = createTestLogger();
-    await syncSlashCommands({
+    await syncAppManifest({
       appId: 'A123',
       logger,
       tokenStorePath,

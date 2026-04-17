@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { App } from '@slack/bolt';
 
+import type { AgentExecutionRequest, AgentExecutionSink } from '~/agent/types.js';
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
 import { SqliteAnalyticsStore } from '~/analytics/sqlite-analytics-store.js';
@@ -15,12 +16,14 @@ import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp } from '~/slack/app.js';
-import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import { syncAppManifest } from '~/slack/commands/manifest-sync.js';
 import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
+import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
+import { startMcpStdioServer } from '~/agent/mcp-server/stdio-transport.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
@@ -56,6 +59,7 @@ export function createApplication(): RuntimeApplication {
   const executionProbe = env.SLACK_E2E_ENABLED
     ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
     : undefined;
+  const permissionBridge = new SlackPermissionBridge(logger.withTag('slack:permission'));
   const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
 
   const ccExecutor = new ClaudeAgentSdkExecutor(
@@ -69,6 +73,48 @@ export function createApplication(): RuntimeApplication {
     new Map([['claude-code', ccExecutor]]),
   );
 
+  if (env.KAGURA_MCP_SERVER_MODE === 'stdio') {
+    const mcpRequest: AgentExecutionRequest = {
+      channelId: 'mcp-server',
+      mentionText: '',
+      threadContext: {
+        channelId: 'mcp-server',
+        fileLoadFailures: [],
+        imageLoadFailures: [],
+        loadedFiles: [],
+        loadedImages: [],
+        messages: [],
+        renderedPrompt: '',
+        threadTs: '0',
+      },
+      threadTs: '0',
+      userId: 'mcp-server',
+    };
+    const mcpSink: AgentExecutionSink = {
+      onEvent: async () => {},
+    };
+
+    return {
+      logger,
+      threadExecutionRegistry: createThreadExecutionRegistry({
+        logger: logger.withTag('slack:execution'),
+      }),
+      async start() {
+        await startMcpStdioServer({
+          channelPreferenceStore,
+          logger: logger.withTag('mcp'),
+          memoryStore,
+          request: mcpRequest,
+          sink: mcpSink,
+        });
+      },
+      async stop() {
+        sqlite.close();
+        logger.info('MCP server stopped.');
+      },
+    };
+  }
+
   const threadExecutionRegistry = createThreadExecutionRegistry({
     logger: logger.withTag('slack:execution'),
   });
@@ -80,6 +126,7 @@ export function createApplication(): RuntimeApplication {
     memoryStore,
     sessionStore,
     providerRegistry,
+    permissionBridge,
     threadExecutionRegistry,
     userInputBridge,
     workspaceResolver,
@@ -91,14 +138,14 @@ export function createApplication(): RuntimeApplication {
     threadExecutionRegistry,
     async start() {
       if (env.SLACK_APP_ID && (env.SLACK_CONFIG_TOKEN || env.SLACK_CONFIG_REFRESH_TOKEN)) {
-        await syncSlashCommands({
+        await syncAppManifest({
           appId: env.SLACK_APP_ID,
           configToken: env.SLACK_CONFIG_TOKEN,
           refreshToken: env.SLACK_CONFIG_REFRESH_TOKEN,
           logger: logger.withTag('manifest'),
         }).catch((error) => {
           logger.warn(
-            'Slash command manifest sync failed (non-fatal): %s',
+            'App manifest sync failed (non-fatal): %s',
             error instanceof Error ? error.message : String(error),
           );
         });

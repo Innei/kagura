@@ -13,6 +13,16 @@ import { resolveUserName } from '../user-profile.js';
 export const HOME_TAB_REFRESH_ACTION_ID = 'home_tab_refresh';
 
 const startTime = Date.now();
+const EMPTY_ANALYTICS_OVERVIEW = {
+  avgDurationMs: 0,
+  cacheHitRate: 0,
+  totalCacheCreationTokens: 0,
+  totalCacheReadTokens: 0,
+  totalCostUSD: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalSessions: 0,
+} satisfies import('~/analytics/types.js').AnalyticsOverview;
 
 export interface HomeTabDependencies {
   analyticsStore: SessionAnalyticsStore;
@@ -87,9 +97,9 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
         .join(', ');
 
       // --- Analytics data ---
-      const overview = deps.analyticsStore.getOverview();
-      const byModel = deps.analyticsStore.getByModel();
-      const recentSessions = deps.analyticsStore.getRecentSessions(5);
+      const overview = deps.analyticsStore.getOverview?.() ?? EMPTY_ANALYTICS_OVERVIEW;
+      const byModel = deps.analyticsStore.getByModel?.() ?? [];
+      const recentSessions = deps.analyticsStore.getRecentSessions?.(5) ?? [];
 
       const blocks: unknown[] = [
         // --- Greeting ---

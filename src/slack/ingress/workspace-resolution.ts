@@ -12,7 +12,7 @@ export function resolveWorkspaceForConversation(
   messageText: string,
   existingSession: SessionRecord | undefined,
   workspaceResolver: WorkspaceResolver,
-  channelPreferenceStore: ChannelPreferenceStore,
+  channelPreferenceStore: ChannelPreferenceStore | undefined,
   channelId: string,
   workspaceOverride?: ResolvedWorkspace,
 ): WorkspaceResolution {
@@ -56,7 +56,7 @@ export function resolveWorkspaceForConversation(
     return autoResolution;
   }
 
-  const preference = channelPreferenceStore.get(channelId);
+  const preference = channelPreferenceStore?.get(channelId);
   if (preference?.defaultWorkspaceInput) {
     const preferenceResolution = workspaceResolver.resolveManualInput(
       preference.defaultWorkspaceInput,

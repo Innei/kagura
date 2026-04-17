@@ -126,6 +126,10 @@ export type AgentExecutionEvent =
       files: GeneratedOutputFile[];
     }
   | {
+      type: 'structured-blocks';
+      blocks: unknown[];
+    }
+  | {
       type: 'usage-info';
       usage: SessionUsageInfo;
     };

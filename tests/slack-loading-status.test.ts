@@ -990,7 +990,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     status: string;
     thread_ts: string;
   }>;
-  updateCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; ts: string }>;
+  updateCalls: Array<{ blocks?: unknown[]; channel: string; text: string; ts: string }>;
 } {
   const deleteCalls: Array<{ channel: string; ts: string }> = [];
   const postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
@@ -1002,7 +1002,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     status: string;
     thread_ts: string;
   }> = [];
-  const updateCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; ts: string }> =
+  const updateCalls: Array<{ blocks?: unknown[]; channel: string; text: string; ts: string }> =
     [];
 
   const client: SlackWebClientLike = {
@@ -1131,7 +1131,7 @@ function createInterruptiblePendingQuery(
     interrupt?: (() => Promise<void> | void) | undefined;
     sessionId?: string | undefined;
   },
-): AsyncIterable<unknown> & {
+): AsyncIterableIterator<unknown> & {
   interrupt: () => Promise<void>;
   return: () => Promise<IteratorResult<unknown>>;
 } {

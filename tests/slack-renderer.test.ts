@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { SlackRenderer, SlackRenderTimeoutError } from '~/slack/render/slack-renderer.js';
-import type { SlackWebClientLike } from '~/slack/types.js';
+import type { SlackBlock, SlackTextObject, SlackWebClientLike } from '~/slack/types.js';
 
 function createTestLogger(): AppLogger {
   const logger = {
@@ -240,11 +240,13 @@ describe('SlackRenderer.postThreadReply', () => {
       type: 'context',
       elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree_' }],
     });
-    const contextTexts = imagePostCalls[0]!.blocks
-      ?.filter((block) => block.type === 'context')
+    const contextTexts = (imagePostCalls[0]!.blocks as SlackBlock[] | undefined)
+      ?.filter((block): block is Extract<SlackBlock, { type: 'context' }> => block.type === 'context')
       .flatMap((block) =>
         (block.elements ?? [])
-          .map((element) => ('text' in element && typeof element.text === 'string' ? element.text : ''))
+          .map((element: SlackTextObject) =>
+            'text' in element && typeof element.text === 'string' ? element.text : '',
+          )
           .filter(Boolean),
       );
     expect(contextTexts).toEqual(['_Working in repo/worktree_']);

@@ -17,7 +17,7 @@ import type { SessionStore } from '~/session/types.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import { getShuffledThinkingMessages } from '../thinking-messages.js';
-import type { SlackWebClientLike } from '../types.js';
+import type { SlackBlock, SlackWebClientLike } from '../types.js';
 
 export interface ActivitySinkOptions {
   analyticsStore?: SessionAnalyticsStore;
@@ -404,6 +404,16 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     async onEvent(event: AgentExecutionEvent): Promise<void> {
       if (event.type === 'assistant-message') {
         await handleAssistantMessage(event.text);
+        return;
+      }
+      if (event.type === 'structured-blocks') {
+        try {
+          await renderer.postStructuredReply(client, channel, threadTs, event.blocks as SlackBlock[], {
+            ...(workspaceLabel ? { workspaceLabel } : {}),
+          });
+        } catch (error) {
+          logger.warn('Failed to post structured blocks: %s', String(error));
+        }
         return;
       }
       if (event.type === 'generated-images') {

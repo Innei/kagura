@@ -12,6 +12,13 @@ import {
   THINKING_STATUS_MESSAGES,
 } from '../thinking-messages.js';
 import type { SlackBlock, SlackFilesUploadV2Response, SlackWebClientLike } from '../types.js';
+import {
+  createAlertBlock,
+  createCardBlock,
+  createCarouselBlock,
+  createChartBlock,
+  createDataTableBlock,
+} from './blocks/index.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
 const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
@@ -147,13 +154,14 @@ export class SlackRenderer {
 
     await this.withSlackTiming(
       'assistant.threads.setStatus',
-      `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(state.status ?? '')} loadingMessages=${state.loadingMessages?.length ?? 0}`,
+      `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(state.status ?? '')} loadingMessages=${state.loadingMessages?.length ?? 0} composing=${state.composing ?? false}`,
       async () =>
         client.assistant.threads.setStatus({
           channel_id: channelId,
           thread_ts: state.threadTs,
           status: state.status ?? '',
           ...(state.loadingMessages ? { loading_messages: state.loadingMessages } : {}),
+          ...(state.composing != null ? { composing: state.composing } : {}),
         }),
     );
     await this.statusProbe?.recordStatus({
@@ -512,6 +520,163 @@ export class SlackRenderer {
     );
   }
 
+  async postStructuredReply(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    blocks: SlackBlock[],
+    options?: {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    if (blocks.length === 0) {
+      return undefined;
+    }
+
+    const prefixBlocks: SlackBlock[] = [];
+    if (options?.workspaceLabel) {
+      prefixBlocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `_Working in ${options.workspaceLabel}_` }],
+      });
+    }
+    const toolSummary = formatToolHistorySummary(options?.toolHistory);
+    if (toolSummary) {
+      prefixBlocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: toolSummary }],
+      });
+    }
+
+    const allBlocks = [...prefixBlocks, ...blocks];
+    const chunks = chunkBlocks(allBlocks, 50);
+    const fallbackText = options?.fallbackText ?? 'Structured message';
+
+    let lastTs: string | undefined;
+    for (const [index, chunk] of chunks.entries()) {
+      const text = chunks.length > 1 ? `${fallbackText} (${index + 1}/${chunks.length})` : fallbackText;
+      const response = await this.withSlackTiming(
+        'chat.postMessage(structured)',
+        `channel=${channelId} thread=${threadTs} chunk=${index + 1}/${chunks.length} blocks=${chunk.length}`,
+        async () =>
+          client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text,
+            blocks: chunk,
+          }),
+      );
+      lastTs = response.ts;
+    }
+
+    return lastTs;
+  }
+
+  async postDataTable(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    columns: Parameters<typeof createDataTableBlock>[0],
+    rows: Parameters<typeof createDataTableBlock>[1],
+    options?: {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    return this.postStructuredReply(
+      client,
+      channelId,
+      threadTs,
+      [createDataTableBlock(columns, rows)],
+      options,
+    );
+  }
+
+  async postChart(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    chartType: Parameters<typeof createChartBlock>[0],
+    data: Parameters<typeof createChartBlock>[1],
+    options?: Parameters<typeof createChartBlock>[2] & {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    return this.postStructuredReply(
+      client,
+      channelId,
+      threadTs,
+      [createChartBlock(chartType, data, options)],
+      options,
+    );
+  }
+
+  async postCard(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    elements: SlackBlock[],
+    options?: Parameters<typeof createCardBlock>[1] & {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    return this.postStructuredReply(
+      client,
+      channelId,
+      threadTs,
+      [createCardBlock(elements, options)],
+      options,
+    );
+  }
+
+  async postAlert(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    level: Parameters<typeof createAlertBlock>[0],
+    text: string,
+    options?: Parameters<typeof createAlertBlock>[2] & {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    return this.postStructuredReply(
+      client,
+      channelId,
+      threadTs,
+      [createAlertBlock(level, text, options)],
+      options,
+    );
+  }
+
+  async postCarousel(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    items: Parameters<typeof createCarouselBlock>[0],
+    options?: {
+      fallbackText?: string;
+      workspaceLabel?: string;
+      toolHistory?: Map<string, number>;
+    },
+  ): Promise<string | undefined> {
+    return this.postStructuredReply(
+      client,
+      channelId,
+      threadTs,
+      [createCarouselBlock(items)],
+      options,
+    );
+  }
+
   private async withSlackTiming<T>(
     action: string,
     context: string,
@@ -646,6 +811,14 @@ export class SlackRenderer {
 
     return fileId;
   }
+}
+
+function chunkBlocks<T>(blocks: T[], maxSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < blocks.length; i += maxSize) {
+    chunks.push(blocks.slice(i, i + maxSize));
+  }
+  return chunks;
 }
 
 async function withTimeout<T>(

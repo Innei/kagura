@@ -36,8 +36,8 @@ export interface ModelAnalyticsRow {
 }
 
 export interface SessionAnalyticsStore {
-  getByModel: () => ModelAnalyticsRow[];
-  getOverview: () => AnalyticsOverview;
-  getRecentSessions: (limit: number) => SessionAnalyticsRecord[];
+  getByModel?: () => ModelAnalyticsRow[];
+  getOverview?: () => AnalyticsOverview;
+  getRecentSessions?: (limit: number) => SessionAnalyticsRecord[];
   upsert: (threadTs: string, userId: string | undefined, usage: SessionUsageInfo) => void;
 }

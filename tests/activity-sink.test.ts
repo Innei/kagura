@@ -36,6 +36,7 @@ function createRendererStub(): SlackRenderer {
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
     upsertThreadProgressMessage: vi.fn().mockResolvedValue('progress-ts'),
     postSessionUsageInfo: vi.fn().mockResolvedValue(undefined),
+    postStructuredReply: vi.fn().mockResolvedValue(undefined),
   } as unknown as SlackRenderer;
 }
 
@@ -95,6 +96,29 @@ describe('createActivitySink', () => {
       'C123',
       'ts1',
       'Hello!',
+      expect.any(Object),
+    );
+  });
+
+  it('posts structured blocks on structured-blocks events', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    const blocks = [{ type: 'data_table', columns: [{ name: 'A' }], rows: [{ A: 1 }] }];
+    await sink.onEvent({ type: 'structured-blocks', blocks });
+
+    expect(renderer.postStructuredReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      blocks,
       expect.any(Object),
     );
   });

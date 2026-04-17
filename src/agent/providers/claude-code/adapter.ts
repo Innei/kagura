@@ -204,7 +204,15 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
   constructor(
     private readonly logger: AppLogger,
     private readonly memoryStore: MemoryStore,
-    private readonly channelPreferenceStore: ChannelPreferenceStore,
+    private readonly channelPreferenceStore: ChannelPreferenceStore = {
+      get: () => undefined,
+      upsert: (channelId, defaultWorkspaceInput) => ({
+        channelId,
+        createdAt: new Date(0).toISOString(),
+        defaultWorkspaceInput,
+        updatedAt: new Date(0).toISOString(),
+      }),
+    },
     private readonly executionProbe?: ClaudeExecutionProbe,
   ) {
     void this.logClaudeAuthStatus();

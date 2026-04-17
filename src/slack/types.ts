@@ -9,6 +9,18 @@ export interface SlackAssistantThreadsApi {
     thread_ts: string;
     status: string;
     loading_messages?: string[];
+    composing?: boolean;
+  }) => Promise<unknown>;
+  setSuggestedPrompts?: (args: {
+    channel_id: string;
+    thread_ts: string;
+    title: string;
+    prompts: Array<{ title: string; message: string }>;
+  }) => Promise<unknown>;
+  setTitle?: (args: {
+    channel_id: string;
+    thread_ts: string;
+    title: string;
   }) => Promise<unknown>;
 }
 
@@ -45,13 +57,28 @@ export interface SlackPlainTextObject {
 export type SlackTextObject = SlackMrkdwnTextObject | SlackPlainTextObject;
 
 export interface SlackSectionBlock {
-  text: SlackTextObject;
+  fields?: SlackTextObject[];
+  text?: SlackTextObject;
   type: 'section';
 }
 
 export interface SlackContextBlock {
-  elements: SlackMrkdwnTextObject[];
+  elements: SlackTextObject[];
   type: 'context';
+}
+
+export interface SlackHeaderBlock {
+  text: SlackPlainTextObject;
+  type: 'header';
+}
+
+export interface SlackDividerBlock {
+  type: 'divider';
+}
+
+export interface SlackRichTextBlock {
+  elements: unknown[];
+  type: 'rich_text';
 }
 
 export interface SlackButtonElement {
@@ -70,14 +97,59 @@ export interface SlackActionsBlock {
 
 export interface SlackImageBlock {
   alt_text?: string;
-  slack_file: { id: string };
+  slack_file?: { id: string };
+  image_url?: string;
   type: 'image';
+}
+
+export interface SlackDataTableBlock {
+  columns: Array<{ name: string; title?: string; type?: string }>;
+  rows: Array<Record<string, string | number | boolean>>;
+  type: 'data_table';
+  [key: string]: unknown;
+}
+
+export interface SlackChartBlock {
+  chart_type: 'bar' | 'line' | 'pie' | string;
+  data: unknown;
+  title?: string;
+  type: 'chart';
+  [key: string]: unknown;
+}
+
+export interface SlackCardBlock {
+  elements: SlackBlock[];
+  title?: string;
+  type: 'card';
+  [key: string]: unknown;
+}
+
+export interface SlackAlertBlock {
+  level: 'info' | 'warning' | 'error' | 'success';
+  text: string;
+  title?: string;
+  type: 'alert';
+  [key: string]: unknown;
+}
+
+export interface SlackCarouselBlock {
+  items: Array<SlackSectionBlock | SlackImageBlock>;
+  type: 'carousel';
+  [key: string]: unknown;
 }
 
 export type SlackBlock =
   | SlackActionsBlock
+  | SlackAlertBlock
+  | SlackCardBlock
+  | SlackCarouselBlock
+  | SlackChartBlock
   | SlackContextBlock
+  | SlackDataTableBlock
+  | SlackDividerBlock
+  | SlackHeaderBlock
   | SlackImageBlock
+  | SlackRichTextBlock
   | SlackSectionBlock;
 
 export interface SlackFilesUploadV2Response {
@@ -111,7 +183,7 @@ export interface SlackChatApi {
     thread_ts?: string;
   }) => Promise<{ ts?: string }>;
   update: (args: {
-    blocks?: SlackBlock[];
+    blocks?: unknown[];
     channel: string;
     text: string;
     ts: string;

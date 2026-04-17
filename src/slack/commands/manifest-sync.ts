@@ -35,10 +35,23 @@ interface SlackManifestEventSubscriptions {
   bot_events?: string[];
 }
 
+interface SlackManifestAssistantConfig {
+  [key: string]: unknown;
+  agent_config?: {
+    name?: string;
+    [key: string]: unknown;
+  };
+  suggested_prompts?: Array<{
+    message: string;
+    title: string;
+  }>;
+}
+
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
     app_home?: SlackManifestAppHome;
+    assistant_config?: SlackManifestAssistantConfig;
     bot_user?: SlackManifestBotUser;
     shortcuts?: SlackManifestShortcut[];
     slash_commands?: SlackManifestSlashCommand[];
@@ -117,9 +130,64 @@ const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
 const DESIRED_BOT_EVENTS = [
   'app_home_opened',
   'app_mention',
+  'assistant_thread_started',
   'message.channels',
   'message.im',
 ] as const;
+
+const DESIRED_ASSISTANT_CONFIG: SlackManifestAssistantConfig = {
+  agent_config: {
+    name: 'Kagura',
+  },
+  suggested_prompts: [
+    {
+      title: 'Summarize a thread',
+      message: 'Please summarize the latest discussion in this thread.',
+    },
+    {
+      title: 'Review code changes',
+      message: 'Please review the recent code changes and call out risks.',
+    },
+    {
+      title: 'Draft a plan',
+      message: 'Please create an implementation plan for this task.',
+    },
+  ],
+};
+
+function mergeAssistantConfig(
+  existingAssistantConfig: SlackManifestAssistantConfig | undefined,
+): SlackManifestAssistantConfig {
+  return {
+    ...existingAssistantConfig,
+    ...DESIRED_ASSISTANT_CONFIG,
+    agent_config: {
+      ...existingAssistantConfig?.agent_config,
+      ...DESIRED_ASSISTANT_CONFIG.agent_config,
+    },
+    suggested_prompts: mergeSuggestedPrompts(
+      existingAssistantConfig?.suggested_prompts,
+      DESIRED_ASSISTANT_CONFIG.suggested_prompts ?? [],
+    ),
+  };
+}
+
+function mergeSuggestedPrompts(
+  existingPrompts: SlackManifestAssistantConfig['suggested_prompts'],
+  desiredPrompts: NonNullable<SlackManifestAssistantConfig['suggested_prompts']>,
+): NonNullable<SlackManifestAssistantConfig['suggested_prompts']> {
+  const merged = new Map<string, { message: string; title: string }>();
+
+  for (const prompt of existingPrompts ?? []) {
+    merged.set(prompt.title, prompt);
+  }
+
+  for (const prompt of desiredPrompts) {
+    merged.set(prompt.title, prompt);
+  }
+
+  return Array.from(merged.values());
+}
 
 export interface ManifestSyncOptions {
   appId: string;
@@ -129,11 +197,11 @@ export interface ManifestSyncOptions {
   tokenStorePath?: string | undefined;
 }
 
-export async function syncSlashCommands(options: ManifestSyncOptions): Promise<void> {
+export async function syncAppManifest(options: ManifestSyncOptions): Promise<void> {
   const { appId, logger } = options;
   const tokenStorePath = options.tokenStorePath ?? './data/slack-config-tokens.json';
 
-  logger.info('Checking slash command registration for app %s...', appId);
+  logger.info('Checking app manifest for %s...', appId);
 
   const accessToken = await resolveAccessToken(options, tokenStorePath);
   if (!accessToken) {
@@ -145,7 +213,7 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
 
   const currentManifest = await exportManifest(appId, accessToken);
   if (!currentManifest) {
-    logger.error('Failed to export app manifest — skipping slash command sync');
+    logger.error('Failed to export app manifest — skipping manifest sync');
     return;
   }
 
@@ -169,6 +237,12 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const existingBotEvents = currentManifest.settings?.event_subscriptions?.bot_events ?? [];
   const missingBotEvents = DESIRED_BOT_EVENTS.filter((event) => !existingBotEvents.includes(event));
 
+  // Ensure assistant config is present
+  const existingAssistantConfig = currentManifest.features?.assistant_config;
+  const mergedAssistantConfig = mergeAssistantConfig(existingAssistantConfig);
+  const needsAssistantConfig =
+    JSON.stringify(existingAssistantConfig ?? null) !== JSON.stringify(mergedAssistantConfig);
+
   // Remove /stop if still present in manifest (replaced by reaction + shortcut)
   const commandsToKeep = (
     missingCommands.length > 0 ? [...existingCommands, ...missingCommands] : existingCommands
@@ -181,10 +255,11 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
     missingShortcuts.length === 0 &&
     !needsAlwaysOnline &&
     !needsHomeTab &&
-    missingBotEvents.length === 0
+    missingBotEvents.length === 0 &&
+    !needsAssistantConfig
   ) {
     logger.info(
-      'All %d slash commands and %d shortcuts already registered, bot always_online, home_tab, and required bot events are enabled',
+      'All %d slash commands and %d shortcuts already registered, bot always_online, home_tab, required bot events, and assistant config are enabled',
       DESIRED_COMMANDS.length,
       DESIRED_SHORTCUTS.length,
     );
@@ -214,6 +289,9 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   if (missingBotEvents.length > 0) {
     logger.info('Adding missing bot events: %s', missingBotEvents.join(', '));
   }
+  if (needsAssistantConfig) {
+    logger.info('Updating assistant_config with default suggested prompts');
+  }
 
   const updatedBotEvents = [...existingBotEvents];
   for (const event of missingBotEvents) {
@@ -230,6 +308,7 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
         ...currentManifest.features?.app_home,
         home_tab_enabled: true,
       },
+      assistant_config: mergedAssistantConfig,
       bot_user: {
         ...currentManifest.features?.bot_user,
         always_online: true,

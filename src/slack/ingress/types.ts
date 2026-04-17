@@ -20,7 +20,7 @@ import type { SlackWebClientLike } from '../types.js';
 
 export interface SlackIngressDependencies {
   analyticsStore: SessionAnalyticsStore;
-  channelPreferenceStore: ChannelPreferenceStore;
+  channelPreferenceStore?: ChannelPreferenceStore;
   claudeExecutor: AgentExecutor;
   logger: AppLogger;
   memoryStore: MemoryStore;
