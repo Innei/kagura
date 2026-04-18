@@ -1,7 +1,13 @@
 {
   "compilerOptions": {
     "rootDir": ".",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "~/*": ["./src/*"],
+      "@kagura/prompt-pipeline": ["./packages/prompt-pipeline/src/index.ts"],
+      "@kagura/prompt-formatter-claude": ["./packages/prompt-formatter-claude/src/index.ts"],
+      "@kagura/prompt-formatter-openai": ["./packages/prompt-formatter-openai/src/index.ts"]
+    }
   },
   "extends": "./tsconfig.json",
   "include": ["tests/**/*.ts", "vitest.config.ts", "tsdown.config.ts"]
