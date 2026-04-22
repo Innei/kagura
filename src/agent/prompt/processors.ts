@@ -43,6 +43,7 @@ export const toolDeclarationProcessor: PromptProcessor = {
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,
       '- AskUserQuestion: pause and ask the Slack user for a required confirmation, disambiguation, or choice before proceeding.',
+      '- set_channel_default_workspace: ONLY call when the user explicitly asks to set or change the workspace. NEVER call proactively — the workspace is already auto-injected in the session context.',
       '',
       'CRITICAL USER-CONFIRMATION RULES:',
       '- If you need confirmation, approval, disambiguation, or a choice from the user, you MUST use AskUserQuestion instead of assuming an answer.',
