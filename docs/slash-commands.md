@@ -23,14 +23,15 @@ All responses are **ephemeral** (only visible to the invoking user).
 
 ## Stopping in-progress replies
 
-Two mechanisms are available to cancel an active bot reply:
+Three mechanisms are available to cancel an active bot reply. Slack blocks custom slash commands inside threads ([Slack docs](https://docs.slack.dev/interactivity/implementing-slash-commands)), so the thread-local options rely on reactions, shortcuts, or plain-text keywords rather than `/commands`.
 
-| Method               | How to use                                                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Emoji reaction**   | Add a :octagonal_sign: (`:octagonal_sign:`) or :no_entry_sign: (`:stop_sign:`) reaction to any message in the thread (the trigger message, the bot's progress message, or the thread root) |
-| **Message shortcut** | Right-click (or `...` menu) on any message in the thread -> **Stop Reply**                                                                                                                 |
+| Method               | How to use                                                                                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keyword reply**    | Post a thread reply whose only content (after trimming punctuation) is `stop` or `cancel` (case-insensitive). The bot cancels the in-progress reply and adds a :octagonal_sign: reaction to your message. |
+| **Emoji reaction**   | Add a :octagonal_sign: (`:octagonal_sign:`) or :no_entry_sign: (`:stop_sign:`) reaction to any message in the thread (the trigger message, the bot's progress message, or the thread root)                |
+| **Message shortcut** | Right-click (or `...` menu) on any message in the thread -> **Stop Reply**                                                                                                                                |
 
-Both stop all active executions in the thread and finalize the bot's progress message as "stopped."
+All three stop active executions in the thread and finalize the bot's progress message as "stopped."
 
 ## Reaction lifecycle
 

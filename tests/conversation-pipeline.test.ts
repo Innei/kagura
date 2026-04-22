@@ -11,6 +11,7 @@ import {
   acknowledgeAndLog,
   DEFAULT_CONVERSATION_STEPS,
   executeAgent,
+  handleStopKeywordStep,
   prepareThreadContext,
   resolveSessionStep,
   resolveWorkspaceStep,
@@ -85,13 +86,20 @@ describe('runConversationPipeline', () => {
 
 describe('DEFAULT_CONVERSATION_STEPS', () => {
   it('exports the expected number of steps', () => {
-    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(6);
+    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(7);
   });
 
   it('contains only functions', () => {
     for (const step of DEFAULT_CONVERSATION_STEPS) {
       expect(typeof step).toBe('function');
     }
+  });
+
+  it('runs handleStopKeywordStep before stopActiveExecutionsStep', () => {
+    const stopKeywordIdx = DEFAULT_CONVERSATION_STEPS.indexOf(handleStopKeywordStep);
+    const stopActiveIdx = DEFAULT_CONVERSATION_STEPS.indexOf(stopActiveExecutionsStep);
+    expect(stopKeywordIdx).toBeGreaterThanOrEqual(0);
+    expect(stopActiveIdx).toBeGreaterThan(stopKeywordIdx);
   });
 });
 
@@ -177,6 +185,8 @@ function createMinimalPipelineContext(overrides?: {
       } as unknown as MemoryStore,
       renderer: {
         addAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
+        removeAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
+        addCompletionReaction: vi.fn().mockResolvedValue(undefined),
         clearUiState: vi.fn().mockResolvedValue(undefined),
         deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
         finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
@@ -270,6 +280,105 @@ describe('acknowledgeAndLog step', () => {
       'ts1',
       'ts1',
     );
+  });
+});
+
+describe('handleStopKeywordStep', () => {
+  it('continues for non-stop text', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'tell me a joke';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadExecutionRegistry.stopAll).not.toHaveBeenCalled();
+    expect(ctx.client.reactions.add).not.toHaveBeenCalled();
+  });
+
+  it('cancels and reacts when text is exactly "stop"', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'stop';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result).toEqual({ action: 'done', reason: 'user stop keyword' });
+    expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'user_stop');
+    expect(ctx.client.reactions.add).toHaveBeenCalledWith({
+      channel: 'C123',
+      name: 'octagonal_sign',
+      timestamp: 'ts1',
+    });
+  });
+
+  it('matches case-insensitively and strips trailing punctuation', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'STOP!';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('done');
+    expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalled();
+  });
+
+  it('matches "cancel" as a synonym', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'cancel';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('done');
+  });
+
+  it('strips leading user mention before matching', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = '<@U_BOT> stop';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('done');
+  });
+
+  it('ignores stop keyword embedded in longer text', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'please stop the tests gracefully';
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadExecutionRegistry.stopAll).not.toHaveBeenCalled();
+  });
+
+  it('removes acknowledgement reaction when it was added', async () => {
+    const ctx = createMinimalPipelineContext({ addAcknowledgementReaction: true });
+    ctx.message.text = 'stop';
+
+    await handleStopKeywordStep(ctx);
+
+    expect(ctx.deps.renderer.removeAcknowledgementReaction).toHaveBeenCalledWith(
+      ctx.client,
+      'C123',
+      'ts1',
+    );
+  });
+
+  it('does not remove acknowledgement reaction when it was never added', async () => {
+    const ctx = createMinimalPipelineContext({ addAcknowledgementReaction: false });
+    ctx.message.text = 'stop';
+
+    await handleStopKeywordStep(ctx);
+
+    expect(ctx.deps.renderer.removeAcknowledgementReaction).not.toHaveBeenCalled();
+  });
+
+  it('swallows errors from reactions.add', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = 'stop';
+    vi.mocked(ctx.client.reactions.add).mockRejectedValueOnce(new Error('already_reacted'));
+
+    const result = await handleStopKeywordStep(ctx);
+
+    expect(result.action).toBe('done');
+    expect(ctx.deps.logger.warn).toHaveBeenCalled();
   });
 });
 

@@ -84,6 +84,67 @@ export async function acknowledgeAndLog(
   return CONTINUE;
 }
 
+const STOP_KEYWORDS: ReadonlySet<string> = new Set(['stop', 'cancel']);
+
+function normalizeStopKeyword(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const stripped = text
+    .replaceAll(/<@[^>]+>/g, '')
+    .replace(/[.!?。！？]+$/u, '')
+    .trim()
+    .toLowerCase();
+  return stripped.length > 0 ? stripped : undefined;
+}
+
+export async function handleStopKeywordStep(
+  ctx: ConversationPipelineContext,
+): Promise<PipelineStepResult> {
+  const { client, deps, message, options, threadTs } = ctx;
+  const keyword = normalizeStopKeyword(message.text);
+  if (!keyword || !STOP_KEYWORDS.has(keyword)) {
+    return CONTINUE;
+  }
+
+  runtimeInfo(
+    deps.logger,
+    'Stop keyword %s detected in thread %s — cancelling active executions',
+    keyword,
+    threadTs,
+  );
+
+  const result = await deps.threadExecutionRegistry.stopAll(threadTs, 'user_stop');
+  runtimeInfo(
+    deps.logger,
+    'Stop keyword in thread %s: stopped=%d failed=%d',
+    threadTs,
+    result.stopped,
+    result.failed,
+  );
+
+  if (options.addAcknowledgementReaction) {
+    await deps.renderer
+      .removeAcknowledgementReaction(client, message.channel, message.ts)
+      .catch((error) => {
+        deps.logger.warn(
+          'Failed to remove acknowledgement reaction after stop keyword: %s',
+          String(error),
+        );
+      });
+  }
+
+  await client.reactions
+    .add({
+      channel: message.channel,
+      name: 'octagonal_sign',
+      timestamp: message.ts,
+    })
+    .catch((error) => {
+      deps.logger.warn('Failed to add stop reaction to user message: %s', String(error));
+    });
+
+  return { action: 'done', reason: 'user stop keyword' };
+}
+
 export async function stopActiveExecutionsStep(
   ctx: ConversationPipelineContext,
 ): Promise<PipelineStepResult> {
@@ -379,6 +440,7 @@ function resolveExecutor(
 
 export const DEFAULT_CONVERSATION_STEPS: PipelineStep[] = [
   acknowledgeAndLog,
+  handleStopKeywordStep,
   stopActiveExecutionsStep,
   resolveWorkspaceStep,
   resolveSessionStep,
