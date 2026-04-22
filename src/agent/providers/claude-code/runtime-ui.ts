@@ -3,6 +3,10 @@ import path from 'node:path';
 import type { SDKPartialAssistantMessage } from '@anthropic-ai/claude-agent-sdk';
 
 import type { AgentActivityState } from '~/agent/types.js';
+import {
+  DEFAULT_ASSISTANT_THINKING_STATUS,
+  getShuffledThinkingMessages,
+} from '~/slack/thinking-messages.js';
 
 import { RECALL_MEMORY_TOOL_NAME } from './tools/recall-memory.js';
 import { SAVE_MEMORY_TOOL_NAME } from './tools/save-memory.js';
@@ -35,7 +39,7 @@ type StreamToolStopEvent = {
 export function createRuntimeUiStateTracker(): RuntimeUiStateTracker {
   return {
     loadingMessages: [],
-    sessionStatus: 'Thinking...',
+    sessionStatus: DEFAULT_ASSISTANT_THINKING_STATUS,
     systemStatuses: {},
     taskStatus: undefined,
     textStreamingActive: false,
@@ -215,7 +219,7 @@ function pickRuntimeStatus(runtimeUi: RuntimeUiStateTracker): string {
       runtimeUi.taskStatus?.text ??
       pickRuntimeSystemStatus(runtimeUi) ??
       runtimeUi.sessionStatus ??
-      'Thinking...',
+      DEFAULT_ASSISTANT_THINKING_STATUS,
   );
 }
 
@@ -241,6 +245,13 @@ function buildRuntimeLoadingMessages(runtimeUi: RuntimeUiStateTracker, status: s
 
   if (deduped.length > 0) {
     return deduped;
+  }
+
+  // Generic thinking: emit the shared carousel pool instead of echoing a
+  // single line equal to `status`. Slack renders these as the rotating
+  // loading_messages list inside the assistant-thread container.
+  if (status === DEFAULT_ASSISTANT_THINKING_STATUS) {
+    return getShuffledThinkingMessages();
   }
 
   return status ? [normalizeLoadingMessage(status)] : [];

@@ -1,5 +1,24 @@
+// Slack's `assistant.threads.setStatus` drives the assistant-thread container's
+// loading/status UI — NOT a channel message. Two fields ride that call:
+//   - `status`: a single short line rendered as "{AppName} is {status}" in the
+//     thread header.
+//   - `loading_messages`: a list powering the rotating loading indicator inside
+//     the assistant-thread panel. Entries should each read naturally after
+//     "is ", same as `status`.
+// Both `THINKING_STATUS_MESSAGES` and `THINKING_LOADING_MESSAGES` below are
+// "post-is" fragments. They overlap semantically but stay separate pools so
+// the rotating header and the loading list don't show identical copies at the
+// same instant.
+
+// Canonical default string used whenever no tool-specific progress applies.
+// Kept capitalized ("Thinking...") per product preference, accepting the
+// "{AppName} is Thinking..." rendering. All `'Thinking...'` literals across
+// the codebase MUST reference this constant so the default can evolve in one
+// place and maps consistently to Slack's `status` / `loading_messages`.
+export const DEFAULT_ASSISTANT_THINKING_STATUS = 'Thinking...';
+
 export const THINKING_STATUS_MESSAGES = [
-  'Thinking...',
+  DEFAULT_ASSISTANT_THINKING_STATUS,
   'Gathering thoughts...',
   'Turning the question over...',
   'Following a thread...',

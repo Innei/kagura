@@ -21,6 +21,7 @@ import type {
 import type { GeneratedOutputFile, ModelUsageInfo, SessionUsageInfo } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
+import { DEFAULT_ASSISTANT_THINKING_STATUS } from '~/slack/thinking-messages.js';
 
 import {
   applyStreamEventToUiState,
@@ -308,7 +309,7 @@ async function handleSessionStateChangedMessage(
 ): Promise<void> {
   logger.info('Claude session state changed: %s', message.state);
   if (message.state === 'running') {
-    setSessionStatus(handlers.runtimeUi, 'Thinking...');
+    setSessionStatus(handlers.runtimeUi, DEFAULT_ASSISTANT_THINKING_STATUS);
     clearSystemStatus(handlers.runtimeUi, 'permission');
   } else if (message.state === 'requires_action') {
     setSystemStatus(handlers.runtimeUi, 'permission', 'Awaiting permission...');

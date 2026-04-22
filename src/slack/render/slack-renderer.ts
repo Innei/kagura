@@ -7,6 +7,7 @@ import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
 import {
+  DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
   rotateThinkingStatus,
   THINKING_STATUS_MESSAGES,
@@ -19,7 +20,7 @@ const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
 const THINKING_STATUS_SET = new Set<string>(THINKING_STATUS_MESSAGES);
 
 function isThinkingStatus(status: string | undefined): boolean {
-  return !status || status === 'Thinking...' || THINKING_STATUS_SET.has(status);
+  return !status || status === DEFAULT_ASSISTANT_THINKING_STATUS || THINKING_STATUS_SET.has(status);
 }
 
 interface RendererUiState {
@@ -107,7 +108,7 @@ export class SlackRenderer {
 
     await this.setUiState(client, channelId, {
       threadTs,
-      status: 'Thinking...',
+      status: DEFAULT_ASSISTANT_THINKING_STATUS,
       loadingMessages: loadingMessages ? [...loadingMessages] : getShuffledThinkingMessages(),
       clear: false,
     });

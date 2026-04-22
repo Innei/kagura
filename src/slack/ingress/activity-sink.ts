@@ -16,7 +16,11 @@ import type { SessionStore } from '~/session/types.js';
 
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
-import { getShuffledThinkingMessages } from '../thinking-messages.js';
+import {
+  DEFAULT_ASSISTANT_THINKING_STATUS,
+  getShuffledThinkingMessages,
+  THINKING_LOADING_MESSAGES,
+} from '../thinking-messages.js';
 import type { SlackWebClientLike } from '../types.js';
 
 export interface ActivitySinkOptions {
@@ -83,6 +87,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
+  // Any activity drawn from the shared thinking pool (or the default status
+  // itself) is "generic thinking" and must not promote the state to a
+  // progress-message — even when runtime-ui's shuffle picks different entries
+  // from the sink's initial shuffle.
+  const genericThinkingActivities = new Set<string>([
+    DEFAULT_ASSISTANT_THINKING_STATUS,
+    ...THINKING_LOADING_MESSAGES,
+  ]);
 
   const safeRender = async <T>(
     label: string,
@@ -108,7 +120,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       return (
         normalizedActivity.length > 0 &&
         normalizedActivity !== normalizedStatus &&
-        !(defaultThinkingState.activities ?? []).includes(normalizedActivity)
+        !genericThinkingActivities.has(normalizedActivity)
       );
     });
 
@@ -563,7 +575,7 @@ function formatUserInputQuestionMessage(
 function createDefaultThinkingState(threadTs: string): AgentActivityState {
   return {
     threadTs,
-    status: 'Thinking...',
+    status: DEFAULT_ASSISTANT_THINKING_STATUS,
     activities: getShuffledThinkingMessages(),
     clear: false,
   };
