@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "dotenv": "17.4.0"
+  },
   "devDependencies": {
     "@types/node": "25.5.2",
     "typescript": "^6.0.2",
