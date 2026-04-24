@@ -16,7 +16,7 @@ import type { SessionStore } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
-import type { SlackRenderer } from '../render/slack-renderer.js';
+import type { PostedThreadReply, SlackRenderer } from '../render/slack-renderer.js';
 import {
   DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
@@ -85,6 +85,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     | undefined;
   let hasSentToolbarInTurn = false;
   let sessionUsageInfo: SessionUsageInfo | undefined;
+  let lastAssistantReply: PostedThreadReply | undefined;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -183,9 +184,12 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
     const includeToolbar = !hasSentToolbarInTurn;
     try {
-      await renderer.postThreadReply(client, channel, threadTs, text, {
+      const postedReply = await renderer.postThreadReply(client, channel, threadTs, text, {
         ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
       });
+      if (postedReply) {
+        lastAssistantReply = postedReply;
+      }
       hasSentToolbarInTurn = true;
     } catch (error) {
       logger.warn('Failed to post assistant thread reply: %s', String(error));
@@ -504,13 +508,32 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
             });
         }
       }
-      // Post session usage info as the final context block
+      // Attach session usage to the final assistant reply so multi-agent threads
+      // do not interleave detached usage-only messages between agent replies.
       if (executionCompletedSuccessfully && sessionUsageInfo) {
-        await renderer
-          .postSessionUsageInfo(client, channel, threadTs, sessionUsageInfo)
-          .catch((err) => {
-            logger.warn('Failed to post session usage info: %s', String(err));
-          });
+        let usageAttached = false;
+        if (lastAssistantReply) {
+          usageAttached =
+            (await renderer
+              .appendSessionUsageInfoToThreadReply(
+                client,
+                channel,
+                threadTs,
+                lastAssistantReply,
+                sessionUsageInfo,
+              )
+              .catch((err) => {
+                logger.warn('Failed to append session usage info: %s', String(err));
+                return false;
+              })) === true;
+        }
+        if (!usageAttached) {
+          await renderer
+            .postSessionUsageInfo(client, channel, threadTs, sessionUsageInfo)
+            .catch((err) => {
+              logger.warn('Failed to post session usage info: %s', String(err));
+            });
+        }
       }
       if (sessionUsageInfo && analyticsStore) {
         try {

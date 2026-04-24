@@ -45,6 +45,12 @@ interface RendererUiState {
   toolHistory?: Map<string, number> | undefined;
 }
 
+export interface PostedThreadReply {
+  blocks?: SlackBlock[];
+  text: string;
+  ts: string;
+}
+
 const DEFAULT_PROGRESS_STATUS = 'Working on your request...';
 const DEFAULT_SLACK_OPERATION_TIMEOUT_MS = 15_000;
 
@@ -381,7 +387,7 @@ export class SlackRenderer {
     threadTs: string,
     text: string,
     options?: { workspaceLabel?: string; toolHistory?: Map<string, number> },
-  ): Promise<string | undefined> {
+  ): Promise<PostedThreadReply | undefined> {
     if (!text.trim()) {
       return undefined;
     }
@@ -418,7 +424,7 @@ export class SlackRenderer {
       }
     }
 
-    let lastTs: string | undefined;
+    let lastReply: PostedThreadReply | undefined;
     for (const [index, batch] of batches.entries()) {
       const response = await this.withSlackTiming(
         'chat.postMessage(thread-reply)',
@@ -431,10 +437,16 @@ export class SlackRenderer {
             blocks: batch.blocks,
           }),
       );
-      lastTs = response.ts;
+      if (response.ts) {
+        lastReply = {
+          text: batch.text,
+          ts: response.ts,
+          ...(batch.blocks ? { blocks: batch.blocks as SlackBlock[] } : {}),
+        };
+      }
     }
 
-    return lastTs;
+    return lastReply;
   }
 
   async postGeneratedImages(
@@ -499,6 +511,53 @@ export class SlackRenderer {
           ],
         }),
     );
+  }
+
+  async appendSessionUsageInfoToThreadReply(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    reply: PostedThreadReply,
+    usage: SessionUsageInfo,
+  ): Promise<boolean> {
+    const usageText = formatSessionUsageInfo(usage);
+    if (!usageText) return true;
+
+    const existingBlocks = reply.blocks ?? [];
+    if (
+      existingBlocks.some(
+        (block) =>
+          block.type === 'context' && block.elements.some((element) => element.text === usageText),
+      )
+    ) {
+      return true;
+    }
+    if (existingBlocks.length >= 50) {
+      return false;
+    }
+
+    const blocks: SlackBlock[] = [
+      ...existingBlocks,
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: usageText }],
+      },
+    ];
+    const text = reply.text.includes(usageText) ? reply.text : `${reply.text}\n\n${usageText}`;
+
+    await this.withSlackTiming(
+      'chat.update(session-usage)',
+      `channel=${channelId} thread=${threadTs} messageTs=${reply.ts} textLength=${text.length}`,
+      async () =>
+        client.chat.update({
+          channel: channelId,
+          ts: reply.ts,
+          text,
+          blocks,
+        }),
+    );
+
+    return true;
   }
 
   private async withSlackTiming<T>(

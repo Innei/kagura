@@ -198,6 +198,68 @@ describe('SlackRenderer.postSessionUsageInfo', () => {
   });
 });
 
+describe('SlackRenderer.appendSessionUsageInfoToThreadReply', () => {
+  it('updates the assistant reply with a usage context block', async () => {
+    const { client } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+    const usage: SessionUsageInfo = {
+      durationMs: 12_345,
+      totalCostUSD: 0.1234,
+      modelUsage: [
+        {
+          cacheCreationInputTokens: 0,
+          cacheHitRate: 50,
+          cacheReadInputTokens: 50_000,
+          costUSD: 0.1234,
+          inputTokens: 100_000,
+          inputTokensIncludeCache: true,
+          model: 'gpt-5.5',
+          outputTokens: 5_000,
+        },
+      ],
+    };
+
+    const appended = await renderer.appendSessionUsageInfoToThreadReply(
+      client,
+      'C1',
+      '1712345678.000100',
+      {
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: 'Done' },
+          },
+        ],
+        text: 'Done',
+        ts: 'reply-ts',
+      },
+      usage,
+    );
+
+    expect(appended).toBe(true);
+    expect(client.chat.update).toHaveBeenCalledWith({
+      channel: 'C1',
+      ts: 'reply-ts',
+      text: expect.stringContaining('gpt-5.5: 55.0k non-cached in + out (50% cache)'),
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: 'Done' },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: expect.stringContaining('gpt-5.5: 55.0k non-cached in + out (50% cache)'),
+            },
+          ],
+        },
+      ],
+    });
+  });
+});
+
 describe('SlackRenderer.postGeneratedFiles', () => {
   it('uploads non-image files without posting extra image blocks', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'slack-renderer-files-'));

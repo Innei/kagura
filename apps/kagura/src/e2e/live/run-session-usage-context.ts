@@ -25,11 +25,11 @@ interface SessionUsageContextResult {
   failureMessage?: string;
   matched: {
     assistantReplied: boolean;
+    usageMessageAttachedToAssistant: boolean;
     usageMessageAfterAssistant: boolean;
     usageMessageHasContextBlock: boolean;
     usageMessageMatchesFormat: boolean;
     usageMessageObserved: boolean;
-    usageMessageSeparateFromAssistant: boolean;
   };
   passed: boolean;
   rootMessageTs?: string;
@@ -58,11 +58,11 @@ async function main(): Promise<void> {
     channelId: env.SLACK_E2E_CHANNEL_ID,
     matched: {
       assistantReplied: false,
+      usageMessageAttachedToAssistant: false,
       usageMessageAfterAssistant: false,
       usageMessageHasContextBlock: false,
       usageMessageMatchesFormat: false,
       usageMessageObserved: false,
-      usageMessageSeparateFromAssistant: false,
     },
     passed: false,
     runId,
@@ -109,8 +109,9 @@ async function main(): Promise<void> {
           result.usageMessageTs = usageMessage.ts;
           result.usageContextTexts = usageMessage.contextTexts;
           result.matched.usageMessageObserved = true;
-          result.matched.usageMessageSeparateFromAssistant = usageMessage.ts !== assistantReply.ts;
-          result.matched.usageMessageAfterAssistant = isTsAfter(usageMessage.ts, assistantReply.ts);
+          result.matched.usageMessageAttachedToAssistant = usageMessage.ts === assistantReply.ts;
+          result.matched.usageMessageAfterAssistant =
+            usageMessage.ts === assistantReply.ts || isTsAfter(usageMessage.ts, assistantReply.ts);
           result.matched.usageMessageHasContextBlock = usageMessage.contextTexts.length > 0;
           result.matched.usageMessageMatchesFormat =
             isUsageSummaryText(usageMessage.text) ||
@@ -133,7 +134,7 @@ async function main(): Promise<void> {
     console.info('[e2e] Session usage context E2E passed.');
     console.info('[e2e] Root thread: %s', result.rootMessageTs);
     console.info('[e2e] Assistant reply: %s', result.assistantReplyTs);
-    console.info('[e2e] Usage message: %s', result.usageMessageTs);
+    console.info('[e2e] Usage context message: %s', result.usageMessageTs);
   } catch (error) {
     result.failureMessage = error instanceof Error ? error.message : String(error);
     caughtError = error;
@@ -199,7 +200,9 @@ function findUsageMessage(input: {
   | undefined {
   for (const message of input.replies.messages ?? []) {
     if (!message.ts || message.ts === input.rootTs) continue;
-    if (!isTsAfter(message.ts, input.assistantReplyTs)) continue;
+    if (message.ts !== input.assistantReplyTs && !isTsAfter(message.ts, input.assistantReplyTs)) {
+      continue;
+    }
     if (!isBotAuthoredMessage(message, input.botUserId)) continue;
 
     const text = typeof message.text === 'string' ? message.text.trim() : '';
@@ -265,13 +268,13 @@ function assertResult(result: SessionUsageContextResult): void {
     failures.push('assistant did not emit the expected marker reply');
   }
   if (!result.matched.usageMessageObserved) {
-    failures.push('session usage message was not observed after the assistant reply');
+    failures.push('session usage context was not observed on or after the assistant reply');
   }
-  if (!result.matched.usageMessageSeparateFromAssistant) {
-    failures.push('session usage details were not posted as a separate Slack message');
+  if (!result.matched.usageMessageAttachedToAssistant) {
+    failures.push('session usage details were not attached to the assistant reply');
   }
   if (!result.matched.usageMessageAfterAssistant) {
-    failures.push('session usage message did not appear after the assistant reply');
+    failures.push('session usage context did not appear on or after the assistant reply');
   }
   if (!result.matched.usageMessageHasContextBlock) {
     failures.push('session usage message does not include a Slack context block');
@@ -303,9 +306,9 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'session-usage-context',
-  title: 'Session Usage Context Appears After Reply',
+  title: 'Session Usage Context Stays With Reply',
   description:
-    'Verify that a successful run posts the assistant reply first and then a separate Slack context message containing session usage and cost details.',
+    'Verify that a successful run attaches session usage and cost details to the assistant reply instead of posting a detached context message.',
   keywords: ['session', 'usage', 'context', 'cost', 'tokens', 'reply'],
   run: main,
 };

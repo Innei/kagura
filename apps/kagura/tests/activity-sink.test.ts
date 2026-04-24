@@ -25,6 +25,7 @@ function createTestLogger(): AppLogger {
 function createRendererStub(): SlackRenderer {
   return {
     addAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
+    appendSessionUsageInfoToThreadReply: vi.fn().mockResolvedValue(true),
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
@@ -741,6 +742,58 @@ describe('createActivitySink', () => {
     await sink.finalize();
 
     expect(analyticsStore.upsert).toHaveBeenCalledWith('ts1', 'U999', usage);
+  });
+
+  it('appends usage info to the last assistant reply instead of posting a detached message', async () => {
+    const renderer = createRendererStub();
+    vi.mocked(renderer.postThreadReply).mockResolvedValue({
+      blocks: [],
+      text: 'Done',
+      ts: 'reply-ts',
+    });
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U999',
+    });
+
+    const usage = {
+      totalCostUSD: 0.01,
+      durationMs: 5000,
+      modelUsage: [
+        {
+          model: 'claude-sonnet-4',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadInputTokens: 2000,
+          cacheCreationInputTokens: 100,
+          cacheHitRate: 66.7,
+          costUSD: 0.01,
+        },
+      ],
+    };
+
+    await sink.onEvent({ type: 'assistant-message', text: 'Done' });
+    await sink.onEvent({ type: 'usage-info', usage });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(renderer.appendSessionUsageInfoToThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      {
+        blocks: [],
+        text: 'Done',
+        ts: 'reply-ts',
+      },
+      usage,
+    );
+    expect(renderer.postSessionUsageInfo).not.toHaveBeenCalled();
   });
 
   it('does not persist analytics when no analyticsStore provided', async () => {
