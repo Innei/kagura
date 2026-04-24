@@ -9,7 +9,8 @@
     "./config/env-loader": "./src/config/env-loader.ts",
     "./config/env-writer": "./src/config/env-writer.ts",
     "./config/json-writer": "./src/config/json-writer.ts",
-    "./slack/manifest-template": "./src/slack/manifest-template.ts"
+    "./slack/manifest-template": "./src/slack/manifest-template.ts",
+    "./slack/prefill-url": "./src/slack/prefill-url.ts"
   },
   "scripts": {
     "test": "vitest run",
