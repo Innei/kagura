@@ -4,6 +4,7 @@
 
 _Every thread a stage, every response a dance_
 
+[![npm](https://img.shields.io/npm/v/@innei/kagura?style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@innei/kagura)
 [![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.33-f69220?style=flat-square)](https://pnpm.io)
@@ -41,7 +42,33 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 
 **Operations** — Auto-provisioned manifest (commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
 
-## Getting started
+## Usage
+
+Install globally and launch — kagura ships as a single-file ESM bin that auto-provisions the Slack app manifest on startup.
+
+```bash
+npm install -g @innei/kagura
+# or: pnpm add -g @innei/kagura
+
+# provide env via shell / .env / systemd / docker
+export SLACK_BOT_TOKEN=xoxb-...
+export SLACK_APP_TOKEN=xapp-...
+export SLACK_SIGNING_SECRET=...
+export REPO_ROOT_DIR=/absolute/path/to/repos
+export ANTHROPIC_API_KEY=sk-ant-...
+
+kagura
+```
+
+Or one-shot with `npx`:
+
+```bash
+npx @innei/kagura
+```
+
+Prerequisites: Node.js ≥ 22, a Slack app with Socket Mode enabled, and the `claude` CLI logged in (`claude login`) or `ANTHROPIC_API_KEY` set. See [docs/configuration.md](docs/configuration.md) for the full env reference, manifest auto-sync, token rotation, and Docker deployment.
+
+## Getting started (development)
 
 ```bash
 git clone https://github.com/Innei/kagura.git
@@ -50,8 +77,6 @@ pnpm install
 cp .env.example .env # fill in SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET, REPO_ROOT_DIR
 pnpm dev             # or: pnpm build && pnpm start
 ```
-
-See [docs/configuration.md](docs/configuration.md) for the full environment variable reference, Slack app manifest, token rotation, and Docker deployment.
 
 ## Documentation
 

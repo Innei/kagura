@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createApplication } from './application.js';
 import { redactUnknown } from './logger/redact.js';
 

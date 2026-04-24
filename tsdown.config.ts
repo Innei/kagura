@@ -18,6 +18,8 @@ export default defineConfig({
   clean: true,
   tsconfig: 'tsconfig.json',
   fixedExtension: false,
+  noExternal: [/.*/],
+  external: ['better-sqlite3', '@anthropic-ai/claude-agent-sdk'],
   define: {
     __GIT_HASH__: JSON.stringify(git('git rev-parse HEAD')),
     __GIT_COMMIT_DATE__: JSON.stringify(git('git log -1 --format=%cI HEAD')),
