@@ -15,22 +15,21 @@ const TRANSIENT_NETWORK_ERROR_CODES = new Set([
 ]);
 
 const TRANSIENT_NETWORK_MESSAGE_PATTERNS = [
-  /Client network socket disconnected before secure TLS connection was established/i,
+  /client network socket disconnected before secure tls connection was established/i,
   /socket hang up/i,
-  /read ECONNRESET/i,
-  /connect ETIMEDOUT/i,
-  /TLS connection was established/i,
+  /read econnreset/i,
+  /connect etimedout/i,
+  /tls connection was established/i,
 ];
 
 export interface SlackNetworkStartRetryOptions {
-  maxAttempts?: number;
   baseDelayMs?: number;
+  maxAttempts?: number;
   maxDelayMs?: number;
 }
 
 export interface SlackWebClientOptionsLike {
   agent?: HttpAgent;
-  timeout?: number;
   retryConfig?: {
     retries: number;
     factor: number;
@@ -38,6 +37,7 @@ export interface SlackWebClientOptionsLike {
     maxTimeout: number;
     randomize: boolean;
   };
+  timeout?: number;
 }
 
 export function createSlackNetworkAgent(): https.Agent {
@@ -110,7 +110,12 @@ export function getSlackNetworkErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+  if (
+    typeof error === 'object' &&
+    error &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
     return error.message;
   }
 
@@ -159,4 +164,3 @@ export async function startSlackAppWithRetry(
     }
   }
 }
-

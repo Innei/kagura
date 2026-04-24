@@ -13,9 +13,8 @@ process.env.CLAUDE_PERMISSION_MODE = 'default';
 
 const { createApplication } = await import('~/application.js');
 const { env } = await import('~/env/server.js');
-const { PERMISSION_APPROVE_ACTION_ID, PERMISSION_DENY_ACTION_ID } = await import(
-  '~/slack/interaction/permission-bridge.js'
-);
+const { PERMISSION_APPROVE_ACTION_ID, PERMISSION_DENY_ACTION_ID } =
+  await import('~/slack/interaction/permission-bridge.js');
 
 interface PermissionApprovalResult {
   botUserId: string;
@@ -199,7 +198,7 @@ function extractToolName(text: string): string | undefined {
     return markdownMatch[1].trim();
   }
 
-  const plainTextMatch = text.match(/Claude 想要使用\s+([^\n]+?)\s+工具/u);
+  const plainTextMatch = text.match(/Claude 想要使用\s+(\S(?:[^\n]*\S)?)\s+工具/u);
   if (plainTextMatch?.[1]?.trim()) {
     return plainTextMatch[1].trim();
   }

@@ -82,7 +82,9 @@ export class SlackPermissionBridge {
         reason: 'cancelled',
         toolName: request.toolName,
       });
-      throw request.signal.reason ?? new Error(`Permission request aborted for ${request.threadTs}`);
+      throw (
+        request.signal.reason ?? new Error(`Permission request aborted for ${request.threadTs}`)
+      );
     }
 
     return await new Promise<SlackPermissionResponse>((resolve, reject) => {
@@ -218,10 +220,7 @@ export class SlackPermissionBridge {
   }
 }
 
-export function createPermissionActionHandler(
-  bridge: SlackPermissionBridge,
-  allowed: boolean,
-) {
+export function createPermissionActionHandler(bridge: SlackPermissionBridge, allowed: boolean) {
   return async (args: {
     ack: () => Promise<void>;
     body: unknown;
@@ -256,7 +255,9 @@ function buildPermissionRequestText(request: SlackPermissionRequest): string {
   ].join('\n');
 }
 
-function buildPermissionRequestBlocks(request: SlackPermissionRequest): Array<SlackSectionBlock | SlackActionsBlock> {
+function buildPermissionRequestBlocks(
+  request: SlackPermissionRequest,
+): Array<SlackSectionBlock | SlackActionsBlock> {
   const text = buildPermissionRequestText(request);
   return [
     {
@@ -305,9 +306,7 @@ function buildResolvedPermissionText(input: {
   }
 
   const actor = input.actionUserId ? ` by <@${input.actionUserId}>` : '';
-  return input.allowed
-    ? `已批准 ${input.toolName}${actor}`
-    : `已拒绝 ${input.toolName}${actor}`;
+  return input.allowed ? `已批准 ${input.toolName}${actor}` : `已拒绝 ${input.toolName}${actor}`;
 }
 
 function buildResolvedPermissionBlocks(input: {

@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppLogger } from '~/logger/index.js';
 import {
+  createPermissionActionHandler,
   PERMISSION_APPROVE_ACTION_ID,
   PERMISSION_DENY_ACTION_ID,
   SlackPermissionBridge,
-  createPermissionActionHandler,
 } from '~/slack/interaction/permission-bridge.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 
@@ -35,7 +35,7 @@ function createClient(): SlackWebClientLike {
     },
     conversations: { replies: vi.fn(async () => ({ messages: [] })) },
     files: { uploadV2: vi.fn(async () => ({ files: [] })) },
-    reactions: { add: vi.fn(async () => ({})), remove: vi.fn(async () => ({ })) },
+    reactions: { add: vi.fn(async () => ({})), remove: vi.fn(async () => ({})) },
     views: { open: vi.fn(async () => ({})), publish: vi.fn(async () => ({})) },
   } as unknown as SlackWebClientLike;
 }

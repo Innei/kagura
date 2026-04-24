@@ -156,7 +156,10 @@ async function main(): Promise<void> {
     console.info('Assistant reply: %s', result.assistantReplyTs);
     console.info('Progress finalized: %s', result.matched.progressMessageFinalized);
     console.info('Retained in thread: %s', result.matched.progressMessageRetainedInThread);
-    console.info('Retained progress has no tool history: %s', result.matched.progressMessageHasNoToolHistory);
+    console.info(
+      'Retained progress has no tool history: %s',
+      result.matched.progressMessageHasNoToolHistory,
+    );
   } catch (error) {
     result.failureMessage = error instanceof Error ? error.message : String(error);
     caughtError = error;
@@ -211,7 +214,10 @@ function containsToolHistory(text?: string, blocks?: unknown[]): boolean {
     return true;
   }
 
-  for (const block of (blocks ?? []) as Array<{ elements?: Array<Record<string, unknown>>; type?: string }>) {
+  for (const block of (blocks ?? []) as Array<{
+    elements?: Array<Record<string, unknown>>;
+    type?: string;
+  }>) {
     if (block.type !== 'context') continue;
     for (const element of block.elements ?? []) {
       const value = typeof element.text === 'string' ? element.text : '';

@@ -63,9 +63,14 @@ describe('slack network guard', () => {
     const start = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(
-        Object.assign(new Error('Client network socket disconnected before secure TLS connection was established'), {
-          code: 'ECONNRESET',
-        }),
+        Object.assign(
+          new Error(
+            'Client network socket disconnected before secure TLS connection was established',
+          ),
+          {
+            code: 'ECONNRESET',
+          },
+        ),
       )
       .mockResolvedValueOnce();
     const logger = { warn: vi.fn() } as any;

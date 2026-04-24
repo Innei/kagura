@@ -42,10 +42,14 @@ describe('Claude permission bridge', () => {
     ).buildToolOptions({ requestPermission });
 
     await expect(
-      toolOptions.canUseTool?.('Bash', { command: 'pwd' }, {
-        description: 'Run pwd',
-        signal: new AbortController().signal,
-      }),
+      toolOptions.canUseTool?.(
+        'Bash',
+        { command: 'pwd' },
+        {
+          description: 'Run pwd',
+          signal: new AbortController().signal,
+        },
+      ),
     ).resolves.toMatchObject({ behavior: 'allow' });
     expect(requestPermission).toHaveBeenCalledWith(
       {

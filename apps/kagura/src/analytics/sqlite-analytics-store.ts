@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { desc, eq, sql } from 'drizzle-orm';
 
-import type { ModelUsageInfo,SessionUsageInfo } from '~/agent/types.js';
+import type { ModelUsageInfo, SessionUsageInfo } from '~/agent/types.js';
 import type { AppDatabase } from '~/db/index.js';
 import { sessionAnalytics } from '~/db/schema.js';
 import type { AppLogger } from '~/logger/index.js';

@@ -8,7 +8,10 @@ import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
 
-import { THINKING_LOADING_MESSAGES, THINKING_STATUS_MESSAGES } from '../../slack/thinking-messages.js';
+import {
+  THINKING_LOADING_MESSAGES,
+  THINKING_STATUS_MESSAGES,
+} from '../../slack/thinking-messages.js';
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
@@ -144,7 +147,10 @@ async function main(): Promise<void> {
 function isDefaultThinkingStatus(record: SlackStatusProbeRecord): boolean {
   if (record.kind !== 'status') return false;
   if (record.clear) return false;
-  if (!THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])) return false;
+  if (
+    !THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])
+  )
+    return false;
 
   const messages = record.loadingMessages ?? [];
   if (messages.length === 0) return true;

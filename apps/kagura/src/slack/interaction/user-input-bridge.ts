@@ -43,7 +43,8 @@ export class SlackUserInputBridge {
 
     if (params.signal?.aborted) {
       throw (
-        params.signal.reason ?? new Error(`User input request aborted for thread ${params.threadTs}`)
+        params.signal.reason ??
+        new Error(`User input request aborted for thread ${params.threadTs}`)
       );
     }
 
@@ -146,7 +147,7 @@ function parseSlackUserInputReply(
 
   const rawTokens = question.multiSelect
     ? text
-        .split(/[,\n，、;；]+/g)
+        .split(/[\n,;、，；]+/g)
         .map((token) => token.trim())
         .filter(Boolean)
     : [text];

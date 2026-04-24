@@ -1,4 +1,4 @@
-export { assemblePrompt,DEFAULT_PROMPT_PROCESSORS } from './pipeline.js';
+export { assemblePrompt, DEFAULT_PROMPT_PROCESSORS } from './pipeline.js';
 export {
   fileContextProcessor,
   imageCollectionProcessor,
