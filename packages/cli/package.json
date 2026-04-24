@@ -11,7 +11,9 @@
     "./config/json-writer": "./src/config/json-writer.ts",
     "./slack/manifest-template": "./src/slack/manifest-template.ts",
     "./slack/prefill-url": "./src/slack/prefill-url.ts",
-    "./slack/config-token": "./src/slack/config-token.ts"
+    "./slack/config-token": "./src/slack/config-token.ts",
+    "./providers/types": "./src/providers/types.ts",
+    "./providers/registry": "./src/providers/registry.ts"
   },
   "scripts": {
     "test": "vitest run",
