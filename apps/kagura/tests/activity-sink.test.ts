@@ -72,6 +72,18 @@ function createMockSessionStore(): SessionStore {
 
 function createMockAnalyticsStore(): SessionAnalyticsStore {
   return {
+    getByModel: vi.fn().mockReturnValue([]),
+    getOverview: vi.fn().mockReturnValue({
+      avgDurationMs: 0,
+      cacheHitRate: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCostUSD: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalSessions: 0,
+    }),
+    getRecentSessions: vi.fn().mockReturnValue([]),
     upsert: vi.fn(),
   };
 }

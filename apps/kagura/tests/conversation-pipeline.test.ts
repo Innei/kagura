@@ -173,7 +173,7 @@ function createMinimalPipelineContext(overrides?: {
       },
     } as unknown as SlackWebClientLike,
     deps: {
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
       claudeExecutor: {
         providerId: 'claude',
         execute: vi.fn().mockResolvedValue(undefined),

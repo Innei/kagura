@@ -82,7 +82,7 @@ describe('Workspace picker action test', () => {
     const channelPreferenceStore = { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() };
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const deps = {
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
       channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,
@@ -200,7 +200,7 @@ describe('Workspace picker action test', () => {
     const channelPreferenceStore = { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() };
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const handler = createAppMentionHandler({
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
       channelPreferenceStore,
       claudeExecutor: executor,
       logger,

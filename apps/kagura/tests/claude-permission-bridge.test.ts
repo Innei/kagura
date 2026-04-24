@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 
@@ -27,7 +28,11 @@ describe('Claude permission bridge', () => {
 
   it('awaits sink.requestPermission before allowing a tool', async () => {
     const { ClaudeAgentSdkExecutor } = await import('~/agent/providers/claude-code/adapter.js');
-    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      createTestLogger(),
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const requestPermission = vi.fn().mockResolvedValue({ allowed: true });
     const toolOptions = (
       executor as unknown as {
@@ -89,4 +94,16 @@ function createMemoryStore(): MemoryStore {
     saveWithDedup: vi.fn(),
     search: () => [],
   } as unknown as MemoryStore;
+}
+
+function createChannelPreferenceStore(): ChannelPreferenceStore {
+  return {
+    get: () => undefined,
+    upsert: (channelId, defaultWorkspaceInput) => ({
+      channelId,
+      createdAt: new Date(0).toISOString(),
+      defaultWorkspaceInput,
+      updatedAt: new Date(0).toISOString(),
+    }),
+  };
 }

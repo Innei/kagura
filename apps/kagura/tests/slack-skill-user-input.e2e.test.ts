@@ -36,7 +36,7 @@ describe('Slack skill user input bridge', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = createInteractiveExecutor();
     const deps = {
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
       channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,

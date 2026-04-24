@@ -10,6 +10,7 @@ import { SAVE_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/save-
 import { UPLOAD_SLACK_FILE_TOOL_NAME } from '~/agent/providers/claude-code/tools/upload-slack-file.js';
 import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -75,10 +76,11 @@ describe('Slack loading status test', () => {
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
+    const channelPreferenceStore = createChannelPreferenceStore();
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const handler = createAppMentionHandler({
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
-      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
+      analyticsStore: createAnalyticsStore(),
+      channelPreferenceStore,
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -352,7 +354,11 @@ describe('Slack loading status test', () => {
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const ac = new AbortController();
     const logger = createTestLogger();
-    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      logger,
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const events: AgentExecutionEvent[] = [];
 
     sdkMocks.query.mockImplementation(() =>
@@ -405,7 +411,11 @@ describe('Slack loading status test', () => {
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const ac = new AbortController();
     const logger = createTestLogger();
-    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      logger,
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const events: AgentExecutionEvent[] = [];
     const interrupt = vi.fn(async () => {});
 
@@ -450,7 +460,11 @@ describe('Slack loading status test', () => {
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const ac = new AbortController();
     const logger = createTestLogger();
-    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      logger,
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const events: AgentExecutionEvent[] = [];
     let stoppedPublishAttempts = 0;
 
@@ -493,7 +507,11 @@ describe('Slack loading status test', () => {
   it('emits started then stopped when abort signal is already aborted before first next()', async () => {
     const ac = new AbortController();
     ac.abort();
-    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      createTestLogger(),
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const events: AgentExecutionEvent[] = [];
 
     sdkMocks.query.mockImplementation(() => createMessageStream([]));
@@ -515,7 +533,11 @@ describe('Slack loading status test', () => {
   });
 
   it('emits failed when the iterator rejects with a non-abort error', async () => {
-    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      createTestLogger(),
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const events: AgentExecutionEvent[] = [];
 
     sdkMocks.query.mockImplementation(() =>
@@ -552,10 +574,11 @@ describe('Slack loading status test', () => {
     const threadContextLoader = new SlackThreadContextLoader(logger);
     const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
-    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
+    const channelPreferenceStore = createChannelPreferenceStore();
+    const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
     const handler = createAppMentionHandler({
-      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
-      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
+      analyticsStore: createAnalyticsStore(),
+      channelPreferenceStore,
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -852,7 +875,11 @@ async function getMcpToolsForRequest(
     throw new Error('stop-after-mcp-server');
   });
 
-  const executor = new ClaudeAgentSdkExecutor(createTestLogger(), memoryStore);
+  const executor = new ClaudeAgentSdkExecutor(
+    createTestLogger(),
+    memoryStore,
+    createChannelPreferenceStore(),
+  );
   const events: AgentExecutionEvent[] = [];
 
   await expect(
@@ -974,6 +1001,36 @@ function createMemoryStore(): MemoryStore {
       id: 'memory-1',
     }),
     search: () => [],
+  };
+}
+
+function createAnalyticsStore(): SessionAnalyticsStore {
+  return {
+    getByModel: vi.fn().mockReturnValue([]),
+    getOverview: vi.fn().mockReturnValue({
+      avgDurationMs: 0,
+      cacheHitRate: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCostUSD: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalSessions: 0,
+    }),
+    getRecentSessions: vi.fn().mockReturnValue([]),
+    upsert: vi.fn(),
+  };
+}
+
+function createChannelPreferenceStore(): ChannelPreferenceStore {
+  return {
+    get: () => undefined,
+    upsert: (channelId, defaultWorkspaceInput) => ({
+      channelId,
+      createdAt: new Date(0).toISOString(),
+      defaultWorkspaceInput,
+      updatedAt: new Date(0).toISOString(),
+    }),
   };
 }
 
@@ -1132,6 +1189,7 @@ function createInterruptiblePendingQuery(
   },
 ): AsyncIterable<unknown> & {
   interrupt: () => Promise<void>;
+  next: () => Promise<IteratorResult<unknown>>;
   return: () => Promise<IteratorResult<unknown>>;
 } {
   let yieldedInit = false;

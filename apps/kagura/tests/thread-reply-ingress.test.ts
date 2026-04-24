@@ -363,7 +363,7 @@ function createThreadReplyTestHarness(threadTs: string): {
     }),
   } as unknown as WorkspaceResolver;
   const handler = createThreadReplyHandler({
-    analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+    analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
     channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,
@@ -436,7 +436,7 @@ function createDualIngressTestHarness(
     }),
   } as unknown as WorkspaceResolver;
   const deps = {
-    analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+    analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
     channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,

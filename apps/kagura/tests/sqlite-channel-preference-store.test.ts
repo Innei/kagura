@@ -1,27 +1,19 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import type Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
-import * as schema from '~/db/schema.js';
+import { type AppDatabase,createDatabase } from '~/db/index.js';
 import { createRootLogger } from '~/logger/index.js';
 
 describe('SqliteChannelPreferenceStore', () => {
   let sqlite: Database.Database;
-  let db: ReturnType<typeof drizzle>;
+  let db: AppDatabase;
   let store: SqliteChannelPreferenceStore;
 
   beforeEach(() => {
-    sqlite = new Database(':memory:');
-    sqlite.exec(`
-      CREATE TABLE channel_preferences (
-        channel_id TEXT PRIMARY KEY,
-        default_workspace_input TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `);
-    db = drizzle(sqlite, { schema });
+    const database = createDatabase(':memory:');
+    db = database.db;
+    sqlite = database.sqlite;
     store = new SqliteChannelPreferenceStore(db, createRootLogger().withTag('test'));
   });
 
