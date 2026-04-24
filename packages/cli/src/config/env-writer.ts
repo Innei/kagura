@@ -13,9 +13,8 @@ export function writeEnvFile(filePath: string, patch: EnvPatch): void {
 
   const updated = lines.map((line) => {
     const m = KV_RE.exec(line);
-    if (!m) return line;
-    const key = m[1];
-    if (!(key in patch)) return line;
+    const key = m?.[1];
+    if (!key || !(key in patch)) return line;
     touched.add(key);
     const val = patch[key];
     if (val === undefined) return line;
