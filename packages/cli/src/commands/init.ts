@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { loadConfigJson, loadEnvFile } from '../config/env-loader.js';
 import { writeEnvFile } from '../config/env-writer.js';
 import { writeConfigJson } from '../config/json-writer.js';
-import { type KaguraPaths,resolveKaguraPaths } from '../config/paths.js';
+import { type KaguraPaths, resolveKaguraPaths } from '../config/paths.js';
 import { getProvider, listProviders } from '../providers/registry.js';
 import type { ProviderId, SetupPatch } from '../providers/types.js';
 import type { RunHooks } from '../router.js';
@@ -67,7 +67,9 @@ export async function runInit(opts: InitOptions, hooks: RunHooks = {}): Promise<
 }
 
 export function applyPatch(paths: KaguraPaths, patch: SetupPatch): void {
-  if (patch.env) writeEnvFile(paths.envFile, patch.env);
+  if (patch.env && Object.keys(patch.env).length > 0) {
+    writeEnvFile(paths.envFile, patch.env);
+  }
   if (patch.config) writeConfigJson(paths.configJsonFile, patch.config);
 }
 

@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runInit } from '../src/commands/init.js';
 
+const fetchMock = vi.fn();
+globalThis.fetch = fetchMock as unknown as typeof fetch;
+
 const clack = vi.hoisted(() => ({
   intro: vi.fn(),
   outro: vi.fn(),
@@ -18,16 +21,18 @@ const clack = vi.hoisted(() => ({
   confirm: vi.fn(),
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-
 vi.mock('@clack/prompts', () => clack);
+const openMock = vi.hoisted(() => vi.fn());
+vi.mock('open', () => ({ default: openMock }));
 
-describe('runInit orchestration', () => {
+describe('runInit · end-to-end', () => {
   let tmp: string;
   const origEnv = { ...process.env };
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kg-init-'));
-    process.env = { ...origEnv, KAGURA_HOME: tmp };
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kg-e2e-'));
+    fetchMock.mockReset();
+    openMock.mockReset();
     for (const k of Object.keys(clack) as Array<keyof typeof clack>) {
       const v = clack[k];
       if (typeof v === 'function') (v as ReturnType<typeof vi.fn>).mockReset();
@@ -38,6 +43,7 @@ describe('runInit orchestration', () => {
       }
     }
     clack.isCancel.mockReturnValue(false);
+    process.env = { ...origEnv, KAGURA_HOME: tmp };
   });
 
   afterEach(() => {
@@ -45,18 +51,23 @@ describe('runInit orchestration', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('writes config.json with provider and repoRootDir when skipStart=true', async () => {
+  it('provider+slack-skip+repo-root writes config.json with skipStart=true', async () => {
     clack.select
       .mockResolvedValueOnce('claude-code') // provider
-      .mockResolvedValueOnce('oauth'); // claude branch
-    clack.text.mockResolvedValueOnce('/tmp/my-repos'); // REPO_ROOT_DIR
+      .mockResolvedValueOnce('skip') // slack
+      .mockResolvedValueOnce('oauth'); // claude auth branch
+    clack.text.mockResolvedValueOnce('/tmp/my-repos');
 
     const code = await runInit({ skipStart: true });
     expect(code).toBe(0);
 
-    const cfgRaw = fs.readFileSync(path.join(tmp, 'config.json'), 'utf8');
-    const cfg = JSON.parse(cfgRaw);
+    const cfg = JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8'));
     expect(cfg.defaultProviderId).toBe('claude-code');
     expect(cfg.repoRootDir).toBe('/tmp/my-repos');
+
+    // Slack skip → no .env writes from init (provider oauth also writes no env)
+    expect(fs.existsSync(path.join(tmp, '.env'))).toBe(false);
+    expect(openMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
