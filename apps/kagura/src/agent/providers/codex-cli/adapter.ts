@@ -1,0 +1,675 @@
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import type { Dirent } from 'node:fs';
+import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import readline from 'node:readline';
+
+import type {
+  AgentExecutionRequest,
+  AgentExecutionSink,
+  AgentExecutor,
+  GeneratedOutputFile,
+  SessionUsageInfo,
+} from '~/agent/types.js';
+import { env } from '~/env/server.js';
+import type { AppLogger } from '~/logger/index.js';
+import { redact } from '~/logger/redact.js';
+import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryStore } from '~/memory/types.js';
+
+import {
+  buildCodexPrompt,
+  CODEX_GENERATED_ARTIFACTS_DIR,
+  CODEX_RUNTIME_DIR,
+  getCodexMemoryOpsRelativePath,
+} from './prompt.js';
+
+const ABORT_KILL_TIMEOUT_MS = 1_000;
+const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
+const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
+const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
+
+interface GeneratedArtifactSnapshotEntry {
+  mtimeMs: number;
+  path: string;
+  size: number;
+}
+
+type GeneratedArtifactSnapshot = Map<string, GeneratedArtifactSnapshotEntry>;
+
+interface CodexJsonEvent {
+  item?: CodexJsonItem | undefined;
+  thread_id?: unknown;
+  type: string;
+  usage?:
+    | {
+        cached_input_tokens?: unknown;
+        input_tokens?: unknown;
+        output_tokens?: unknown;
+      }
+    | undefined;
+}
+
+interface CodexJsonItem {
+  aggregated_output?: unknown;
+  command?: unknown;
+  exit_code?: unknown;
+  id?: unknown;
+  status?: unknown;
+  text?: unknown;
+  type?: unknown;
+}
+
+function createAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+export class CodexCliExecutor implements AgentExecutor {
+  readonly providerId = 'codex-cli';
+  private readonly activeExecutions = new Set<Promise<void>>();
+
+  constructor(
+    private readonly logger: AppLogger,
+    private readonly memoryStore?: MemoryStore | undefined,
+  ) {
+    this.logger.info(
+      'Codex CLI provider configured: model=%s reasoning=%s sandbox=%s',
+      env.CODEX_MODEL ?? '(config default)',
+      env.CODEX_REASONING_EFFORT ?? '(config default)',
+      env.CODEX_CLI_SANDBOX,
+    );
+  }
+
+  async drain(): Promise<void> {
+    if (this.activeExecutions.size > 0) {
+      this.logger.info('Draining %d active Codex execution(s)...', this.activeExecutions.size);
+      await Promise.allSettled(this.activeExecutions);
+    }
+  }
+
+  async execute(request: AgentExecutionRequest, sink: AgentExecutionSink): Promise<void> {
+    const execution = this.executeInternal(request, sink);
+    this.activeExecutions.add(execution);
+    try {
+      await execution;
+    } finally {
+      this.activeExecutions.delete(execution);
+    }
+  }
+
+  private async executeInternal(
+    request: AgentExecutionRequest,
+    sink: AgentExecutionSink,
+  ): Promise<void> {
+    const executionId = request.executionId ?? 'unknown';
+    const executionStartedAt = Date.now();
+    const prompt = buildCodexPrompt(request);
+    const args = this.buildArgs(request);
+    const cwd = request.workspacePath ?? process.cwd();
+    const generatedArtifactsDir = path.resolve(cwd, CODEX_GENERATED_ARTIFACTS_DIR);
+    const runtimeDir = path.resolve(cwd, CODEX_RUNTIME_DIR);
+    const memoryOpsPath = path.resolve(cwd, getCodexMemoryOpsRelativePath(request));
+    let child: ChildProcessWithoutNullStreams | undefined;
+    let resumeHandle = request.resumeHandle;
+    let started = false;
+    let abortCleanup: (() => void) | undefined;
+
+    this.logger.info(
+      'Codex CLI execution requested (execution=%s thread=%s channel=%s user=%s resume=%s cwd=%s)',
+      executionId,
+      request.threadTs,
+      request.channelId,
+      request.userId,
+      request.resumeHandle ?? 'none',
+      cwd,
+    );
+
+    try {
+      await mkdir(generatedArtifactsDir, { recursive: true });
+      await mkdir(runtimeDir, { recursive: true });
+      const generatedArtifactsBefore = await snapshotGeneratedArtifacts(generatedArtifactsDir);
+
+      child = spawn('codex', args, {
+        cwd,
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      abortCleanup = this.attachAbortHandler(child, request.abortSignal);
+      const stderrPromise = this.captureStderr(child, executionId, request.threadTs);
+      const stdoutPromise = this.consumeStdout(child, sink, {
+        getDurationMs: () => Date.now() - executionStartedAt,
+        getResumeHandle: () => resumeHandle,
+        markStarted: async (handle) => {
+          if (handle) {
+            resumeHandle = handle;
+          }
+          if (started) {
+            return;
+          }
+          started = true;
+          await sink.onEvent({
+            type: 'lifecycle',
+            phase: 'started',
+            ...(resumeHandle ? { resumeHandle } : {}),
+          });
+        },
+        request,
+      });
+
+      child.stdin.end(prompt);
+
+      const exitPromise = new Promise<void>((resolve, reject) => {
+        child!.once('error', reject);
+        child!.once('exit', (code, signal) => {
+          if (request.abortSignal?.aborted) {
+            reject(createAbortError());
+            return;
+          }
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          reject(
+            new Error(`Codex CLI exited with code ${code ?? 'null'} signal ${signal ?? 'none'}`),
+          );
+        });
+      });
+
+      await Promise.all([stdoutPromise, stderrPromise, exitPromise]);
+
+      if (!started) {
+        await sink.onEvent({ type: 'lifecycle', phase: 'started' });
+      }
+      await this.applyMemoryOps(request, memoryOpsPath);
+      await publishGeneratedArtifacts(sink, generatedArtifactsDir, generatedArtifactsBefore);
+      await sink.onEvent({
+        type: 'lifecycle',
+        phase: 'completed',
+        ...(resumeHandle ? { resumeHandle } : {}),
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        const reason = request.abortSignal?.reason === 'superseded' ? 'superseded' : 'user_stop';
+        this.logger.info(
+          'Codex CLI execution stopped (execution=%s reason=%s thread=%s)',
+          executionId,
+          reason,
+          request.threadTs,
+        );
+        this.killChild(child);
+        await sink.onEvent({
+          type: 'lifecycle',
+          phase: 'stopped',
+          reason,
+          ...(resumeHandle ? { resumeHandle } : {}),
+        });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        'Codex CLI execution failed (execution=%s thread=%s): %s',
+        executionId,
+        request.threadTs,
+        redact(message),
+      );
+      await sink.onEvent({
+        type: 'lifecycle',
+        phase: 'failed',
+        ...(resumeHandle ? { resumeHandle } : {}),
+        error: message,
+      });
+    } finally {
+      abortCleanup?.();
+    }
+  }
+
+  private async applyMemoryOps(
+    request: AgentExecutionRequest,
+    memoryOpsPath: string,
+  ): Promise<void> {
+    if (!this.memoryStore) {
+      return;
+    }
+
+    let raw: string;
+    try {
+      raw = await readFile(memoryOpsPath, 'utf8');
+    } catch (error) {
+      if (isNodeErrorCode(error, 'ENOENT')) {
+        return;
+      }
+      throw error;
+    }
+
+    let savedCount = 0;
+    for (const [index, line] of raw.split(/\r?\n/).entries()) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      const op = parseCodexMemoryOp(trimmed);
+      if (!op) {
+        this.logger.warn('Ignoring invalid Codex memory op on line %d', index + 1);
+        continue;
+      }
+
+      const scope = op.scope ?? (request.workspaceRepoId ? 'workspace' : 'global');
+      if (scope === 'workspace' && !request.workspaceRepoId) {
+        this.logger.warn(
+          'Ignoring Codex workspace memory op without workspace on line %d',
+          index + 1,
+        );
+        continue;
+      }
+
+      const saved = this.memoryStore.save({
+        category: op.category,
+        content: op.content,
+        repoId: scope === 'workspace' ? request.workspaceRepoId : undefined,
+        threadTs: request.threadTs,
+        ...(op.metadata ? { metadata: op.metadata } : {}),
+        ...(op.expiresAt ? { expiresAt: op.expiresAt } : {}),
+      });
+      savedCount += 1;
+      this.logger.info('Codex memory op saved %s memory %s', saved.scope, saved.id);
+    }
+
+    if (savedCount > 0) {
+      this.logger.info('Applied %d Codex memory op(s) for thread %s', savedCount, request.threadTs);
+    }
+  }
+
+  private buildArgs(request: AgentExecutionRequest): string[] {
+    const modelArgs = env.CODEX_MODEL ? ['--model', env.CODEX_MODEL] : [];
+    const reasoningArgs = env.CODEX_REASONING_EFFORT
+      ? ['-c', `model_reasoning_effort="${env.CODEX_REASONING_EFFORT}"`]
+      : [];
+    const execArgs = [
+      '--json',
+      '--sandbox',
+      env.CODEX_CLI_SANDBOX,
+      '-c',
+      'approval_policy="never"',
+      '--skip-git-repo-check',
+      ...modelArgs,
+      ...reasoningArgs,
+    ];
+
+    if (request.resumeHandle) {
+      return [
+        'exec',
+        'resume',
+        '--json',
+        '-c',
+        'approval_policy="never"',
+        '--skip-git-repo-check',
+        ...modelArgs,
+        ...reasoningArgs,
+        request.resumeHandle,
+        '-',
+      ];
+    }
+
+    return ['exec', ...execArgs, '-'];
+  }
+
+  private attachAbortHandler(
+    child: ChildProcessWithoutNullStreams,
+    signal: AbortSignal | undefined,
+  ): () => void {
+    if (!signal) {
+      return () => {};
+    }
+    if (signal.aborted) {
+      this.killChild(child);
+      return () => {};
+    }
+
+    const onAbort = () => {
+      this.killChild(child);
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    return () => signal.removeEventListener('abort', onAbort);
+  }
+
+  private killChild(child: ChildProcessWithoutNullStreams | undefined): void {
+    if (!child || child.killed) {
+      return;
+    }
+
+    child.kill('SIGTERM');
+    setTimeout(() => {
+      if (!child.killed) {
+        child.kill('SIGKILL');
+      }
+    }, ABORT_KILL_TIMEOUT_MS).unref();
+  }
+
+  private async captureStderr(
+    child: ChildProcessWithoutNullStreams,
+    executionId: string,
+    threadTs: string,
+  ): Promise<void> {
+    const rl = readline.createInterface({ input: child.stderr });
+    for await (const line of rl) {
+      const text = line.trim();
+      if (text.length === 0 || text === 'Reading additional input from stdin...') {
+        continue;
+      }
+      this.logger.info(
+        'Codex CLI stderr (execution=%s thread=%s): %s',
+        executionId,
+        threadTs,
+        redact(text),
+      );
+    }
+  }
+
+  private async consumeStdout(
+    child: ChildProcessWithoutNullStreams,
+    sink: AgentExecutionSink,
+    handlers: {
+      getResumeHandle: () => string | undefined;
+      getDurationMs: () => number;
+      markStarted: (resumeHandle?: string | undefined) => Promise<void>;
+      request: AgentExecutionRequest;
+    },
+  ): Promise<void> {
+    const rl = readline.createInterface({ input: child.stdout });
+    for await (const line of rl) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+
+      let event: CodexJsonEvent;
+      try {
+        event = JSON.parse(trimmed) as CodexJsonEvent;
+      } catch {
+        this.logger.warn('Ignoring non-JSON Codex CLI stdout line: %s', redact(trimmed));
+        continue;
+      }
+
+      await this.handleEvent(event, sink, handlers);
+    }
+  }
+
+  private async handleEvent(
+    event: CodexJsonEvent,
+    sink: AgentExecutionSink,
+    handlers: {
+      getResumeHandle: () => string | undefined;
+      getDurationMs: () => number;
+      markStarted: (resumeHandle?: string | undefined) => Promise<void>;
+      request: AgentExecutionRequest;
+    },
+  ): Promise<void> {
+    switch (event.type) {
+      case 'thread.started': {
+        await handlers.markStarted(
+          typeof event.thread_id === 'string' ? event.thread_id : undefined,
+        );
+        return;
+      }
+
+      case 'turn.started': {
+        await handlers.markStarted(handlers.getResumeHandle());
+        await sink.onEvent({
+          type: 'activity-state',
+          state: {
+            status: 'Codex is thinking...',
+            threadTs: handlers.request.threadTs,
+          },
+        });
+        return;
+      }
+
+      case 'item.started':
+      case 'item.completed': {
+        await this.handleItemEvent(event, sink, handlers.request.threadTs);
+        return;
+      }
+
+      case 'turn.completed': {
+        await sink.onEvent({
+          type: 'usage-info',
+          usage: this.toUsageInfo(event, handlers.getDurationMs()),
+        });
+        await sink.onEvent({
+          type: 'activity-state',
+          state: { clear: true, threadTs: handlers.request.threadTs },
+        });
+        return;
+      }
+
+      default: {
+        this.logger.info('Unhandled Codex CLI event type: %s', event.type);
+      }
+    }
+  }
+
+  private async handleItemEvent(
+    event: CodexJsonEvent,
+    sink: AgentExecutionSink,
+    threadTs: string,
+  ): Promise<void> {
+    const item = event.item;
+    if (!item) {
+      return;
+    }
+
+    if (item.type === 'agent_message' && event.type === 'item.completed') {
+      const text = typeof item.text === 'string' ? item.text.trim() : undefined;
+      if (text) {
+        await sink.onEvent({ type: 'assistant-message', text });
+      }
+      return;
+    }
+
+    if (item.type !== 'command_execution') {
+      return;
+    }
+
+    const command = typeof item.command === 'string' ? item.command : undefined;
+    const taskId = typeof item.id === 'string' ? item.id : (command ?? 'codex-command');
+    const title = command ?? 'Running command';
+    const exitCode = typeof item.exit_code === 'number' ? item.exit_code : undefined;
+    const itemStatus = typeof item.status === 'string' ? item.status : undefined;
+    const aggregatedOutput =
+      typeof item.aggregated_output === 'string' ? item.aggregated_output.trim() : undefined;
+    const status =
+      event.type === 'item.started'
+        ? 'in_progress'
+        : exitCode === 0 || itemStatus === 'completed'
+          ? 'complete'
+          : 'error';
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId,
+      title,
+      status,
+      ...(aggregatedOutput ? { details: aggregatedOutput.slice(0, 2000) } : {}),
+    });
+
+    if (status === 'in_progress') {
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          status: title,
+          threadTs,
+        },
+      });
+    }
+  }
+
+  private toUsageInfo(event: CodexJsonEvent, durationMs: number): SessionUsageInfo {
+    const inputTokens =
+      typeof event.usage?.input_tokens === 'number' ? event.usage.input_tokens : 0;
+    const cacheReadInputTokens =
+      typeof event.usage?.cached_input_tokens === 'number' ? event.usage.cached_input_tokens : 0;
+    const outputTokens =
+      typeof event.usage?.output_tokens === 'number' ? event.usage.output_tokens : 0;
+    const cacheHitRate = inputTokens > 0 ? (cacheReadInputTokens / inputTokens) * 100 : 0;
+
+    return {
+      costKnown: false,
+      durationMs,
+      modelUsage: [
+        {
+          cacheCreationInputTokens: 0,
+          cacheHitRate,
+          cacheReadInputTokens,
+          costUSD: 0,
+          inputTokensIncludeCache: true,
+          inputTokens,
+          model: env.CODEX_MODEL ?? 'codex-cli',
+          outputTokens,
+        },
+      ],
+      totalCostUSD: 0,
+    };
+  }
+}
+
+async function snapshotGeneratedArtifacts(dir: string): Promise<GeneratedArtifactSnapshot> {
+  const entries = new Map<string, GeneratedArtifactSnapshotEntry>();
+  await collectGeneratedArtifacts(dir, dir, entries);
+  return entries;
+}
+
+async function collectGeneratedArtifacts(
+  rootDir: string,
+  currentDir: string,
+  entries: GeneratedArtifactSnapshot,
+): Promise<void> {
+  let dirents: Dirent<string>[];
+  try {
+    dirents = await readdir(currentDir, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return;
+    }
+    throw error;
+  }
+
+  for (const dirent of dirents) {
+    const absolutePath = path.join(currentDir, dirent.name);
+    if (dirent.isDirectory()) {
+      await collectGeneratedArtifacts(rootDir, absolutePath, entries);
+      continue;
+    }
+    if (!dirent.isFile()) {
+      continue;
+    }
+
+    const fileStat = await stat(absolutePath);
+    if (fileStat.size > MAX_GENERATED_ARTIFACT_BYTES) {
+      continue;
+    }
+
+    const relativePath = path.relative(rootDir, absolutePath);
+    entries.set(relativePath, {
+      mtimeMs: fileStat.mtimeMs,
+      path: absolutePath,
+      size: fileStat.size,
+    });
+  }
+}
+
+async function publishGeneratedArtifacts(
+  sink: AgentExecutionSink,
+  generatedArtifactsDir: string,
+  before: GeneratedArtifactSnapshot,
+): Promise<void> {
+  const after = await snapshotGeneratedArtifacts(generatedArtifactsDir);
+  const imageFiles: GeneratedOutputFile[] = [];
+  const otherFiles: GeneratedOutputFile[] = [];
+
+  for (const [relativePath, entry] of after) {
+    const previous = before.get(relativePath);
+    if (previous && previous.mtimeMs === entry.mtimeMs && previous.size === entry.size) {
+      continue;
+    }
+
+    const file = {
+      fileName: path.basename(relativePath),
+      path: entry.path,
+      providerFileId: `codex-local:${relativePath}`,
+    };
+
+    if (GENERATED_IMAGE_FILENAME.test(relativePath)) {
+      imageFiles.push(file);
+    } else {
+      otherFiles.push(file);
+    }
+  }
+
+  if (imageFiles.length > 0) {
+    await sink.onEvent({ type: 'generated-images', files: imageFiles });
+  }
+  if (otherFiles.length > 0) {
+    await sink.onEvent({ type: 'generated-files', files: otherFiles });
+  }
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+interface CodexMemorySaveOp {
+  category: MemoryCategory;
+  content: string;
+  expiresAt?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+  scope?: 'global' | 'workspace' | undefined;
+}
+
+function parseCodexMemoryOp(line: string): CodexMemorySaveOp | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (record.tool !== 'save_memory') {
+    return undefined;
+  }
+  if (typeof record.category !== 'string' || !MEMORY_CATEGORY_SET.has(record.category)) {
+    return undefined;
+  }
+  if (typeof record.content !== 'string' || record.content.trim().length === 0) {
+    return undefined;
+  }
+
+  const scope =
+    record.scope === 'global' || record.scope === 'workspace' ? record.scope : undefined;
+  const metadata =
+    record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata)
+      ? (record.metadata as Record<string, unknown>)
+      : undefined;
+  const expiresAt = typeof record.expiresAt === 'string' ? record.expiresAt : undefined;
+
+  return {
+    category: record.category as MemoryCategory,
+    content: record.content.slice(0, 2000),
+    ...(scope ? { scope } : {}),
+    ...(metadata ? { metadata } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+  };
+}
