@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as p from '@clack/prompts';
 import { Command } from 'commander';
 
-import { loadConfigJson, loadEnvFile } from '../config/env-loader.js';
+import { detectConfig, loadConfigJson, loadEnvFile } from '../config/env-loader.js';
 import { writeEnvFile } from '../config/env-writer.js';
 import { writeConfigJson } from '../config/json-writer.js';
 import { type KaguraPaths, resolveKaguraPaths } from '../config/paths.js';
@@ -58,6 +58,16 @@ export async function runInit(opts: InitOptions, hooks: RunHooks = {}): Promise<
   p.outro(`Config written to ${paths.configDir}`);
 
   if (opts.skipStart) return 0;
+
+  const status = detectConfig(paths);
+  if (!status.ok) {
+    p.note(
+      `Still missing: ${status.missing.join(', ')}.\n` +
+        `Run \`kagura init\` again, or edit ${paths.envFile} manually, then run \`kagura\`.`,
+      'Not starting yet',
+    );
+    return 0;
+  }
 
   const go = await p.confirm({ message: 'Start kagura now?', initialValue: true });
   if (go === true && !p.isCancel(go) && hooks.startApp) {
