@@ -6,37 +6,6 @@ settings:
 
 importers:
   .:
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk':
-        specifier: 0.2.92
-        version: 0.2.92(zod@4.3.6)
-      '@anthropic-ai/sdk':
-        specifier: 0.82.0
-        version: 0.82.0(zod@4.3.6)
-      '@innei/pretty-logger-core':
-        specifier: 0.4.2
-        version: 0.4.2
-      '@slack/bolt':
-        specifier: 4.6.0
-        version: 4.6.0(@types/express@5.0.6)
-      '@t3-oss/env-core':
-        specifier: 0.13.11
-        version: 0.13.11(typescript@6.0.2)(zod@4.3.6)
-      better-sqlite3:
-        specifier: ^12.8.0
-        version: 12.8.0
-      dotenv:
-        specifier: 17.4.0
-        version: 17.4.0
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)
-      markdown-to-slack-blocks:
-        specifier: 1.5.0
-        version: 1.5.0
-      zod:
-        specifier: 4.3.6
-        version: 4.3.6
     devDependencies:
       '@lobehub/eslint-config':
         specifier: ^2.1.5
@@ -44,24 +13,12 @@ importers:
       '@lobehub/prettier-config':
         specifier: ^2.1.5
         version: 2.1.5(prettier@3.8.1)
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: 25.5.2
-        version: 25.5.2
-      drizzle-kit:
-        specifier: ^0.31.10
-        version: 0.31.10
       eslint:
         specifier: ^10.2.0
         version: 10.2.0(jiti@2.6.1)
       lint-staged:
         specifier: ^16.4.0
         version: 16.4.0
-      nodemon:
-        specifier: 3.1.14
-        version: 3.1.14
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
@@ -77,6 +34,49 @@ importers:
       simple-git-hooks:
         specifier: ^2.13.1
         version: 2.13.1
+
+  apps/kagura:
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.2.92
+        version: 0.2.92(zod@4.3.6)
+      better-sqlite3:
+        specifier: ^12.8.0
+        version: 12.8.0
+    devDependencies:
+      '@anthropic-ai/sdk':
+        specifier: 0.82.0
+        version: 0.82.0(zod@4.3.6)
+      '@innei/pretty-logger-core':
+        specifier: 0.4.2
+        version: 0.4.2
+      '@slack/bolt':
+        specifier: 4.6.0
+        version: 4.6.0(@types/express@5.0.6)
+      '@t3-oss/env-core':
+        specifier: 0.13.11
+        version: 0.13.11(typescript@6.0.2)(zod@4.3.6)
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/node':
+        specifier: 25.5.2
+        version: 25.5.2
+      dotenv:
+        specifier: 17.4.0
+        version: 17.4.0
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)
+      markdown-to-slack-blocks:
+        specifier: 1.5.0
+        version: 1.5.0
+      nodemon:
+        specifier: 3.1.14
+        version: 3.1.14
       tsdown:
         specifier: 0.21.7
         version: 0.21.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(typescript@6.0.2)
@@ -89,6 +89,9 @@ importers:
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@types/node@25.5.2)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.5.2)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
 
   packages/live-cli:
     dependencies:

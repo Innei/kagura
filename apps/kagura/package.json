@@ -1,0 +1,83 @@
+{
+  "name": "@innei/kagura",
+  "version": "0.2.0",
+  "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
+  "keywords": [
+    "slack",
+    "claude",
+    "agent",
+    "bot",
+    "anthropic"
+  ],
+  "homepage": "https://github.com/Innei/kagura#readme",
+  "bugs": {
+    "url": "https://github.com/Innei/kagura/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Innei/kagura.git"
+  },
+  "license": "MIT",
+  "author": "Innei <i@innei.dev>",
+  "type": "module",
+  "bin": {
+    "kagura": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "drizzle",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "dev": "nodemon",
+    "e2e": "tsx ../../packages/live-cli/src/cli.ts run",
+    "e2e:interactive": "tsx ../../packages/live-cli/src/cli.ts run --interactive",
+    "e2e:list": "tsx ../../packages/live-cli/src/cli.ts list",
+    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
+    "prepublishOnly": "pnpm build",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.92",
+    "better-sqlite3": "^12.8.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.82.0",
+    "@innei/pretty-logger-core": "0.4.2",
+    "@slack/bolt": "4.6.0",
+    "@t3-oss/env-core": "0.13.11",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "25.5.2",
+    "dotenv": "17.4.0",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "markdown-to-slack-blocks": "1.5.0",
+    "nodemon": "3.1.14",
+    "tsdown": "0.21.7",
+    "tsx": "4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.2",
+    "zod": "4.3.6"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver",
+      "better-sqlite3"
+    ]
+  }
+}
