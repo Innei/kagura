@@ -5,7 +5,9 @@ import path from 'node:path';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
+import type { AgentExecutor } from '~/agent/types.js';
 import { createApplication } from '~/application.js';
+import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
 import { createDatabase } from '~/db/index.js';
 import { env } from '~/env/server.js';
 import { createRootLogger } from '~/logger/index.js';
@@ -98,12 +100,23 @@ function buildCommandDeps(): SlashCommandDependencies {
   const { db } = createDatabase(dbPath);
   const logger = createRootLogger().withTag('e2e:commands');
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
-  const ccExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
+  const channelPreferenceStore = new SqliteChannelPreferenceStore(
+    db,
+    logger.withTag('channel-preference'),
+  );
+  const ccExecutor = new ClaudeAgentSdkExecutor(
+    logger.withTag('claude:session'),
+    memoryStore,
+    channelPreferenceStore,
+  );
 
   return {
     logger,
     memoryStore,
-    providerRegistry: createProviderRegistry('claude-code', new Map([['claude-code', ccExecutor]])),
+    providerRegistry: createProviderRegistry(
+      'claude-code',
+      new Map<string, AgentExecutor>([['claude-code', ccExecutor]]),
+    ),
     sessionStore: new SqliteSessionStore(db, logger.withTag('session')),
     threadExecutionRegistry: createThreadExecutionRegistry(),
     workspaceResolver: new WorkspaceResolver({

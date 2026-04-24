@@ -5,6 +5,7 @@ import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
+import { redactUnknown } from '~/logger/redact.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -148,8 +149,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   app.assistant(assistant);
 
   app.error(async (error) => {
-    const message = error.message ?? String(error);
-    deps.logger.error('Slack Bolt unhandled error: %s', message);
+    deps.logger.error('Slack Bolt unhandled error: %s', redactUnknown(error));
   });
 
   return app;

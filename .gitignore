@@ -4,7 +4,11 @@ logs
 .env
 .env.local
 .env.e2e
+config.json
+config.*.json
+!config.example.json
 .DS_Store
+.kagura/
 data/
 slack-live-e2e
 .worktrees/

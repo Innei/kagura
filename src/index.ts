@@ -1,4 +1,5 @@
 import { createApplication } from './application.js';
+import { redactUnknown } from './logger/redact.js';
 
 async function main(): Promise<void> {
   const application = createApplication();
@@ -21,7 +22,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error(message);
+  console.error(redactUnknown(error));
   process.exit(1);
 });

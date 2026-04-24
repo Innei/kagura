@@ -32,11 +32,13 @@ export interface ModelUsageInfo {
   cacheReadInputTokens: number;
   costUSD: number;
   inputTokens: number;
+  inputTokensIncludeCache?: boolean | undefined;
   model: string;
   outputTokens: number;
 }
 
 export interface SessionUsageInfo {
+  costKnown?: boolean | undefined;
   durationMs: number;
   modelUsage: ModelUsageInfo[];
   totalCostUSD: number;

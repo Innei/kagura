@@ -1,0 +1,19 @@
+{
+  "claude": {
+    "model": "",
+    "permissionMode": "bypassPermissions",
+    "enableSkills": false
+  },
+  "codex": {
+    "model": "",
+    "reasoningEffort": "medium",
+    "sandbox": "danger-full-access"
+  },
+  "defaultProviderId": "claude-code",
+  "logDir": "./logs",
+  "logLevel": "info",
+  "logToFile": false,
+  "repoRootDir": "~/git",
+  "repoScanDepth": 2,
+  "sessionDbPath": "./data/sessions.db"
+}

@@ -82,7 +82,7 @@ export type SlackBlock =
 
 export interface SlackFilesUploadV2Response {
   file?: { id?: string };
-  files?: Array<{ id?: string }>;
+  files?: Array<{ id?: string; files?: Array<{ id?: string }> }>;
 }
 
 export interface SlackFilesApi {

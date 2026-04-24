@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
+import type { GeneratedImageFile, GeneratedOutputFile, SessionUsageInfo } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { SlackRenderer, SlackRenderTimeoutError } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -61,7 +61,7 @@ afterEach(() => {
 });
 
 describe('SlackRenderer.postGeneratedImages', () => {
-  it('uploads each file and posts an image block referencing the uploaded file id', async () => {
+  it('uploads each image file to the thread', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'slack-renderer-'));
     const pathA = path.join(dir, 'a.png');
     const pathB = path.join(dir, 'b.png');
@@ -102,17 +102,7 @@ describe('SlackRenderer.postGeneratedImages', () => {
     });
     expect(uploadCalls[1]!.file.equals(Buffer.from('png-b'))).toBe(true);
 
-    expect(imagePostCalls).toHaveLength(2);
-    expect(imagePostCalls[0]!.blocks?.[0]).toMatchObject({
-      type: 'image',
-      alt_text: 'a.png',
-      slack_file: { id: 'F_ID_1' },
-    });
-    expect(imagePostCalls[1]!.blocks?.[0]).toMatchObject({
-      type: 'image',
-      alt_text: 'b.png',
-      slack_file: { id: 'F_ID_2' },
-    });
+    expect(imagePostCalls).toHaveLength(0);
   });
 
   it('warns and skips the image block when upload returns no file id', async () => {
@@ -130,6 +120,25 @@ describe('SlackRenderer.postGeneratedImages', () => {
 
     expect(failed).toEqual([meta]);
     expect(logger.warn).toHaveBeenCalled();
+    expect(imagePostCalls).toHaveLength(0);
+  });
+
+  it('extracts file ids from Slack uploadV2 completion responses', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'slack-renderer-uploadv2-'));
+    const pathA = path.join(dir, 'nested.png');
+    await writeFile(pathA, Buffer.from('nested'));
+
+    const { client, imagePostCalls } = createClientFixture();
+    vi.mocked(client.files.uploadV2).mockResolvedValue({
+      files: [{ files: [{ id: 'F_NESTED' }] }],
+    });
+
+    const renderer = new SlackRenderer(createTestLogger());
+    const failed = await renderer.postGeneratedImages(client, 'C1', 'ts-root', [
+      { fileName: 'nested.png', path: pathA, providerFileId: 'pf-nested' },
+    ]);
+
+    expect(failed).toEqual([]);
     expect(imagePostCalls).toHaveLength(0);
   });
 
@@ -154,12 +163,38 @@ describe('SlackRenderer.postGeneratedImages', () => {
     const failed = await renderer.postGeneratedImages(client, 'C1', 'ts-root', [a, b]);
 
     expect(failed).toEqual([b]);
-    expect(imagePostCalls).toHaveLength(1);
-    expect(imagePostCalls[0]!.blocks?.[0]).toMatchObject({
-      type: 'image',
-      alt_text: 'a.png',
-      slack_file: { id: 'F_OK' },
-    });
+    expect(imagePostCalls).toHaveLength(0);
+  });
+});
+
+describe('SlackRenderer.postSessionUsageInfo', () => {
+  it('omits unknown cost and subtracts cached input for Codex-style usage', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+    const usage: SessionUsageInfo = {
+      costKnown: false,
+      durationMs: 12_345,
+      totalCostUSD: 0,
+      modelUsage: [
+        {
+          cacheCreationInputTokens: 0,
+          cacheHitRate: 50,
+          cacheReadInputTokens: 50_000,
+          costUSD: 0,
+          inputTokens: 100_000,
+          inputTokensIncludeCache: true,
+          model: 'gpt-5.5',
+          outputTokens: 5_000,
+        },
+      ],
+    };
+
+    await renderer.postSessionUsageInfo(client, 'C1', '1712345678.000100', usage);
+
+    const text = imagePostCalls[0]?.text;
+    expect(text).toContain('12.3s');
+    expect(text).not.toContain('$0.0000');
+    expect(text).toContain('gpt-5.5: 55.0k non-cached in + out (50% cache)');
   });
 });
 
@@ -244,7 +279,9 @@ describe('SlackRenderer.postThreadReply', () => {
       ?.filter((block) => block.type === 'context')
       .flatMap((block) =>
         (block.elements ?? [])
-          .map((element) => ('text' in element && typeof element.text === 'string' ? element.text : ''))
+          .map((element) =>
+            'text' in element && typeof element.text === 'string' ? element.text : '',
+          )
           .filter(Boolean),
       );
     expect(contextTexts).toEqual(['_Working in repo/worktree_']);

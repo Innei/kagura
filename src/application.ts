@@ -4,7 +4,9 @@ import path from 'node:path';
 import type { App } from '@slack/bolt';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
+import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
+import type { AgentExecutor } from '~/agent/types.js';
 import { SqliteAnalyticsStore } from '~/analytics/sqlite-analytics-store.js';
 import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
 import { createDatabase } from '~/db/index.js';
@@ -20,6 +22,7 @@ import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
+import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -56,6 +59,7 @@ export function createApplication(): RuntimeApplication {
   const executionProbe = env.SLACK_E2E_ENABLED
     ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
     : undefined;
+  const permissionBridge = new SlackPermissionBridge(logger.withTag('slack:permission'));
   const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
 
   const ccExecutor = new ClaudeAgentSdkExecutor(
@@ -64,9 +68,13 @@ export function createApplication(): RuntimeApplication {
     channelPreferenceStore,
     executionProbe,
   );
+  const codexExecutor = new CodexCliExecutor(logger.withTag('codex:session'), memoryStore);
   const providerRegistry = createProviderRegistry(
-    'claude-code',
-    new Map([['claude-code', ccExecutor]]),
+    env.AGENT_DEFAULT_PROVIDER,
+    new Map<string, AgentExecutor>([
+      ['claude-code', ccExecutor],
+      ['codex-cli', codexExecutor],
+    ]),
   );
 
   const threadExecutionRegistry = createThreadExecutionRegistry({
@@ -78,6 +86,7 @@ export function createApplication(): RuntimeApplication {
     channelPreferenceStore,
     logger,
     memoryStore,
+    permissionBridge,
     sessionStore,
     providerRegistry,
     threadExecutionRegistry,

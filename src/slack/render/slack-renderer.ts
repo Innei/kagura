@@ -451,33 +451,6 @@ export class SlackRenderer {
         failed.push(meta);
         continue;
       }
-
-      try {
-        await this.withSlackTiming(
-          'chat.postMessage(generated-image)',
-          `channel=${channelId} thread=${threadTs} file=${meta.fileName}`,
-          async () =>
-            client.chat.postMessage({
-              blocks: [
-                {
-                  alt_text: meta.fileName,
-                  slack_file: { id: fileId },
-                  type: 'image',
-                },
-              ],
-              channel: channelId,
-              text: meta.fileName,
-              thread_ts: threadTs,
-            }),
-        );
-      } catch (error) {
-        this.logger.warn(
-          'Failed to post Slack image block for %s: %s',
-          meta.fileName,
-          String(error),
-        );
-        failed.push(meta);
-      }
     }
 
     return failed;
@@ -712,6 +685,12 @@ function extractUploadedFileId(response: SlackFilesUploadV2Response): string | u
   if (fromFiles) {
     return fromFiles;
   }
+  const fromNestedFiles = response.files
+    ?.flatMap((f) => f.files ?? [])
+    .find((f) => f.id?.trim())?.id;
+  if (fromNestedFiles) {
+    return fromNestedFiles;
+  }
   const fromFile = response.file?.id?.trim();
   return fromFile || undefined;
 }
@@ -740,13 +719,18 @@ function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
   const durationSec = (usage.durationMs / 1000).toFixed(1);
   parts.push(`${durationSec}s`);
 
-  // Format total cost
-  parts.push(`$${usage.totalCostUSD.toFixed(4)}`);
+  if (usage.costKnown !== false) {
+    parts.push(`$${usage.totalCostUSD.toFixed(4)}`);
+  }
 
   // Format model usage details
   for (const model of usage.modelUsage) {
     const modelName = model.model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
-    const nonCachedInputAndOutputTokens = model.inputTokens + model.outputTokens;
+    const nonCachedInputTokens =
+      model.inputTokensIncludeCache === true
+        ? Math.max(0, model.inputTokens - model.cacheReadInputTokens)
+        : model.inputTokens;
+    const nonCachedInputAndOutputTokens = nonCachedInputTokens + model.outputTokens;
     const cacheHitPct = model.cacheHitRate.toFixed(0);
 
     parts.push(

@@ -1,5 +1,34 @@
 # Configuration
 
+## Runtime configuration
+
+Non-secret runtime settings can live in `config.json`:
+
+```bash
+cp config.example.json config.json
+```
+
+Environment variables still work and take precedence over JSON config:
+
+```text
+environment > config.json > built-in defaults
+```
+
+Use `.env` for secrets such as Slack tokens. You can point the app at a different JSON file with `APP_CONFIG_PATH`.
+
+Example:
+
+```json
+{
+  "codex": {
+    "model": "gpt-5.5",
+    "reasoningEffort": "medium",
+    "sandbox": "danger-full-access"
+  },
+  "repoRootDir": "~/git"
+}
+```
+
 ## Environment variables
 
 ```bash
