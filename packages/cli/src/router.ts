@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { buildConfigCommand } from './commands/config.js';
+import { buildDoctorCommand } from './commands/doctor.js';
 import { formatVersion } from './version.js';
 
 export function buildProgram(): Command {
@@ -12,6 +13,7 @@ export function buildProgram(): Command {
     .showHelpAfterError('(use `kagura --help` for help)');
 
   program.addCommand(buildConfigCommand());
+  program.addCommand(buildDoctorCommand());
 
   program.action(async () => {
     program.outputHelp();
