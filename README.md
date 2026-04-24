@@ -44,29 +44,42 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 
 ## Usage
 
-Install globally and launch — kagura ships as a single-file ESM bin that auto-provisions the Slack app manifest on startup.
-
 ```bash
 npm install -g @innei/kagura
-# or: pnpm add -g @innei/kagura
-
-# provide env via shell / .env / systemd / docker
-export SLACK_BOT_TOKEN=xoxb-...
-export SLACK_APP_TOKEN=xapp-...
-export SLACK_SIGNING_SECRET=...
-export REPO_ROOT_DIR=/absolute/path/to/repos
-export ANTHROPIC_API_KEY=sk-ant-...
-
 kagura
 ```
 
-Or one-shot with `npx`:
+On first run, `kagura` notices there is no configuration and launches an interactive wizard:
 
-```bash
-npx @innei/kagura
+1. Pick an AI provider (Claude Code or Codex CLI).
+2. Create a Slack app — either via Slack's prefill URL or, if you've pasted a config token, fully automatically via the `apps.manifest.create` API.
+3. Install the app and paste back the Bot Token, App-Level Token, and Signing Secret. The CLI validates each one against `auth.test` before writing.
+4. Point kagura at your repositories (`REPO_ROOT_DIR`).
+
+Everything lands under `~/.config/kagura/` (override with `$KAGURA_HOME`):
+
+```
+~/.config/kagura/
+├── .env             secrets
+├── config.json      tunables
+├── data/sessions.db
+└── logs/
 ```
 
-Prerequisites: Node.js ≥ 22, a Slack app with Socket Mode enabled, and the `claude` CLI logged in (`claude login`) or `ANTHROPIC_API_KEY` set. See [docs/configuration.md](docs/configuration.md) for the full env reference, manifest auto-sync, token rotation, and Docker deployment.
+### Subcommands
+
+| Command                  | What it does                                                 |
+| ------------------------ | ------------------------------------------------------------ |
+| `kagura`                 | Run the bot (launches init wizard if config is incomplete)   |
+| `kagura init`            | Run the init wizard unconditionally                          |
+| `kagura doctor`          | Diagnose configuration and connectivity (`--json`, `--deep`) |
+| `kagura manifest print`  | Print the Kagura-desired Slack manifest                      |
+| `kagura manifest export` | Export your Slack app's current manifest                     |
+| `kagura manifest sync`   | Push the desired manifest into your app                      |
+| `kagura config path`     | Print `~/.config/kagura/`                                    |
+| `kagura --version`       | Print version, commit hash, commit date                      |
+| `kagura --help`          | Show help (works on subcommands too)                         |
+| `kagura-app`             | Run the bot directly, skipping config detection              |
 
 ## Getting started (development)
 
