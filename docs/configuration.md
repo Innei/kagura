@@ -1,5 +1,17 @@
 # Configuration
 
+## File layout
+
+Kagura reads config from `~/.config/kagura/` by default. Dev mode (running inside the repo) falls back to cwd; `$KAGURA_HOME` overrides both.
+
+- `~/.config/kagura/.env` — secrets (tokens, signing secret, API keys)
+- `~/.config/kagura/config.json` — non-secret tunables (provider selection, model options, paths, log level)
+- `~/.config/kagura/data/sessions.db` — Drizzle-managed SQLite
+- `~/.config/kagura/data/slack-config-tokens.json` — rotating Slack config tokens
+- `~/.config/kagura/logs/` — daily log files (if `LOG_TO_FILE=true`)
+
+Precedence when keys overlap: `env > config.json > built-in default`.
+
 ## Runtime configuration
 
 Non-secret runtime settings can live in `config.json`:
