@@ -11,11 +11,13 @@ import type {
   GeneratedOutputFile,
   SessionUsageInfo,
 } from '~/agent/types.js';
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryStore } from '~/memory/types.js';
 
+import { parseSetChannelDefaultWorkspaceToolInput } from '../claude-code/tools/set-channel-default-workspace.js';
 import { buildCodexPrompt, getCodexRuntimePaths } from './prompt.js';
 
 const ABORT_KILL_TIMEOUT_MS = 1_000;
@@ -23,6 +25,7 @@ const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
 const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
 const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
 const CODEX_MEMORY_OPS_COMMAND_PATTERN = /[^\s"'\\]*-memory-ops\.jsonl(?:$|[\s"'])/;
+const CODEX_CHANNEL_OPS_COMMAND_PATTERN = /[^\s"'\\]*-channel-ops\.jsonl(?:$|[\s"'])/;
 
 interface GeneratedArtifactSnapshotEntry {
   mtimeMs: number;
@@ -85,6 +88,7 @@ export class CodexCliExecutor implements AgentExecutor {
   constructor(
     private readonly logger: AppLogger,
     private readonly memoryStore?: MemoryStore | undefined,
+    private readonly channelPreferenceStore?: ChannelPreferenceStore | undefined,
   ) {
     this.logger.info(
       'Codex CLI provider configured: model=%s reasoning=%s sandbox=%s',
@@ -118,10 +122,10 @@ export class CodexCliExecutor implements AgentExecutor {
     const executionId = request.executionId ?? 'unknown';
     const executionStartedAt = Date.now();
     const args = this.buildArgs(request);
-    const cwd = request.workspacePath ?? process.cwd();
     const runtimePaths = getCodexRuntimePaths(request);
+    const cwd = request.workspacePath ?? runtimePaths.runtimeDir;
     const prompt = buildCodexPrompt(request, runtimePaths);
-    const { generatedArtifactsDir, memoryOpsPath, runtimeDir } = runtimePaths;
+    const { channelOpsPath, generatedArtifactsDir, memoryOpsPath, runtimeDir } = runtimePaths;
     let child: ChildProcessWithoutNullStreams | undefined;
     let resumeHandle = request.resumeHandle;
     let started = false;
@@ -196,6 +200,7 @@ export class CodexCliExecutor implements AgentExecutor {
         await sink.onEvent({ type: 'lifecycle', phase: 'started' });
       }
       await this.applyMemoryOps(request, memoryOpsPath);
+      await this.applyChannelOps(request, channelOpsPath);
       await publishGeneratedArtifacts(sink, generatedArtifactsDir, generatedArtifactsBefore);
       await sink.onEvent({
         type: 'lifecycle',
@@ -313,6 +318,55 @@ export class CodexCliExecutor implements AgentExecutor {
 
     if (savedCount > 0) {
       this.logger.info('Applied %d Codex memory op(s) for thread %s', savedCount, request.threadTs);
+    }
+  }
+
+  private async applyChannelOps(
+    request: AgentExecutionRequest,
+    channelOpsPath: string,
+  ): Promise<void> {
+    if (!this.channelPreferenceStore) {
+      return;
+    }
+
+    let raw: string;
+    try {
+      raw = await readFile(channelOpsPath, 'utf8');
+    } catch (error) {
+      if (isNodeErrorCode(error, 'ENOENT')) {
+        return;
+      }
+      throw error;
+    }
+
+    let appliedCount = 0;
+    for (const [index, line] of raw.split(/\r?\n/).entries()) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      const op = parseCodexChannelOp(trimmed);
+      if (!op) {
+        this.logger.warn('Ignoring invalid Codex channel op on line %d', index + 1);
+        continue;
+      }
+
+      const record = this.channelPreferenceStore.upsert(request.channelId, op.workspaceInput);
+      appliedCount += 1;
+      this.logger.info(
+        'Codex channel op set default workspace for %s to %s',
+        request.channelId,
+        record.defaultWorkspaceInput ?? '(none)',
+      );
+    }
+
+    if (appliedCount > 0) {
+      this.logger.info(
+        'Applied %d Codex channel op(s) for thread %s',
+        appliedCount,
+        request.threadTs,
+      );
     }
   }
 
@@ -578,6 +632,9 @@ function describeCodexCommand(command: string): string {
   if (CODEX_MEMORY_OPS_COMMAND_PATTERN.test(command)) {
     return 'Saving memory...';
   }
+  if (CODEX_CHANNEL_OPS_COMMAND_PATTERN.test(command)) {
+    return 'Setting channel workspace...';
+  }
 
   return command;
 }
@@ -713,4 +770,32 @@ function parseCodexMemoryOp(line: string): CodexMemorySaveOp | undefined {
     ...(metadata ? { metadata } : {}),
     ...(expiresAt ? { expiresAt } : {}),
   };
+}
+
+interface CodexChannelOp {
+  workspaceInput: string;
+}
+
+function parseCodexChannelOp(line: string): CodexChannelOp | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (record.tool !== 'set_channel_default_workspace') {
+    return undefined;
+  }
+
+  try {
+    return parseSetChannelDefaultWorkspaceToolInput(record);
+  } catch {
+    return undefined;
+  }
 }

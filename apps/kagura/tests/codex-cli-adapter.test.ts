@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
 import { buildCodexPrompt, getCodexRuntimePaths } from '~/agent/providers/codex-cli/prompt.js';
 import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
+import type {
+  ChannelPreferenceRecord,
+  ChannelPreferenceStore,
+} from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore, SaveMemoryInput } from '~/memory/types.js';
 
@@ -121,6 +125,24 @@ function createMemoryStore(saved: MemoryRecord[] = []): MemoryStore {
     saveWithDedup: vi.fn(),
     search: vi.fn(),
   } as unknown as MemoryStore;
+}
+
+function createChannelPreferenceStore(
+  saved: ChannelPreferenceRecord[] = [],
+): ChannelPreferenceStore {
+  return {
+    get: vi.fn(),
+    upsert: vi.fn((channelId: string, defaultWorkspaceInput: string | undefined) => {
+      const record: ChannelPreferenceRecord = {
+        channelId,
+        defaultWorkspaceInput,
+        createdAt: '2026-04-24T00:00:00.000Z',
+        updatedAt: '2026-04-24T00:00:00.000Z',
+      };
+      saved.push(record);
+      return record;
+    }),
+  };
 }
 
 describe('CodexCliExecutor', () => {
@@ -357,6 +379,32 @@ describe('CodexCliExecutor', () => {
     });
   });
 
+  it('runs Codex from the runtime directory when no workspace is resolved', async () => {
+    const request = createRequest({ executionId: 'exec-no-workspace' });
+    const runtimePaths = getCodexRuntimePaths(request);
+
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, { type: 'turn.completed', usage: {} });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    await new CodexCliExecutor(createLogger()).execute(request, createSink([]));
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      expect.any(Array),
+      expect.objectContaining({ cwd: runtimePaths.runtimeDir }),
+    );
+  });
+
   it('applies Codex save_memory JSONL operations after execution', async () => {
     const workspacePath = mkdtempSync(path.join(tmpdir(), 'codex-memory-'));
     const request = createRequest({
@@ -404,6 +452,46 @@ describe('CodexCliExecutor', () => {
       repoId: 'repo-a',
       threadTs: request.threadTs,
     });
+    expect(saved).toHaveLength(1);
+  });
+
+  it('applies Codex set_channel_default_workspace JSONL operations after execution', async () => {
+    const request = createRequest({ executionId: 'exec-channel-pref' });
+    const { channelOpsPath } = getCodexRuntimePaths(request);
+    const saved: ChannelPreferenceRecord[] = [];
+    const channelPreferenceStore = createChannelPreferenceStore(saved);
+
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((prompt, child) => {
+          expect(prompt).toContain(channelOpsPath);
+          queueMicrotask(() => {
+            writeFileSync(
+              channelOpsPath,
+              `${JSON.stringify({
+                tool: 'set_channel_default_workspace',
+                workspaceInput: 'LobeHub',
+              })}\n`,
+            );
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, {
+              type: 'item.completed',
+              item: { id: 'msg-1', type: 'agent_message', text: 'workspace saved' },
+            });
+            writeJson(child, { type: 'turn.completed', usage: {} });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    await new CodexCliExecutor(createLogger(), undefined, channelPreferenceStore).execute(
+      request,
+      createSink([]),
+    );
+
+    expect(channelPreferenceStore.upsert).toHaveBeenCalledWith('C1', 'LobeHub');
     expect(saved).toHaveLength(1);
   });
 
@@ -490,6 +578,25 @@ describe('CodexCliExecutor', () => {
     expect(prompt).toContain('<codex_workspace_skills>');
     expect(prompt).toContain('## /demo-skill');
     expect(prompt).toContain('Reply with DEMO_SKILL_OK.');
+  });
+
+  it('includes the shared Kagura host behavior in the Codex prompt', () => {
+    const prompt = buildCodexPrompt(createRequest());
+
+    expect(prompt).toContain('<system_instructions>');
+    expect(prompt).toContain('Kagura is a Slack-native agent orchestration/runtime');
+    expect(prompt).toContain('AskUserQuestion is disabled in this Slack host. Do not call it.');
+    expect(prompt).toContain(
+      'Ask for confirmation, approval, disambiguation, or choices in normal Slack-visible assistant text.',
+    );
+    expect(prompt).toContain(
+      'When the user asks for a file deliverable, you must actually create and save the file locally, then use the available Kagura upload path; a text-only reply is not sufficient.',
+    );
+    expect(prompt).toContain('The direct upload_slack_file tool is not available');
+    expect(prompt).toContain('To call set_channel_default_workspace');
+    expect(prompt).toContain(
+      'Do not save routine turn summaries, ephemeral status, transcript restatements',
+    );
   });
 
   it('kills the Codex process and emits stopped on abort', async () => {

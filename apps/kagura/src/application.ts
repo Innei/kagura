@@ -87,7 +87,11 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     channelPreferenceStore,
     executionProbe,
   );
-  const codexExecutor = new CodexCliExecutor(logger.withTag('codex:session'), memoryStore);
+  const codexExecutor = new CodexCliExecutor(
+    logger.withTag('codex:session'),
+    memoryStore,
+    channelPreferenceStore,
+  );
   const providerRegistry = createProviderRegistry(
     options?.defaultProviderId ?? env.AGENT_DEFAULT_PROVIDER,
     new Map<string, AgentExecutor>([
