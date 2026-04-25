@@ -36,7 +36,9 @@ interface GeneratedArtifactSnapshotEntry {
 type GeneratedArtifactSnapshot = Map<string, GeneratedArtifactSnapshotEntry>;
 
 interface CodexJsonEvent {
+  error?: unknown;
   item?: CodexJsonItem | undefined;
+  message?: unknown;
   thread_id?: unknown;
   type: string;
   usage?:
@@ -73,12 +75,73 @@ function isMissingResumeThreadError(message: string, stderrLines: string[]): boo
   return haystack.includes('thread/resume failed: no rollout found for thread id');
 }
 
-function formatErrorWithStderr(message: string, stderrLines: string[]): string {
-  const tail = stderrLines.slice(-3).join('\n').trim();
+function formatErrorWithDetails(
+  message: string,
+  stderrLines: string[],
+  codexErrorLines: string[],
+): string {
+  const detailLines = uniqueRecentLines(
+    [...codexErrorLines, ...stderrLines].map(cleanCodexErrorLine),
+  );
+  const tail = detailLines.slice(-6).join('\n').trim();
   if (!tail || message.includes(tail)) {
     return message;
   }
   return `${message}\n${tail}`;
+}
+
+function uniqueRecentLines(lines: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function cleanCodexErrorLine(line: string): string {
+  return line
+    .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+ERROR\s+codex_core::tools::router:\s+error=/, '')
+    .trim();
+}
+
+function extractCodexEventError(event: CodexJsonEvent): string | undefined {
+  const candidates = [event.message, event.error, event.item?.text, event.item?.aggregated_output];
+  for (const candidate of candidates) {
+    const extracted = stringifyCodexErrorValue(candidate);
+    if (extracted) {
+      return extracted;
+    }
+  }
+  return undefined;
+}
+
+function stringifyCodexErrorValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value.trim() || undefined;
+  }
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ['message', 'error', 'detail', 'reason']) {
+    const nested = stringifyCodexErrorValue(record[key]);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
 }
 
 export class CodexCliExecutor implements AgentExecutor {
@@ -130,6 +193,7 @@ export class CodexCliExecutor implements AgentExecutor {
     let resumeHandle = request.resumeHandle;
     let started = false;
     let abortCleanup: (() => void) | undefined;
+    const codexErrorLines: string[] = [];
     const stderrLines: string[] = [];
 
     this.logger.info(
@@ -172,6 +236,9 @@ export class CodexCliExecutor implements AgentExecutor {
             ...(resumeHandle ? { resumeHandle } : {}),
           });
         },
+        recordErrorDetail: (detail) => {
+          codexErrorLines.push(detail);
+        },
         request,
       });
 
@@ -194,7 +261,13 @@ export class CodexCliExecutor implements AgentExecutor {
         });
       });
 
-      await Promise.all([stdoutPromise, stderrPromise, exitPromise]);
+      const settled = await Promise.allSettled([stdoutPromise, stderrPromise, exitPromise]);
+      const rejected = settled.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (rejected) {
+        throw rejected.reason;
+      }
 
       if (!started) {
         await sink.onEvent({ type: 'lifecycle', phase: 'started' });
@@ -226,9 +299,10 @@ export class CodexCliExecutor implements AgentExecutor {
         return;
       }
 
-      const message = formatErrorWithStderr(
+      const message = formatErrorWithDetails(
         error instanceof Error ? error.message : String(error),
         stderrLines,
+        codexErrorLines,
       );
       if (
         request.resumeHandle &&
@@ -469,6 +543,7 @@ export class CodexCliExecutor implements AgentExecutor {
       getDurationMs: () => number;
       markStarted: (resumeHandle?: string | undefined) => Promise<void>;
       request: AgentExecutionRequest;
+      recordErrorDetail: (detail: string) => void;
     },
   ): Promise<void> {
     const rl = readline.createInterface({ input: child.stdout });
@@ -498,6 +573,7 @@ export class CodexCliExecutor implements AgentExecutor {
       getDurationMs: () => number;
       markStarted: (resumeHandle?: string | undefined) => Promise<void>;
       request: AgentExecutionRequest;
+      recordErrorDetail: (detail: string) => void;
     },
   ): Promise<void> {
     switch (event.type) {
@@ -535,6 +611,24 @@ export class CodexCliExecutor implements AgentExecutor {
           type: 'activity-state',
           state: { clear: true, threadTs: handlers.request.threadTs },
         });
+        return;
+      }
+
+      case 'error':
+      case 'turn.failed': {
+        const detail = extractCodexEventError(event);
+        if (detail) {
+          handlers.recordErrorDetail(detail);
+          this.logger.info('Codex CLI %s detail: %s', event.type, redact(detail));
+        } else {
+          this.logger.info('Codex CLI emitted %s without a visible detail', event.type);
+        }
+        if (event.type === 'turn.failed') {
+          await sink.onEvent({
+            type: 'activity-state',
+            state: { clear: true, threadTs: handlers.request.threadTs },
+          });
+        }
         return;
       }
 

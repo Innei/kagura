@@ -333,6 +333,65 @@ describe('CodexCliExecutor', () => {
     });
   });
 
+  it('includes Codex error events and stderr details in failed lifecycle events', async () => {
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, {
+              type: 'thread.started',
+              thread_id: 'codex-thread-1',
+            });
+            writeJson(child, {
+              type: 'error',
+              message: 'apply_patch failed while editing MainLexicalContent.tsx',
+            });
+            writeJson(child, {
+              type: 'turn.failed',
+              error: {
+                message: 'tool execution failed',
+              },
+            });
+            child.stderr.write(
+              '2026-04-25T16:56:57.539984Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /repo/MainLexicalContent.tsx:\n',
+            );
+            child.stderr.write("import type { SerializedEditorState } from 'lexical'\n");
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 1, null);
+          });
+        }),
+    );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(createRequest(), createSink(events));
+
+    expect(events).toContainEqual({
+      type: 'activity-state',
+      state: { clear: true, threadTs: '1712345678.000100' },
+    });
+    expect(events.at(-1)).toEqual({
+      type: 'lifecycle',
+      phase: 'failed',
+      resumeHandle: 'codex-thread-1',
+      error: expect.stringContaining(
+        'apply_patch verification failed: Failed to find expected lines in /repo/MainLexicalContent.tsx:',
+      ),
+    });
+    expect(events.at(-1)).toEqual({
+      type: 'lifecycle',
+      phase: 'failed',
+      resumeHandle: 'codex-thread-1',
+      error: expect.stringContaining("import type { SerializedEditorState } from 'lexical'"),
+    });
+    expect(events.at(-1)).toEqual({
+      type: 'lifecycle',
+      phase: 'failed',
+      resumeHandle: 'codex-thread-1',
+      error: expect.stringContaining('apply_patch failed while editing MainLexicalContent.tsx'),
+    });
+  });
+
   it('emits generated-images for new Codex artifact files', async () => {
     const workspacePath = mkdtempSync(path.join(tmpdir(), 'codex-artifacts-'));
     const request = createRequest({ workspacePath });
