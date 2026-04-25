@@ -730,7 +730,57 @@ function describeCodexCommand(command: string): string {
     return 'Setting channel workspace...';
   }
 
-  return command;
+  return unwrapShellLoginCommand(command);
+}
+
+function unwrapShellLoginCommand(command: string): string {
+  const trimmed = command.trim();
+  const shellPrefix = findShellLoginPrefix(trimmed);
+  if (!shellPrefix) {
+    return trimmed;
+  }
+
+  const shellCommand = trimmed.slice(shellPrefix.length).trim();
+  if (!shellCommand) {
+    return trimmed;
+  }
+
+  return unquoteShellArgument(shellCommand) ?? shellCommand;
+}
+
+function findShellLoginPrefix(command: string): string | undefined {
+  const prefixes = [
+    '/bin/bash -lc ',
+    '/bin/zsh -lc ',
+    '/bin/fish -lc ',
+    '/usr/bin/bash -lc ',
+    '/usr/bin/zsh -lc ',
+    '/usr/bin/fish -lc ',
+    'bash -lc ',
+    'zsh -lc ',
+    'fish -lc ',
+    'sh -lc ',
+  ];
+
+  return prefixes.find((prefix) => command.startsWith(prefix));
+}
+
+function unquoteShellArgument(value: string): string | undefined {
+  if (value.length < 2) {
+    return undefined;
+  }
+
+  const quote = value[0];
+  if ((quote !== "'" && quote !== '"') || value.at(-1) !== quote) {
+    return undefined;
+  }
+
+  const inner = value.slice(1, -1);
+  if (quote === "'") {
+    return inner;
+  }
+
+  return inner.replaceAll(/\\(["$\\`])/g, '$1');
 }
 
 async function snapshotGeneratedArtifacts(dir: string): Promise<GeneratedArtifactSnapshot> {

@@ -218,8 +218,16 @@ describe('CodexCliExecutor', () => {
         type: 'task-update',
         taskId: 'cmd-1',
         status: 'complete',
+        title: 'pwd',
       }),
     );
+    expect(events).toContainEqual({
+      type: 'activity-state',
+      state: {
+        status: 'pwd',
+        threadTs: '1712345678.000100',
+      },
+    });
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'usage-info',
@@ -607,6 +615,65 @@ describe('CodexCliExecutor', () => {
         type: 'task-update',
         taskId: 'cmd-memory',
         title: 'Saving memory...',
+      }),
+    );
+    expect(events).not.toContainEqual(
+      expect.objectContaining({
+        title: command,
+      }),
+    );
+  });
+
+  it('renders shell-wrapped Codex commands without the shell prefix', async () => {
+    const command = "/bin/zsh -lc 'git submodule status'";
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, { type: 'turn.started' });
+            writeJson(child, {
+              type: 'item.started',
+              item: {
+                id: 'cmd-shell',
+                type: 'command_execution',
+                command,
+                status: 'in_progress',
+              },
+            });
+            writeJson(child, {
+              type: 'item.completed',
+              item: {
+                id: 'cmd-shell',
+                type: 'command_execution',
+                command,
+                exit_code: 0,
+                status: 'completed',
+              },
+            });
+            writeJson(child, { type: 'turn.completed', usage: {} });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(createRequest(), createSink(events));
+
+    expect(events).toContainEqual({
+      type: 'activity-state',
+      state: {
+        status: 'git submodule status',
+        threadTs: '1712345678.000100',
+      },
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'task-update',
+        taskId: 'cmd-shell',
+        title: 'git submodule status',
       }),
     );
     expect(events).not.toContainEqual(
