@@ -1,13 +1,15 @@
 {
   "name": "@innei/kagura",
   "version": "0.2.1",
-  "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
+  "description": "Slack-native agent integration for Claude Agent SDK and OpenAI Codex CLI, scaffolded for local execution on macOS.",
   "keywords": [
     "slack",
     "claude",
+    "codex",
     "agent",
     "bot",
-    "anthropic"
+    "anthropic",
+    "openai"
   ],
   "homepage": "https://github.com/Innei/kagura#readme",
   "bugs": {

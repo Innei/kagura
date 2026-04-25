@@ -9,6 +9,7 @@ config.*.json
 !config.example.json
 .DS_Store
 .kagura/
+.superpowers/
 data/
 slack-live-e2e
 .worktrees/
