@@ -1,6 +1,6 @@
 ---
 name: writing-live-e2e-tests
-description: Use when writing or modifying live E2E test scenarios in src/e2e/live/ for the kagura project. Triggers on tasks involving Slack bot integration testing, live scenario creation, or E2E test patterns with polling and assertions.
+description: Use when writing, modifying, or running live E2E test scenarios in src/e2e/live/ for the kagura project. Triggers on Slack bot integration testing, live scenario creation, Codex/Claude provider live tests, status probe assertions, database assertions, and requests to run or debug live E2E tests.
 ---
 
 # Writing Live E2E Tests
@@ -8,6 +8,8 @@ description: Use when writing or modifying live E2E test scenarios in src/e2e/li
 ## Overview
 
 Live E2E tests run against a real Slack workspace via Socket Mode. Each test is a standalone `run-*.ts` file in `src/e2e/live/` that exports a `LiveE2EScenario` object. The CLI auto-discovers and runs them.
+
+When the user asks to add a live E2E test, implement the scenario and run the local validation commands. When they ask to "跑下" or run it and `.env.e2e` exists, run the real live scenario too.
 
 ## Skeleton
 
@@ -112,16 +114,17 @@ runDirectly(scenario);
 
 ## Key Rules
 
-| Rule                  | Detail                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| Result path           | `env.SLACK_E2E_RESULT_PATH.replace(/result\.json$/, 'your-name-result.json')` — never hardcode |
-| Marker pattern        | Include `runId` in prompts and assertions: `MARKER_NAME ${runId}`                              |
-| Polling               | `while (Date.now() < deadline)` with `delay(1_000)` to `delay(3_000)` between iterations       |
-| Two clients           | `triggerClient` (user token) posts prompts; `botClient` (bot token) polls replies              |
-| Bot identity          | `botClient.authTest()` to get `user_id` for filtering replies                                  |
-| Application lifecycle | `createApplication()` → `start()` → `delay(3_000)` → test → `stop()` in finally                |
-| Separate helpers      | Extract `writeResult()` and `assertResult()` as functions                                      |
-| Assert then pass      | Call `assertResult()` first, set `result.passed = true` only after it succeeds                 |
+| Rule                  | Detail                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Result path           | `env.SLACK_E2E_RESULT_PATH.replace(/result\.json$/, 'your-name-result.json')` — never hardcode                     |
+| Marker pattern        | Include `runId` in prompts and assertions: `MARKER_NAME ${runId}`                                                  |
+| Polling               | `while (Date.now() < deadline)` with `delay(1_000)` to `delay(3_000)` between iterations                           |
+| Two clients           | `triggerClient` (user token) posts prompts; `botClient` (bot token) polls replies                                  |
+| Bot identity          | `botClient.authTest()` to get `user_id` for filtering replies                                                      |
+| Application lifecycle | `createApplication()` → `start()` → `delay(3_000)` → test → `stop()` in finally                                    |
+| Separate helpers      | Extract `writeResult()` and `assertResult()` as functions                                                          |
+| Assert then pass      | Call `assertResult()` first, set `result.passed = true` only after it succeeds                                     |
+| Provider-specific run | Use `createApplication({ defaultProviderId: 'codex-cli' })` or `'claude-code'` when the test must force a provider |
 
 ## Polling Pattern
 
@@ -168,16 +171,74 @@ Poll `getReactions()` for emoji presence/absence across phases (ack added → re
 
 Use `better-sqlite3` to query SQLite directly after bot processes, verify persistence of memory/session records.
 
+Important schema details:
+
+- `memories` has `repo_id`, not `scope`.
+- Global memories are `repo_id IS NULL`.
+- Workspace memories use `repo_id = ?`.
+- Resolve DB path with `path.resolve(process.cwd(), env.SESSION_DB_PATH)`.
+
 ### Status probe
 
 `FileSlackStatusProbe` writes NDJSON records. Read the probe file to verify tool progress events.
 
+Use `resetSlackStatusProbeFile(env.SLACK_E2E_STATUS_PROBE_PATH)` before posting the trigger. After polling, filter records by `record.threadTs === rootMessage.ts`.
+
+For Slack-visible rendering regressions, collect:
+
+- status records: `record.status` and `record.loadingMessages`
+- progress records: `record.text`
+
+Assert both the positive user-facing text and absence of raw internals. Example: for Codex memory file writes, assert `Saving memory...` appears and `/bin/zsh -lc`, `.kagura/runtime`, and `memory-ops.jsonl` do not.
+
+## Validation Commands
+
+After editing or adding a live scenario, run these from the repository root:
+
+```bash
+pnpm --filter kagura exec tsc --noEmit
+pnpm exec prettier --check apps/kagura/src/e2e/live/run-your-scenario.ts
+```
+
+Run targeted unit tests too when the scenario covers code with existing tests, for example:
+
+```bash
+pnpm --filter kagura exec vitest run tests/codex-cli-adapter.test.ts
+```
+
+Check scenario discovery with required dummy env if the local shell has no live secrets loaded:
+
+```bash
+SLACK_BOT_TOKEN=xoxb-test SLACK_APP_TOKEN=xapp-test SLACK_SIGNING_SECRET=secret REPO_ROOT_DIR=/Users/innei/git/innei-repo pnpm --filter kagura exec tsx src/e2e/live/cli.ts --list your-search-term
+```
+
+## Running Real Live E2E
+
+Prefer running from the repository root. Because `pnpm --filter kagura exec` executes in the package directory, `load-e2e-env.ts` may not find the root `.env.e2e` by relative path. If `.env.e2e` exists at the repository root, source it explicitly:
+
+```bash
+set -a
+source .env.e2e
+set +a
+pnpm --filter kagura exec tsx src/e2e/live/cli.ts scenario-id
+```
+
+If the CLI reports dotenv injected `0` variables and env validation says `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_SIGNING_SECRET`, or `REPO_ROOT_DIR` are missing, rerun with the explicit `source .env.e2e` command above.
+
+Expected noisy but usually non-fatal live logs:
+
+- Slack manifest token rotation may fail; slash command sync is skipped, but app mention E2E can still run.
+- Socket Mode may log WebSocket ping/pong warnings.
+- After `application.stop()`, Bolt may log "client has no active connection" for late events. If the scenario summary says `PASS`, treat this as non-blocking unless the task is specifically about shutdown behavior.
+
 ## Common Mistakes
 
-| Mistake                                     | Fix                                                |
-| ------------------------------------------- | -------------------------------------------------- |
-| Hardcoded result path                       | Use `env.SLACK_E2E_RESULT_PATH.replace(...)`       |
-| Missing `runDirectly(scenario)` at end      | Required for direct `tsx` execution                |
-| `assertResult` after `result.passed = true` | Assert FIRST, then set passed                      |
-| Forgetting `application.stop()` in finally  | Always cleanup even on error                       |
-| No runId in prompt/assertion                | Every marker must include runId for test isolation |
+| Mistake                                     | Fix                                                             |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| Hardcoded result path                       | Use `env.SLACK_E2E_RESULT_PATH.replace(...)`                    |
+| Missing `runDirectly(scenario)` at end      | Required for direct `tsx` execution                             |
+| `assertResult` after `result.passed = true` | Assert FIRST, then set passed                                   |
+| Forgetting `application.stop()` in finally  | Always cleanup even on error                                    |
+| No runId in prompt/assertion                | Every marker must include runId for test isolation              |
+| Querying `memories.scope`                   | Use `repo_id IS NULL` for global or `repo_id = ?` for workspace |
+| Running live E2E without loaded root env    | From repo root, run `set -a; source .env.e2e; set +a; ...`      |
