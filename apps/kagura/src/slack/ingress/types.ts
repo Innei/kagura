@@ -17,8 +17,10 @@ import type { SlackPermissionBridge } from '../interaction/permission-bridge.js'
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
+import type { AgentTeamsConfig } from './agent-team-routing.js';
 
 export interface SlackIngressDependencies {
+  agentTeams?: AgentTeamsConfig | undefined;
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
   claudeExecutor: AgentExecutor;

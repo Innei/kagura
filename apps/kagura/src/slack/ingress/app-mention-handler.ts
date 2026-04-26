@@ -7,6 +7,7 @@ import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
 
 import type { SlackWebClientLike } from '../types.js';
+import { resolveMentionCoordinationDecision } from './agent-team-routing.js';
 import { handleThreadConversation } from './conversation-pipeline.js';
 import {
   createBotIdentityResolver,
@@ -78,8 +79,27 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
         mention.channel,
         threadTs,
         mention.user,
+        deps.agentTeams,
       ))
     ) {
+      return;
+    }
+
+    const coordinationDecision = resolveMentionCoordinationDecision(
+      mention.text,
+      {
+        userId: botUserId,
+        userName: botIdentity?.userName,
+      },
+      deps.agentTeams,
+    );
+    if (coordinationDecision.action === 'standby') {
+      runtimeInfo(
+        deps.logger,
+        'Skipping app mention for thread %s because current bot is standby for lead %s',
+        threadTs,
+        coordinationDecision.lead,
+      );
       return;
     }
 
@@ -119,22 +139,13 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const threadTs = message.thread_ts;
     const client = args.client as SlackWebClientLike;
 
-    if (!threadTs) {
-      runtimeInfo(
-        deps.logger,
-        'Ignoring message event %s because it is not a thread reply',
-        message.ts,
-      );
-      return;
-    }
-
     if (message.user && !message.bot_id && !message.subtype) {
       const handledUserInput = await maybeHandlePendingUserInputReply(
         client,
         {
           channelId: typeof message.channel === 'string' ? message.channel : undefined,
           text: message.text,
-          threadTs,
+          threadTs: threadTs ?? message.ts,
           userId: message.user,
         },
         deps,
@@ -147,8 +158,75 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const botIdentity = await getBotIdentity(client);
     const botUserId = botIdentity?.userId;
     const mentionsCurrentBot = mentionsUser(message.text, botUserId);
+    const coordinationDecision = resolveMentionCoordinationDecision(
+      message.text,
+      {
+        userId: botUserId,
+        userName: botIdentity?.userName,
+      },
+      deps.agentTeams,
+    );
+    if (coordinationDecision.action === 'standby') {
+      runtimeInfo(
+        deps.logger,
+        'Skipping thread reply for thread %s because current bot is standby for lead %s',
+        threadTs ?? message.ts,
+        coordinationDecision.lead,
+      );
+      return;
+    }
+
+    if (!threadTs) {
+      if (coordinationDecision.action !== 'run') {
+        runtimeInfo(
+          deps.logger,
+          'Ignoring message event %s because it is not a thread reply',
+          message.ts,
+        );
+        return;
+      }
+
+      const channelId = typeof message.channel === 'string' ? message.channel : undefined;
+      const senderId = message.user?.trim() || message.bot_id?.trim();
+      if (!channelId || !senderId) {
+        runtimeWarn(
+          deps.logger,
+          'Ignoring root team mention %s because channel or sender id is missing',
+          message.ts,
+        );
+        return;
+      }
+
+      if (
+        shouldSkipBotAuthoredMessage(deps.logger, 'root message', message.ts, message, botUserId)
+      ) {
+        return;
+      }
+
+      await handleThreadConversation(
+        client,
+        {
+          channel: channelId,
+          files: message.files,
+          team: typeof message.team === 'string' ? message.team : undefined,
+          text: message.text,
+          ts: message.ts,
+          user: senderId,
+        },
+        deps,
+        {
+          logLabel: 'root team mention',
+          addAcknowledgementReaction: false,
+          currentBotUserName: botIdentity?.userName,
+          currentBotUserId: botUserId,
+          rootMessageTs: message.ts,
+        },
+      );
+      return;
+    }
+
     const session = deps.sessionStore.get(threadTs);
-    if (!session && !mentionsCurrentBot) {
+    if (!session && !mentionsCurrentBot && coordinationDecision.action !== 'run') {
       runtimeWarn(
         deps.logger,
         'Ignoring thread reply %s in thread %s because no persisted session was found',
@@ -208,12 +286,14 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
         channelId,
         threadTs,
         typeof message.user === 'string' ? message.user : undefined,
+        deps.agentTeams,
       ))
     ) {
       return;
     }
 
     if (
+      coordinationDecision.action !== 'run' &&
       shouldSkipMessageForForeignMention(
         deps.logger,
         'thread reply',

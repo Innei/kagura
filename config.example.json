@@ -1,4 +1,11 @@
 {
+  "agentTeams": {
+    "S0123456789": {
+      "name": "kagura-agents",
+      "defaultLead": "U0123456789",
+      "members": ["U0123456789", "U9876543210"]
+    }
+  },
   "claude": {
     "model": "",
     "permissionMode": "bypassPermissions",

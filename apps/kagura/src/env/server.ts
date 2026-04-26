@@ -15,8 +15,17 @@ dotenv.config({ override: false }); // dev mode: also read cwd .env if present
 const booleanStringSchema = z.enum(['true', 'false']).transform((value) => value === 'true');
 const optionalPositiveInteger = z.coerce.number().int().positive().optional();
 
+const agentTeamConfigSchema = z
+  .object({
+    defaultLead: z.string().min(1).optional(),
+    members: z.array(z.string().min(1)).optional(),
+    name: z.string().min(1).optional(),
+  })
+  .strict();
+
 const appConfigSchema = z
   .object({
+    agentTeams: z.record(z.string().min(1), agentTeamConfigSchema).optional(),
     claude: z
       .object({
         enableSkills: z.boolean().optional(),
@@ -45,6 +54,7 @@ const appConfigSchema = z
   .strict();
 
 type AppConfig = z.infer<typeof appConfigSchema>;
+export type AppConfigAgentTeams = NonNullable<AppConfig['agentTeams']>;
 
 function loadAppConfig(): AppConfig {
   const override = process.env.APP_CONFIG_PATH?.trim();
@@ -59,6 +69,7 @@ function loadAppConfig(): AppConfig {
 }
 
 const appConfig = loadAppConfig();
+export const appConfigAgentTeams: AppConfigAgentTeams = appConfig.agentTeams ?? {};
 
 function configString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();

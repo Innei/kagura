@@ -13,7 +13,7 @@ import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channe
 import { createDatabase } from '~/db/index.js';
 import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
-import { env, validateLiveE2EEnv } from '~/env/server.js';
+import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
@@ -23,6 +23,7 @@ import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
+import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
@@ -36,6 +37,7 @@ export interface RuntimeApplication {
 }
 
 export interface RuntimeApplicationOptions {
+  agentTeams?: AgentTeamsConfig | undefined;
   claudePermissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
   defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
   executionProbePath?: string | undefined;
@@ -109,6 +111,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const slackApp: App = createSlackApp(
     {
       analyticsStore,
+      agentTeams: options?.agentTeams ?? appConfigAgentTeams,
       channelPreferenceStore,
       logger,
       memoryStore,

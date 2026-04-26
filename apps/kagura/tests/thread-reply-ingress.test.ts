@@ -7,6 +7,7 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
+import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import {
   createAppMentionHandler,
   createThreadReplyHandler,
@@ -134,6 +135,91 @@ describe('thread reply ingress', () => {
     });
 
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+  });
+
+  it('processes a root Slack user-group mention only for the configured lead', async () => {
+    const threadTs = '1712345678.000115';
+    const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        agentTeams: {
+          SAGENTS: {
+            defaultLead: 'U_BOT',
+            members: ['U_BOT', 'U_OTHER_BOT'],
+          },
+        },
+        initialSessions: [],
+      });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<!subteam^SAGENTS|@agents> coordinate this task',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    expect(sessionStore.get(threadTs)).toMatchObject({
+      channelId: 'C123',
+      rootMessageTs: threadTs,
+      threadTs,
+    });
+  });
+
+  it('keeps a root Slack user-group mention on standby for non-lead members', async () => {
+    const threadTs = '1712345678.000116';
+    const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        agentTeams: {
+          SAGENTS: {
+            defaultLead: 'U_OTHER_BOT',
+            members: ['U_BOT', 'U_OTHER_BOT'],
+          },
+        },
+        initialSessions: [],
+      });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<!subteam^SAGENTS|@agents> coordinate this task',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
+    expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
+    expect(sessionStore.get(threadTs)).toBeUndefined();
+  });
+
+  it('keeps direct co-mentioned app mentions on standby when another bot is first', async () => {
+    const threadTs = '1712345678.000117';
+    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+
+    await appMentionHandler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_OTHER_BOT> <@U_BOT> coordinate this task',
+        ts: threadTs,
+        type: 'app_mention',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
   it('processes bot-authored thread replies that mention this bot before a local session exists', async () => {
@@ -375,7 +461,7 @@ describe('thread reply ingress', () => {
 
 function createThreadReplyTestHarness(
   threadTs: string,
-  options: { initialSessions?: SessionRecord[] } = {},
+  options: { agentTeams?: AgentTeamsConfig; initialSessions?: SessionRecord[] } = {},
 ): {
   claudeExecutor: AgentExecutor;
   client: SlackWebClientLike & {
@@ -431,6 +517,7 @@ function createThreadReplyTestHarness(
   } as unknown as WorkspaceResolver;
   const handler = createThreadReplyHandler({
     analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
+    agentTeams: options.agentTeams,
     channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,
@@ -458,6 +545,7 @@ function createThreadReplyTestHarness(
 function createDualIngressTestHarness(
   threadTs: string,
   threadExecutionRegistry = createThreadExecutionRegistry(),
+  options: { agentTeams?: AgentTeamsConfig } = {},
 ): {
   appMentionHandler: ReturnType<typeof createAppMentionHandler>;
   claudeExecutor: AgentExecutor;
@@ -508,6 +596,7 @@ function createDualIngressTestHarness(
   } as unknown as WorkspaceResolver;
   const deps = {
     analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
+    agentTeams: options.agentTeams,
     channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
     claudeExecutor,
     logger,

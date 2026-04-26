@@ -13,31 +13,29 @@ import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-a
 
 interface DualAgentInitialCoMentionResult {
   appOneBotUserId: string;
-  appOneFinalText?: string;
-  appOneFinalTs?: string;
-  appOneHandoffText?: string;
-  appOneHandoffTs?: string;
-  appOneReadyText?: string;
-  appOneReadyTs?: string;
   appTwoBotUserId: string;
-  appTwoReadyText?: string;
-  appTwoReadyTs?: string;
-  appTwoResponseText?: string;
-  appTwoResponseTs?: string;
-  assignmentMessageTs?: string;
   channelId: string;
   failureMessage?: string;
+  leadBotUserId: string;
+  leadFinalText?: string;
+  leadFinalTs?: string;
+  leadHandoffText?: string;
+  leadHandoffTs?: string;
   matched: {
-    appOneFinalObserved: boolean;
-    appOneHandoffObserved: boolean;
-    appOneReadyObserved: boolean;
-    appTwoReadyObserved: boolean;
-    appTwoResponseObserved: boolean;
-    userAssignedAppOne: boolean;
+    leadFinalObserved: boolean;
+    leadHandoffObserved: boolean;
+    standbyInitialSuppressed: boolean;
+    standbyResponseObserved: boolean;
   };
   passed: boolean;
   rootMessageTs?: string;
   runId: string;
+  standbyBotUserId: string;
+  standbyInitialText?: string;
+  standbyInitialTs?: string;
+  standbyResponseText?: string;
+  standbyResponseTs?: string;
+  teamMentionId: string;
 }
 
 const CO_CODEWORD = 'VIOLET';
@@ -65,25 +63,46 @@ async function main(): Promise<void> {
   const appTwoClient = new SlackApiClient(env.SLACK_BOT_2_TOKEN);
   const appOneIdentity = await appOneClient.authTest();
   const appTwoIdentity = await appTwoClient.authTest();
+  const leadApp = resolveLeadApp();
+  const lead =
+    leadApp === 'app2'
+      ? { client: appTwoClient, identity: appTwoIdentity, label: 'app two' }
+      : { client: appOneClient, identity: appOneIdentity, label: 'app one' };
+  const standby =
+    leadApp === 'app2'
+      ? { client: appOneClient, identity: appOneIdentity, label: 'app one' }
+      : { client: appTwoClient, identity: appTwoIdentity, label: 'app two' };
+  const teamMentionId =
+    process.env.SLACK_E2E_AGENT_TEAM_ID?.trim() ||
+    `S${runId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+  const agentTeams = {
+    [teamMentionId]: {
+      defaultLead: lead.identity.user_id,
+      members: [appOneIdentity.user_id, appTwoIdentity.user_id],
+      name: 'kagura-agents-e2e',
+    },
+  };
 
   const result: DualAgentInitialCoMentionResult = {
     appOneBotUserId: appOneIdentity.user_id,
     appTwoBotUserId: appTwoIdentity.user_id,
     channelId: env.SLACK_E2E_CHANNEL_ID,
+    leadBotUserId: lead.identity.user_id,
     matched: {
-      appOneFinalObserved: false,
-      appOneHandoffObserved: false,
-      appOneReadyObserved: false,
-      appTwoReadyObserved: false,
-      appTwoResponseObserved: false,
-      userAssignedAppOne: false,
+      leadFinalObserved: false,
+      leadHandoffObserved: false,
+      standbyInitialSuppressed: false,
+      standbyResponseObserved: false,
     },
     passed: false,
     runId,
+    standbyBotUserId: standby.identity.user_id,
+    teamMentionId,
   };
 
-  const appOne = createApplication({ instanceLabel: 'bootstrap:app1' });
+  const appOne = createApplication({ agentTeams, instanceLabel: 'bootstrap:app1' });
   const appTwo = createApplication({
+    agentTeams,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, 'app2'),
     instanceLabel: 'bootstrap:app2',
     sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, 'app2'),
@@ -103,14 +122,13 @@ async function main(): Promise<void> {
     await delay(3_000);
 
     const rootPrompt = [
-      `<@${appOneIdentity.user_id}> <@${appTwoIdentity.user_id}> DUAL_AGENT_CO_MENTION ${runId}`,
+      `<!subteam^${teamMentionId}|@kagura-agents> DUAL_AGENT_TEAM_MENTION ${runId}`,
       'This is a Slack routing test. Do not use code, file, memory, or interactive question tools.',
-      `The host injects your current Slack app identity. If your identity is <@${appOneIdentity.user_id}>, reply exactly "DUAL_AGENT_APP1_READY ${runId}".`,
-      `If your identity is <@${appTwoIdentity.user_id}>, reply exactly "DUAL_AGENT_APP2_READY ${runId}".`,
-      `Later, when the user mentions <@${appOneIdentity.user_id}> with DUAL_AGENT_CO_ASSIGN ${runId}, app one must reply exactly "<@${appTwoIdentity.user_id}> DUAL_AGENT_CO_REQUEST ${runId}".`,
-      `Later, when app two receives DUAL_AGENT_CO_REQUEST ${runId}, app two must reply exactly "<@${appOneIdentity.user_id}> DUAL_AGENT_CO_RESPONSE ${runId} ${CO_CODEWORD}".`,
-      `Later, when app one receives DUAL_AGENT_CO_RESPONSE ${runId} ${CO_CODEWORD}, app one must reply exactly "DUAL_AGENT_CO_FINAL ${runId} ${CO_CODEWORD}".`,
-    ].join(' ');
+      `The host injects your current Slack app identity. If this initial root message starts the lead app <@${lead.identity.user_id}>, the lead app must reply exactly "<@${standby.identity.user_id}> DUAL_AGENT_TEAM_REQUEST ${runId}".`,
+      `If this initial root message starts the standby app <@${standby.identity.user_id}>, the standby app must reply exactly "DUAL_AGENT_TEAM_STANDBY_INITIAL ${runId}".`,
+      `When the standby app receives DUAL_AGENT_TEAM_REQUEST ${runId}, the standby app must reply exactly "<@${lead.identity.user_id}> DUAL_AGENT_TEAM_RESPONSE ${runId} ${CO_CODEWORD}".`,
+      `When the lead app receives DUAL_AGENT_TEAM_RESPONSE ${runId} ${CO_CODEWORD}, the lead app must reply exactly "DUAL_AGENT_TEAM_FINAL ${runId} ${CO_CODEWORD}".`,
+    ].join('\n');
 
     const rootMessage = await triggerClient.postMessage({
       channel: env.SLACK_E2E_CHANNEL_ID,
@@ -119,86 +137,66 @@ async function main(): Promise<void> {
       unfurl_media: false,
     });
     result.rootMessageTs = rootMessage.ts;
-    console.info('Posted dual-agent initial co-mention root message: %s', rootMessage.ts);
+    console.info('Posted dual-agent team mention root message: %s', rootMessage.ts);
 
-    const appOneReady = await waitForBotReply({
-      botClient: appOneClient,
-      botUserId: appOneIdentity.user_id,
+    const leadHandoff = await waitForBotReply({
+      botClient: lead.client,
+      botUserId: lead.identity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
       sinceTs: rootMessage.ts,
-      textIncludes: `DUAL_AGENT_APP1_READY ${runId}`,
+      textIncludes: `DUAL_AGENT_TEAM_REQUEST ${runId}`,
     });
-    result.appOneReadyText = appOneReady.text;
-    result.appOneReadyTs = appOneReady.ts;
-    result.matched.appOneReadyObserved = true;
-    console.info('Observed app one ready reply: %s', appOneReady.ts);
+    result.leadHandoffText = leadHandoff.text;
+    result.leadHandoffTs = leadHandoff.ts;
+    result.matched.leadHandoffObserved = true;
+    console.info('Observed %s handoff to standby: %s', lead.label, leadHandoff.ts);
 
-    const appTwoReady = await waitForBotReply({
-      botClient: appTwoClient,
-      botUserId: appTwoIdentity.user_id,
+    const standbyInitial = await findBotReply({
+      botClient: standby.client,
+      botUserId: standby.identity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
       sinceTs: rootMessage.ts,
-      textIncludes: `DUAL_AGENT_APP2_READY ${runId}`,
+      textIncludes: `DUAL_AGENT_TEAM_STANDBY_INITIAL ${runId}`,
     });
-    result.appTwoReadyText = appTwoReady.text;
-    result.appTwoReadyTs = appTwoReady.ts;
-    result.matched.appTwoReadyObserved = true;
-    console.info('Observed app two ready reply: %s', appTwoReady.ts);
+    if (standbyInitial) {
+      result.standbyInitialText = standbyInitial.text;
+      result.standbyInitialTs = standbyInitial.ts;
+    } else {
+      result.matched.standbyInitialSuppressed = true;
+    }
 
-    const assignmentMessage = await triggerClient.postMessage({
-      channel: env.SLACK_E2E_CHANNEL_ID,
-      text: [
-        `<@${appOneIdentity.user_id}> DUAL_AGENT_CO_ASSIGN ${runId}`,
-        'Please perform the coordination step from the root instructions now.',
-      ].join(' '),
-      thread_ts: rootMessage.ts,
-      unfurl_links: false,
-      unfurl_media: false,
-    });
-    result.assignmentMessageTs = assignmentMessage.ts;
-    result.matched.userAssignedAppOne = true;
-    console.info('Posted user assignment to app one: %s', assignmentMessage.ts);
-
-    const appOneHandoff = await waitForBotReply({
-      botClient: appOneClient,
-      botUserId: appOneIdentity.user_id,
+    const standbyResponse = await waitForBotReply({
+      botClient: standby.client,
+      botUserId: standby.identity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
-      sinceTs: assignmentMessage.ts,
-      textIncludes: `DUAL_AGENT_CO_REQUEST ${runId}`,
+      sinceTs: leadHandoff.ts,
+      textIncludes: `DUAL_AGENT_TEAM_RESPONSE ${runId} ${CO_CODEWORD}`,
     });
-    result.appOneHandoffText = appOneHandoff.text;
-    result.appOneHandoffTs = appOneHandoff.ts;
-    result.matched.appOneHandoffObserved = true;
-    console.info('Observed app one handoff to app two: %s', appOneHandoff.ts);
+    result.standbyResponseText = standbyResponse.text;
+    result.standbyResponseTs = standbyResponse.ts;
+    result.matched.standbyResponseObserved = true;
+    console.info('Observed %s response to lead: %s', standby.label, standbyResponse.ts);
 
-    const appTwoResponse = await waitForBotReply({
-      botClient: appTwoClient,
-      botUserId: appTwoIdentity.user_id,
+    const leadFinal = await waitForBotReply({
+      botClient: lead.client,
+      botUserId: lead.identity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
-      sinceTs: appOneHandoff.ts,
-      textIncludes: `DUAL_AGENT_CO_RESPONSE ${runId} ${CO_CODEWORD}`,
+      sinceTs: standbyResponse.ts,
+      textIncludes: `DUAL_AGENT_TEAM_FINAL ${runId} ${CO_CODEWORD}`,
     });
-    result.appTwoResponseText = appTwoResponse.text;
-    result.appTwoResponseTs = appTwoResponse.ts;
-    result.matched.appTwoResponseObserved = true;
-    console.info('Observed app two response to app one: %s', appTwoResponse.ts);
+    result.leadFinalText = leadFinal.text;
+    result.leadFinalTs = leadFinal.ts;
+    result.matched.leadFinalObserved = true;
+    console.info('Observed %s final team reply: %s', lead.label, leadFinal.ts);
 
-    const appOneFinal = await waitForBotReply({
-      botClient: appOneClient,
-      botUserId: appOneIdentity.user_id,
-      channelId: env.SLACK_E2E_CHANNEL_ID,
-      rootTs: rootMessage.ts,
-      sinceTs: appTwoResponse.ts,
-      textIncludes: `DUAL_AGENT_CO_FINAL ${runId} ${CO_CODEWORD}`,
-    });
-    result.appOneFinalText = appOneFinal.text;
-    result.appOneFinalTs = appOneFinal.ts;
-    result.matched.appOneFinalObserved = true;
-    console.info('Observed app one final co-mention reply: %s', appOneFinal.ts);
+    await Promise.all([
+      waitForThreadExecutionsToSettle(appOne.threadExecutionRegistry, rootMessage.ts),
+      waitForThreadExecutionsToSettle(appTwo.threadExecutionRegistry, rootMessage.ts),
+    ]);
 
     await writeResult(result);
     assertResult(result);
@@ -256,6 +254,24 @@ async function waitForBotReply(input: {
   throw new Error(`Timed out waiting for bot reply containing "${input.textIncludes}".`);
 }
 
+async function findBotReply(input: {
+  botClient: SlackApiClient;
+  botUserId: string;
+  channelId: string;
+  rootTs: string;
+  sinceTs: string;
+  textIncludes: string;
+}): Promise<{ text: string; ts: string } | undefined> {
+  const replies = await input.botClient.conversationReplies({
+    channel: input.channelId,
+    inclusive: true,
+    limit: 100,
+    ts: input.rootTs,
+  });
+
+  return findBotMessageAfterTs(replies, input.botUserId, input.sinceTs, input.textIncludes);
+}
+
 function findBotMessageAfterTs(
   replies: SlackConversationRepliesResponse,
   botUserId: string,
@@ -286,26 +302,41 @@ function withPathSuffix(rawPath: string, suffix: string): string {
   return path.join(parsed.dir, `${parsed.name}-${suffix}${parsed.ext}`);
 }
 
+function resolveLeadApp(): 'app1' | 'app2' {
+  const raw = process.env.SLACK_E2E_AGENT_TEAM_LEAD?.trim().toLowerCase();
+  if (raw === 'app2') {
+    return 'app2';
+  }
+  return 'app1';
+}
+
+async function waitForThreadExecutionsToSettle(
+  registry: ReturnType<typeof createApplication>['threadExecutionRegistry'],
+  threadTs: string,
+): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (registry.listActive(threadTs).length === 0) {
+      return;
+    }
+    await delay(1_000);
+  }
+}
+
 function assertResult(result: DualAgentInitialCoMentionResult): void {
   const failures: string[] = [];
 
-  if (!result.matched.appOneReadyObserved) {
-    failures.push('first app did not reply to the initial co-mention');
+  if (!result.matched.leadHandoffObserved) {
+    failures.push('team lead did not mention the standby app from the initial team mention');
   }
-  if (!result.matched.appTwoReadyObserved) {
-    failures.push('second app did not reply to the initial co-mention');
+  if (!result.matched.standbyInitialSuppressed) {
+    failures.push('standby app replied to the initial team mention instead of staying standby');
   }
-  if (!result.matched.userAssignedAppOne) {
-    failures.push('user assignment to the first app was not posted');
+  if (!result.matched.standbyResponseObserved) {
+    failures.push('standby app did not respond to the lead app mention');
   }
-  if (!result.matched.appOneHandoffObserved) {
-    failures.push('first app did not mention the second app after assignment');
-  }
-  if (!result.matched.appTwoResponseObserved) {
-    failures.push('second app did not respond to the first app mention');
-  }
-  if (!result.matched.appOneFinalObserved) {
-    failures.push('first app did not respond to the second app mention');
+  if (!result.matched.leadFinalObserved) {
+    failures.push('lead app did not respond to the standby app mention');
   }
 
   if (failures.length > 0) {
@@ -331,10 +362,10 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'dual-agent-initial-co-mention',
-  title: 'Dual Agent Initial Co-Mention',
+  title: 'Dual Agent Initial Team Mention',
   description:
-    'Start two Slack apps from a root message that explicitly mentions both, then verify a user-assigned task can make them mention each other in the thread.',
-  keywords: ['dual-agent', 'mention', 'co-mention', 'thread', 'bot', 'app'],
+    'Start two Slack apps from a root Slack user-group mention, then verify only the lead starts and the standby app joins after a direct mention.',
+  keywords: ['dual-agent', 'mention', 'co-mention', 'team', 'subteam', 'thread', 'bot', 'app'],
   run: main,
 };
 

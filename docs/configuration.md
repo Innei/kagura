@@ -32,6 +32,13 @@ Example:
 
 ```json
 {
+  "agentTeams": {
+    "S0123456789": {
+      "name": "kagura-agents",
+      "defaultLead": "U0123456789",
+      "members": ["U0123456789", "U9876543210"]
+    }
+  },
   "codex": {
     "model": "gpt-5.5",
     "reasoningEffort": "medium",
@@ -40,6 +47,8 @@ Example:
   "repoRootDir": "~/git"
 }
 ```
+
+`agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
 
 ## Environment variables
 

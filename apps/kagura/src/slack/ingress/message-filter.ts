@@ -2,6 +2,7 @@ import type { AppLogger } from '~/logger/index.js';
 import { runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 
 import type { SlackWebClientLike } from '../types.js';
+import { type AgentTeamsConfig,isParticipantInMentionedAgentTeam } from './agent-team-routing.js';
 
 const SLACK_USER_MENTION_PATTERN = /<@([\dA-Z]+)>/g;
 
@@ -113,6 +114,7 @@ export async function shouldSkipBotAuthoredMessageFromUnjoinedSender(
   channelId: string,
   threadTs: string,
   senderUserId: string | undefined,
+  agentTeams?: AgentTeamsConfig | undefined,
 ): Promise<boolean> {
   if (!senderUserId || !senderUserId.startsWith('U')) {
     runtimeInfo(
@@ -149,6 +151,9 @@ export async function shouldSkipBotAuthoredMessageFromUnjoinedSender(
       }
       const externallyAuthored = Boolean(user) && user !== senderUserId;
       if (externallyAuthored && mentionsUser(text, senderUserId)) {
+        return false;
+      }
+      if (externallyAuthored && isParticipantInMentionedAgentTeam(text, senderUserId, agentTeams)) {
         return false;
       }
     }

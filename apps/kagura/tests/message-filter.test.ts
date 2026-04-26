@@ -259,6 +259,40 @@ describe('shouldSkipBotAuthoredMessageFromUnjoinedSender', () => {
     expect(result).toBe(false);
   });
 
+  it('allows bot-authored messages from a sender that joined through a configured team mention', async () => {
+    const logger = createTestLogger();
+    const client = {
+      conversations: {
+        replies: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              text: '<!subteam^SAGENTS|@agents> handle this',
+              ts: '1712345678.000100',
+              user: 'U_TRIGGER',
+            },
+          ],
+        }),
+      },
+    } as unknown as SlackWebClientLike;
+
+    const result = await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+      logger,
+      'test',
+      client,
+      'C123',
+      '1712345678.000100',
+      'U_SENDER',
+      {
+        SAGENTS: {
+          defaultLead: 'U_SENDER',
+          members: ['U_SENDER', 'U_AGENT'],
+        },
+      },
+    );
+
+    expect(result).toBe(false);
+  });
+
   it('skips bot-authored messages from senders that are neither root author nor explicitly mentioned', async () => {
     const logger = createTestLogger();
     const client = {

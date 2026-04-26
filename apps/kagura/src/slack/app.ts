@@ -13,6 +13,7 @@ import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
+import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
 import {
   createAppMentionHandler,
   createAssistantThreadStartedHandler,
@@ -45,6 +46,7 @@ import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
 export interface SlackApplicationDependencies {
+  agentTeams?: AgentTeamsConfig | undefined;
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
   logger: AppLogger;
@@ -92,6 +94,7 @@ export function createSlackApp(
   );
   const ingressDeps = {
     analyticsStore: deps.analyticsStore,
+    agentTeams: deps.agentTeams,
     channelPreferenceStore: deps.channelPreferenceStore,
     logger: deps.logger.withTag('slack:ingress'),
     memoryStore: deps.memoryStore,
