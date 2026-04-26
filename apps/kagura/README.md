@@ -13,11 +13,11 @@ _Every thread a stage, every response a dance_
 
 > _In Japanese mythology, Ame-no-Uzume performed a divine dance before the closed doors of Amano-Iwato — the heavenly rock cave where Amaterasu had hidden herself, plunging the world into darkness. Her dance, accompanied by music and laughter, drew the sun goddess back into the world. This was the first **kagura** (神楽) — "the entertainment of the gods."_
 
-**Kagura** brings that spirit to Slack. Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) natively in your workspace — `@mention` the bot, it routes the session into the right repository, and replies with Slack-native rich text, live progress, and persistent memory.
+**Kagura** brings that spirit to Slack. Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) or [OpenAI Codex CLI](https://github.com/openai/codex) natively in your workspace — `@mention` the bot, it routes the session into the right repository, and replies with Slack-native rich text, live progress, and persistent memory.
 
 ## Why
 
-Running a Claude agent inside Slack requires gluing together thread context, workspace routing, streaming UX, session persistence, and memory — all adapted to Slack's API conventions. **kagura** handles that full lifecycle via [Socket Mode](https://api.slack.com/apis/socket-mode), so you can focus on the agent's behavior.
+Running a coding agent inside Slack requires gluing together thread context, workspace routing, streaming UX, session persistence, and memory — all adapted to Slack's API conventions. **kagura** handles that full lifecycle via [Socket Mode](https://api.slack.com/apis/socket-mode) for both Claude Agent SDK and Codex CLI, so you can focus on the agent's behavior.
 
 ## How it works
 
@@ -34,6 +34,8 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 
 **Conversation** — Thread-aware multimodal context (text + files + images), session resumption across restarts, layered memory (global / workspace / preferences).
 
+**A2A orchestration** — Mention a configured Slack user group or co-mention multiple agent apps to start a lead-coordinated Agent-to-Agent thread with explicit delegation and final summary.
+
 **Slack UX** — Rich text rendering (headings, lists, code blocks, auto-splitting), live progress indicators, reaction lifecycle, native assistant typing.
 
 **Workspace routing** — Each thread binds to a repo/workdir. Auto-detected from message text, or manually chosen via Message Action.
@@ -41,6 +43,51 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 **Agent control** — Pluggable provider registry, stop via `stop`/`cancel` keyword, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
 
 **Operations** — Auto-provisioned manifest (commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
+
+## A2A conversation mode
+
+Kagura separates normal Slack chat from Agent-to-Agent (A2A) coordination. General chat still behaves like a single mentioned bot session. A2A mode starts when the root message either mentions a configured Slack user group, such as `@agents`, or co-mentions multiple configured agent apps.
+
+In an A2A thread, one agent is the lead. The lead owns user-facing coordination, task assignment, and the final summary. Standby agents only run when they are explicitly addressed by the user or by the lead.
+
+Configure A2A teams in `config.json`:
+
+```json
+{
+  "agentTeams": {
+    "S0123456789": {
+      "name": "agents",
+      "defaultLead": "U0123456789",
+      "members": ["U0123456789", "U9876543210"]
+    }
+  }
+}
+```
+
+`agentTeams` keys are Slack user group IDs from `<!subteam^S...>`. `defaultLead` and `members` are bot user IDs. Every production bot instance that should participate in the same team must load compatible `agentTeams` config.
+
+### A2A routing cases
+
+| Case                                                                  | Expected behavior                                                                                     |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Root message mentions `@agents`                                       | Creates an A2A session; the configured/default lead runs first.                                       |
+| Root message co-mentions multiple agent apps                          | Creates an A2A session; the first mentioned/configured lead runs first, other agents stay on standby. |
+| User replies in the A2A thread without mentioning an agent            | The lead handles the reply.                                                                           |
+| User explicitly mentions one standby agent                            | That mentioned agent handles the reply.                                                               |
+| User explicitly mentions multiple agents                              | The lead handles the reply, decides whether to delegate, and may assign tasks.                        |
+| Lead explicitly mentions one or more standby agents                   | Mentioned standby agents run; multiple standby agents may run in parallel.                            |
+| All assigned standby agents reach `completed`, `failed`, or `stopped` | Kagura automatically wakes the original lead provider to post the final summary.                      |
+| Bot-authored messages in General Chat                                 | Still ignored by default.                                                                             |
+| Bot-authored lead messages in A2A                                     | Allowed to trigger mentioned standby participants; self-mentions are ignored to avoid loops.          |
+
+Final summaries are driven by Kagura's execution lifecycle, not by parsing Slack prose. The summary should report successful work, failed or stopped assignments, and the user-visible conclusion.
+
+### Verified A2A live cases
+
+The live E2E suite includes:
+
+- `dual-agent-a2a-auto-summary`: user starts with `@agents`; lead assigns a standby agent; standby completes; Kagura wakes the lead for a final summary.
+- `dual-agent-a2a-user-reply-routing`: user replies mid-thread with no explicit agent mention, one explicit agent mention, and multiple explicit agent mentions. The multi-agent reply path validates `lead reply -> task dispatch -> standby completion -> lead summary`.
 
 ## Install
 
