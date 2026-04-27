@@ -79,13 +79,12 @@ export const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
 
 export const DESIRED_BOT_EVENTS = [
   'app_home_opened',
-  'app_mention',
   'message.channels',
+  'message.groups',
   'message.im',
 ] as const;
 
 export const DESIRED_BOT_SCOPES = [
-  'app_mentions:read',
   'assistant:write',
   'channels:history',
   'channels:read',

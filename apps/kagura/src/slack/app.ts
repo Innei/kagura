@@ -15,7 +15,6 @@ import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
 import type { A2ACoordinatorStore } from './ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
-import { createAppMentionHandler } from './ingress/app-mention-handler.js';
 import {
   createAssistantThreadStartedHandler,
   createAssistantUserMessageHandler,
@@ -138,7 +137,6 @@ export function createSlackApp(
     await ack();
     await homeTabHandler({ client, event: { user: body.user.id, tab: 'home' } });
   });
-  app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
   app.event(
     'reaction_added',

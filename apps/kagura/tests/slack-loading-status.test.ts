@@ -16,7 +16,7 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
-import { createAppMentionHandler } from '~/slack/ingress/app-mention-handler.js';
+import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackBlock, SlackWebClientLike } from '~/slack/types.js';
@@ -78,7 +78,7 @@ describe('Slack loading status test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const channelPreferenceStore = createChannelPreferenceStore();
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
-    const handler = createAppMentionHandler({
+    const handler = createThreadReplyHandler({
       analyticsStore: createAnalyticsStore(),
       channelPreferenceStore,
       claudeExecutor: executor,
@@ -209,7 +209,7 @@ describe('Slack loading status test', () => {
         team: 'T123',
         text: '<@U_BOT> inspect the loading messages in kagura',
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -576,7 +576,7 @@ describe('Slack loading status test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const channelPreferenceStore = createChannelPreferenceStore();
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
-    const handler = createAppMentionHandler({
+    const handler = createThreadReplyHandler({
       analyticsStore: createAnalyticsStore(),
       channelPreferenceStore,
       claudeExecutor: executor,
@@ -634,7 +634,7 @@ describe('Slack loading status test', () => {
         team: 'T123',
         text: '<@U_BOT> inspect failure cleanup in kagura',
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -1069,6 +1069,9 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
           return {};
         },
       },
+    },
+    auth: {
+      test: async () => ({ user: 'kagura', user_id: 'U_BOT' }),
     },
     chat: {
       delete: async (args) => {

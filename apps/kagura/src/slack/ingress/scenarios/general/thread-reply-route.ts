@@ -15,12 +15,15 @@ export function resolveRootMessageRoute(
   deps: SlackIngressDependencies,
   message: SlackMessage,
   identity: ThreadReplyIdentity,
-  coordinationAction: 'none' | 'run',
+  options: {
+    addAcknowledgementReaction: boolean;
+    shouldRun: boolean;
+  },
 ): CommonThreadReplyRoute {
-  if (coordinationAction !== 'run') {
+  if (!options.shouldRun) {
     runtimeInfo(
       deps.logger,
-      'Ignoring message event %s because it is not a thread reply',
+      'Ignoring root message event %s because it is not addressed to this app',
       message.ts,
     );
     return { action: 'ignore' };
@@ -52,12 +55,12 @@ export function resolveRootMessageRoute(
   return {
     action: 'dispatch',
     input: {
-      addAcknowledgementReaction: false,
+      addAcknowledgementReaction: options.addAcknowledgementReaction,
       channelId,
       currentBotUserId: identity.botUserId,
       currentBotUserName: identity.botUserName,
       files: message.files,
-      logLabel: 'root team mention',
+      logLabel: 'root message',
       messageTs: message.ts,
       rootMessageTs: message.ts,
       teamId: typeof message.team === 'string' ? message.team : undefined,

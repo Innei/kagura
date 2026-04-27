@@ -12,7 +12,7 @@ import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import {
-  createAppMentionHandler,
+  createThreadReplyHandler,
   WORKSPACE_PICKER_ACTION_ID,
 } from '~/slack/ingress/app-mention-handler.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
@@ -95,18 +95,18 @@ describe('Workspace picker action test', () => {
       workspaceResolver,
     };
 
-    const mentionHandler = createAppMentionHandler(deps);
+    const messageHandler = createThreadReplyHandler(deps);
     const pickerHandler = createWorkspacePickerActionHandler(deps);
     const { ackCalls, client, postMessageCalls, viewOpenCalls } = createSlackClientFixture();
 
-    await mentionHandler({
+    await messageHandler({
       client,
       event: {
         channel: 'C123',
         team: 'T123',
         text: '<@U_BOT> work on my-app',
         ts: '1712345678.000100',
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -199,7 +199,7 @@ describe('Workspace picker action test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const channelPreferenceStore = { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() };
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore, channelPreferenceStore);
-    const handler = createAppMentionHandler({
+    const handler = createThreadReplyHandler({
       analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
       channelPreferenceStore,
       claudeExecutor: executor,
@@ -221,7 +221,7 @@ describe('Workspace picker action test', () => {
         team: 'T123',
         text: '<@U_BOT> hello, how are you?',
         ts: '1712345678.000100',
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -342,6 +342,9 @@ function createSlackClientFixture(): {
           return {};
         },
       },
+    },
+    auth: {
+      test: async () => ({ user: 'kagura', user_id: 'U_BOT' }),
     },
     chat: {
       delete: async () => ({}),

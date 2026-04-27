@@ -10,10 +10,7 @@ import { createThreadExecutionRegistry } from '~/slack/execution/thread-executio
 import type { A2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
 import { MemoryA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
-import {
-  createAppMentionHandler,
-  createThreadReplyHandler,
-} from '~/slack/ingress/app-mention-handler.js';
+import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -103,14 +100,16 @@ describe('thread reply ingress', () => {
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
-  it('deduplicates a thread self-mention that arrives through both app_mention and message ingress', async () => {
+  it('deduplicates a thread self-mention when Slack retries the same message event', async () => {
     const threadTs = '1712345678.000105';
     const messageTs = '1712345678.000106';
     const registry = createThreadExecutionRegistry();
-    const { appMentionHandler, claudeExecutor, client, threadReplyHandler } =
-      createDualIngressTestHarness(threadTs, registry);
+    const { claudeExecutor, client, threadReplyHandler } = createDualIngressTestHarness(
+      threadTs,
+      registry,
+    );
 
-    await appMentionHandler({
+    await threadReplyHandler({
       client,
       event: {
         channel: 'C123',
@@ -118,7 +117,7 @@ describe('thread reply ingress', () => {
         text: '<@U_BOT> continue with the deliverable',
         thread_ts: threadTs,
         ts: messageTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -137,6 +136,54 @@ describe('thread reply ingress', () => {
     });
 
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores root messages that do not mention this app or a configured agent team', async () => {
+    const threadTs = '1712345678.000135';
+    const { claudeExecutor, client, handler, logger, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, { initialSessions: [] });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: 'plain channel chatter',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
+    expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      'Ignoring root message event %s because it is not addressed to this app',
+      threadTs,
+    );
+  });
+
+  it('processes a root direct message mention of the current app', async () => {
+    const threadTs = '1712345678.000136';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, { initialSessions: [] });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> continue with the deliverable',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
   });
 
   it('processes a root Slack user-group mention only for the configured lead', async () => {
@@ -206,6 +253,43 @@ describe('thread reply ingress', () => {
     expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
     expect(sessionStore.get(threadTs)).toMatchObject({
       a2aLead: 'U_OTHER_BOT',
+      channelId: 'C123',
+      conversationMode: 'a2a',
+      rootMessageTs: threadTs,
+      threadTs,
+    });
+  });
+
+  it('uses an explicit configured agent mention as the root Slack user-group lead', async () => {
+    const threadTs = '1712345678.000137';
+    const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        agentTeams: {
+          SAGENTS: {
+            defaultLead: 'U_OTHER_BOT',
+            members: ['U_BOT', 'U_OTHER_BOT'],
+          },
+        },
+        initialSessions: [],
+      });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<!subteam^SAGENTS|@agents> <@U_BOT> coordinate this task',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    expect(sessionStore.get(threadTs)).toMatchObject({
+      a2aLead: 'U_BOT',
       channelId: 'C123',
       conversationMode: 'a2a',
       rootMessageTs: threadTs,
@@ -472,18 +556,18 @@ describe('thread reply ingress', () => {
     }
   });
 
-  it('keeps direct co-mentioned app mentions on standby when another bot is first', async () => {
+  it('keeps direct co-mentioned root messages on standby when another bot is first', async () => {
     const threadTs = '1712345678.000117';
-    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+    const { claudeExecutor, client, threadReplyHandler } = createDualIngressTestHarness(threadTs);
 
-    await appMentionHandler({
+    await threadReplyHandler({
       client,
       event: {
         channel: 'C123',
         team: 'T123',
         text: '<@U_OTHER_BOT> <@U_BOT> coordinate this task',
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -549,17 +633,17 @@ describe('thread reply ingress', () => {
     });
   });
 
-  it('allows app mentions even when Slack omits the team id', async () => {
+  it('allows root direct mentions even when Slack omits the team id', async () => {
     const threadTs = '1712345678.000107';
-    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+    const { claudeExecutor, client, threadReplyHandler } = createDualIngressTestHarness(threadTs);
 
-    await appMentionHandler({
+    await threadReplyHandler({
       client,
       event: {
         channel: 'C123',
         text: '<@U_BOT> continue with the deliverable',
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -693,16 +777,16 @@ describe('thread reply ingress', () => {
     );
   });
 
-  it('processes app mentions with image attachments only', async () => {
+  it('processes root direct mentions with image attachments', async () => {
     const threadTs = '1712345678.000112';
-    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+    const { claudeExecutor, client, threadReplyHandler } = createDualIngressTestHarness(threadTs);
 
-    await appMentionHandler({
+    await threadReplyHandler({
       client,
       event: {
         channel: 'C123',
         team: 'T123',
-        text: '',
+        text: '<@U_BOT>',
         files: [
           {
             id: 'F123GHI',
@@ -712,7 +796,7 @@ describe('thread reply ingress', () => {
           },
         ],
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });
@@ -821,7 +905,6 @@ function createDualIngressTestHarness(
   threadExecutionRegistry = createThreadExecutionRegistry(),
   options: { agentTeams?: AgentTeamsConfig } = {},
 ): {
-  appMentionHandler: ReturnType<typeof createAppMentionHandler>;
   claudeExecutor: AgentExecutor;
   client: SlackWebClientLike & {
     auth: {
@@ -884,7 +967,6 @@ function createDualIngressTestHarness(
   };
 
   return {
-    appMentionHandler: createAppMentionHandler(deps),
     claudeExecutor,
     client: createSlackClientFixture(),
     threadReplyHandler: createThreadReplyHandler(deps),

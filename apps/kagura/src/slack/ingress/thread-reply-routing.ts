@@ -34,11 +34,16 @@ type ThreadReplyRoute =
       threadTs: string;
     };
 
+export interface ThreadReplyRoutingOptions {
+  rootAddAcknowledgementReaction?: boolean | undefined;
+}
+
 export async function resolveThreadReplyRoute(
   client: SlackWebClientLike,
   deps: SlackIngressDependencies,
   message: SlackMessage,
   identity: ThreadReplyIdentity,
+  options: ThreadReplyRoutingOptions = {},
 ): Promise<ThreadReplyRoute> {
   const threadTs = message.thread_ts;
   const mentionsCurrentBot = mentionsUser(message.text, identity.botUserId);
@@ -65,7 +70,10 @@ export async function resolveThreadReplyRoute(
   }
 
   if (!threadTs) {
-    const route = resolveRootMessageRoute(deps, message, identity, coordinationDecision.action);
+    const route = resolveRootMessageRoute(deps, message, identity, {
+      addAcknowledgementReaction: options.rootAddAcknowledgementReaction ?? true,
+      shouldRun: coordinationDecision.action === 'run' || mentionsCurrentBot,
+    });
     if (!rootA2AContext || route.action !== 'dispatch') {
       return route;
     }

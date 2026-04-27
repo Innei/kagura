@@ -147,7 +147,7 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+              bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
             },
           },
         },
@@ -216,7 +216,7 @@ describe('syncSlashCommands with token rotation', () => {
             },
             settings: {
               event_subscriptions: {
-                bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+                bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
               },
             },
           },
@@ -390,7 +390,7 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+              bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
             },
           },
         },
@@ -436,8 +436,13 @@ describe('syncSlashCommands with token rotation', () => {
                 },
               ],
             },
+            oauth_config: {
+              scopes: {
+                bot: ['app_mentions:read', 'chat:write', 'channels:history'],
+              },
+            },
             settings: {
-              event_subscriptions: { bot_events: ['app_home_opened'] },
+              event_subscriptions: { bot_events: ['app_home_opened', 'app_mention'] },
             },
           },
         }),
@@ -458,8 +463,15 @@ describe('syncSlashCommands with token rotation', () => {
     const [, updateInit] = updateCall as [string, RequestInit];
     const body = JSON.parse(updateInit.body as string);
     expect(body.manifest.settings.event_subscriptions.bot_events).toEqual(
-      expect.arrayContaining(['app_home_opened', 'app_mention', 'message.channels', 'message.im']),
+      expect.arrayContaining([
+        'app_home_opened',
+        'message.channels',
+        'message.groups',
+        'message.im',
+      ]),
     );
+    expect(body.manifest.settings.event_subscriptions.bot_events).not.toContain('app_mention');
+    expect(body.manifest.oauth_config.scopes.bot).toEqual(['chat:write', 'channels:history']);
   });
 
   it('enables always_online when bot_user has it disabled', async () => {

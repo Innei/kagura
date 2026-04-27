@@ -11,10 +11,7 @@ import type { ContextMemories, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
-import {
-  createAppMentionHandler,
-  createThreadReplyHandler,
-} from '~/slack/ingress/app-mention-handler.js';
+import { createThreadReplyHandler } from '~/slack/ingress/app-mention-handler.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -49,18 +46,18 @@ describe('Slack skill user input bridge', () => {
       workspaceResolver,
     };
 
-    const appMentionHandler = createAppMentionHandler(deps);
+    const messageHandler = createThreadReplyHandler(deps);
     const threadReplyHandler = createThreadReplyHandler(deps);
     const { client, postMessageCalls, statusCalls } = createSlackClientFixture({ threadTs });
 
-    const mentionTask = appMentionHandler({
+    const mentionTask = messageHandler({
       client,
       event: {
         channel: 'C123',
         team: 'T123',
         text: '<@U_BOT> run the bazi skill in kagura',
         ts: threadTs,
-        type: 'app_mention',
+        type: 'message',
         user: 'U123',
       },
     });

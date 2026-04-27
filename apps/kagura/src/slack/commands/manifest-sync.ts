@@ -29,6 +29,14 @@ interface SlackManifestEventSubscriptions {
   bot_events?: string[];
 }
 
+interface SlackManifestOAuthConfig {
+  [key: string]: unknown;
+  scopes?: {
+    bot?: string[];
+    [key: string]: unknown;
+  };
+}
+
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
@@ -38,6 +46,7 @@ interface SlackManifest {
     slash_commands?: SlackManifestSlashCommand[];
     [key: string]: unknown;
   };
+  oauth_config?: SlackManifestOAuthConfig;
   settings?: {
     event_subscriptions?: SlackManifestEventSubscriptions;
     [key: string]: unknown;
@@ -73,6 +82,9 @@ export interface ManifestSyncOptions {
   refreshToken?: string | undefined;
   tokenStorePath?: string | undefined;
 }
+
+const OBSOLETE_BOT_EVENTS = ['app_mention'] as const;
+const OBSOLETE_BOT_SCOPES = ['app_mentions:read'] as const;
 
 export async function syncSlashCommands(options: ManifestSyncOptions): Promise<void> {
   const { appId, logger } = options;
@@ -112,7 +124,21 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
 
   // Ensure required bot events are subscribed
   const existingBotEvents = currentManifest.settings?.event_subscriptions?.bot_events ?? [];
-  const missingBotEvents = DESIRED_BOT_EVENTS.filter((event) => !existingBotEvents.includes(event));
+  const obsoleteBotEvents = existingBotEvents.filter((event) =>
+    OBSOLETE_BOT_EVENTS.includes(event as (typeof OBSOLETE_BOT_EVENTS)[number]),
+  );
+  const botEventsToKeep = existingBotEvents.filter(
+    (event) => !OBSOLETE_BOT_EVENTS.includes(event as (typeof OBSOLETE_BOT_EVENTS)[number]),
+  );
+  const missingBotEvents = DESIRED_BOT_EVENTS.filter((event) => !botEventsToKeep.includes(event));
+
+  const existingBotScopes = currentManifest.oauth_config?.scopes?.bot ?? [];
+  const obsoleteBotScopes = existingBotScopes.filter((scope) =>
+    OBSOLETE_BOT_SCOPES.includes(scope as (typeof OBSOLETE_BOT_SCOPES)[number]),
+  );
+  const botScopesToKeep = existingBotScopes.filter(
+    (scope) => !OBSOLETE_BOT_SCOPES.includes(scope as (typeof OBSOLETE_BOT_SCOPES)[number]),
+  );
 
   // Remove /stop if still present in manifest (replaced by reaction + shortcut)
   const commandsToKeep = (
@@ -126,7 +152,9 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
     missingShortcuts.length === 0 &&
     !needsAlwaysOnline &&
     !needsHomeTab &&
-    missingBotEvents.length === 0
+    missingBotEvents.length === 0 &&
+    obsoleteBotEvents.length === 0 &&
+    obsoleteBotScopes.length === 0
   ) {
     logger.info(
       'All %d slash commands and %d shortcuts already registered, bot always_online, home_tab, and required bot events are enabled',
@@ -159,8 +187,14 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   if (missingBotEvents.length > 0) {
     logger.info('Adding missing bot events: %s', missingBotEvents.join(', '));
   }
+  if (obsoleteBotEvents.length > 0) {
+    logger.info('Removing obsolete bot events: %s', obsoleteBotEvents.join(', '));
+  }
+  if (obsoleteBotScopes.length > 0) {
+    logger.info('Removing obsolete bot scopes: %s', obsoleteBotScopes.join(', '));
+  }
 
-  const updatedBotEvents = [...existingBotEvents];
+  const updatedBotEvents = [...botEventsToKeep];
   for (const event of missingBotEvents) {
     if (!updatedBotEvents.includes(event)) {
       updatedBotEvents.push(event);
@@ -182,6 +216,17 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
       slash_commands: commandsToKeep,
       shortcuts: [...existingShortcuts, ...missingShortcuts],
     },
+    ...(obsoleteBotScopes.length > 0
+      ? {
+          oauth_config: {
+            ...currentManifest.oauth_config,
+            scopes: {
+              ...currentManifest.oauth_config?.scopes,
+              bot: botScopesToKeep,
+            },
+          },
+        }
+      : {}),
     settings: {
       ...currentManifest.settings,
       event_subscriptions: {

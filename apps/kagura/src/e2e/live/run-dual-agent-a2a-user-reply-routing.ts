@@ -21,6 +21,7 @@ interface A2AUserReplyRoutingResult {
     multiMentionLeadSummaryObserved: boolean;
     multiMentionStandbyCompletionObserved: boolean;
     noMentionLeadObserved: boolean;
+    ordinaryMessageSuppressed: boolean;
     singleMentionStandbyObserved: boolean;
   };
   passed: boolean;
@@ -32,6 +33,7 @@ interface A2AUserReplyRoutingResult {
 }
 
 const MULTI_CODEWORD = 'CEDAR';
+const HISTORY_CODEWORD = 'MAPLE';
 
 async function main(): Promise<void> {
   if (!env.SLACK_E2E_ENABLED) {
@@ -76,6 +78,7 @@ async function main(): Promise<void> {
       multiMentionLeadSummaryObserved: false,
       multiMentionStandbyCompletionObserved: false,
       noMentionLeadObserved: false,
+      ordinaryMessageSuppressed: false,
       singleMentionStandbyObserved: false,
     },
     passed: false,
@@ -114,14 +117,44 @@ async function main(): Promise<void> {
     await appTwo.start();
     await delay(3_000);
 
+    const ordinaryMessage = await postMessageWithRetry(triggerClient, {
+      channel: env.SLACK_E2E_CHANNEL_ID,
+      text: [
+        `A2A_ORDINARY_IGNORED ${runId}`,
+        `If a Kagura app incorrectly processes this ordinary channel message, it must reply exactly "A2A_ORDINARY_SHOULD_NOT_REPLY ${runId}".`,
+      ].join('\n'),
+      unfurl_links: false,
+      unfurl_media: false,
+    });
+    await assertNoBotReply({
+      botClient: appOneClient,
+      botUserId: appOneIdentity.user_id,
+      channelId: env.SLACK_E2E_CHANNEL_ID,
+      rootTs: ordinaryMessage.ts,
+      sinceTs: ordinaryMessage.ts,
+      textIncludes: `A2A_ORDINARY_SHOULD_NOT_REPLY ${runId}`,
+      unexpected: result.unexpected,
+    });
+    await assertNoBotReply({
+      botClient: appTwoClient,
+      botUserId: appTwoIdentity.user_id,
+      channelId: env.SLACK_E2E_CHANNEL_ID,
+      rootTs: ordinaryMessage.ts,
+      sinceTs: ordinaryMessage.ts,
+      textIncludes: `A2A_ORDINARY_SHOULD_NOT_REPLY ${runId}`,
+      unexpected: result.unexpected,
+    });
+    result.matched.ordinaryMessageSuppressed = true;
+
     const rootMessage = await postMessageWithRetry(triggerClient, {
       channel: env.SLACK_E2E_CHANNEL_ID,
       text: [
         `<!subteam^${teamMentionId}|@kagura-agents> A2A_USER_REPLY_ROUTING ${runId}`,
         'This is a Slack A2A routing test. Do not use tools.',
+        `The shared history codeword for this thread is ${HISTORY_CODEWORD}.`,
         `The lead app <@${appOneIdentity.user_id}> must reply exactly "A2A_READY ${runId}".`,
         `When a later user reply contains "A2A_NO_MENTION ${runId}", the lead app <@${appOneIdentity.user_id}> must reply exactly "A2A_NO_MENTION_LEAD ${runId}".`,
-        `When a later user reply mentions <@${appTwoIdentity.user_id}> and contains "A2A_SINGLE_MENTION ${runId}", the standby app <@${appTwoIdentity.user_id}> must reply exactly "A2A_SINGLE_STANDBY ${runId}".`,
+        `When a later user reply mentions <@${appTwoIdentity.user_id}> and contains "A2A_SINGLE_MENTION ${runId}", the standby app <@${appTwoIdentity.user_id}> must reply exactly "A2A_SINGLE_STANDBY ${runId} ${HISTORY_CODEWORD}".`,
         `When a later user reply mentions both <@${appOneIdentity.user_id}> and <@${appTwoIdentity.user_id}> and contains "A2A_MULTI_MENTION ${runId}", the lead app <@${appOneIdentity.user_id}> must assign work by replying exactly "<@${appTwoIdentity.user_id}> A2A_MULTI_ASSIGN ${runId}".`,
         `When the standby app <@${appTwoIdentity.user_id}> receives "A2A_MULTI_ASSIGN ${runId}", it must reply exactly "A2A_MULTI_WORKER_DONE ${runId} ${MULTI_CODEWORD}".`,
         `When the host automatically wakes the lead for that multi-agent assignment summary, the lead app <@${appOneIdentity.user_id}> must reply exactly "A2A_MULTI_SUMMARY ${runId} ${MULTI_CODEWORD}".`,
@@ -182,7 +215,7 @@ async function main(): Promise<void> {
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
       sinceTs: singleMentionPrompt.ts,
-      textIncludes: `A2A_SINGLE_STANDBY ${runId}`,
+      textIncludes: `A2A_SINGLE_STANDBY ${runId} ${HISTORY_CODEWORD}`,
     });
     result.matched.singleMentionStandbyObserved = true;
     await assertNoBotReply({
@@ -191,7 +224,7 @@ async function main(): Promise<void> {
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
       sinceTs: singleMentionPrompt.ts,
-      textIncludes: `A2A_SINGLE_STANDBY ${runId}`,
+      textIncludes: `A2A_SINGLE_STANDBY ${runId} ${HISTORY_CODEWORD}`,
       unexpected: result.unexpected,
     });
     await waitForBothAppsToSettle(appOne, appTwo, rootMessage.ts);
@@ -223,13 +256,16 @@ async function main(): Promise<void> {
     });
     result.matched.multiMentionStandbyCompletionObserved = true;
 
-    await waitForBotReply({
+    await waitForBotReplyMatching({
       botClient: appOneClient,
       botUserId: appOneIdentity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
       rootTs: rootMessage.ts,
       sinceTs: multiWorkerDone.ts,
-      textIncludes: `A2A_MULTI_SUMMARY ${runId} ${MULTI_CODEWORD}`,
+      description: 'lead auto-summary after multi-agent worker completion',
+      matches: (text) =>
+        text.includes(`A2A_MULTI_SUMMARY ${runId} ${MULTI_CODEWORD}`) ||
+        isLeadAutoSummaryText(text),
     });
     result.matched.multiMentionLeadSummaryObserved = true;
 
@@ -274,6 +310,50 @@ async function waitForBotReply(input: {
     await delay(2_500);
   }
   throw new Error(`Timed out waiting for bot reply containing "${input.textIncludes}".`);
+}
+
+function isLeadAutoSummaryText(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('routing') &&
+    (normalized.includes('completed') ||
+      normalized.includes('completion') ||
+      normalized.includes('concluded') ||
+      normalized.includes('summary')) &&
+    (normalized.includes('multi') ||
+      normalized.includes('delegat') ||
+      normalized.includes('assignment') ||
+      normalized.includes('worker'))
+  );
+}
+
+async function waitForBotReplyMatching(input: {
+  botClient: SlackApiClient;
+  botUserId: string;
+  channelId: string;
+  description: string;
+  matches: (text: string) => boolean;
+  rootTs: string;
+  sinceTs: string;
+}): Promise<{ text: string; ts: string }> {
+  const deadline = Date.now() + env.SLACK_E2E_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const replies = await conversationRepliesWithRetry(input.botClient, input);
+    for (const message of replies.messages ?? []) {
+      if (!message.ts || Number(message.ts) <= Number(input.sinceTs)) {
+        continue;
+      }
+      if (message.user !== input.botUserId) {
+        continue;
+      }
+      const text = typeof message.text === 'string' ? message.text : '';
+      if (input.matches(text)) {
+        return { text, ts: message.ts };
+      }
+    }
+    await delay(2_500);
+  }
+  throw new Error(`Timed out waiting for ${input.description}.`);
 }
 
 async function assertNoBotReply(input: {
@@ -356,8 +436,11 @@ function assertResult(result: A2AUserReplyRoutingResult): void {
   if (!result.matched.noMentionLeadObserved) {
     failures.push('lead reply for no-mention user message was not observed');
   }
+  if (!result.matched.ordinaryMessageSuppressed) {
+    failures.push('ordinary channel message was not verified as suppressed');
+  }
   if (!result.matched.singleMentionStandbyObserved) {
-    failures.push('standby reply for single-agent mention was not observed');
+    failures.push('standby reply for single-agent mention with prior history was not observed');
   }
   if (!result.matched.multiMentionLeadAssignmentObserved) {
     failures.push('lead assignment for multi-agent mention was not observed');

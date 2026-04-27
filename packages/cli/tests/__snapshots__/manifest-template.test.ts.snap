@@ -59,7 +59,6 @@ exports[`manifest-template > produces expected manifest structure 1`] = `
   "oauth_config": {
     "scopes": {
       "bot": [
-        "app_mentions:read",
         "assistant:write",
         "channels:history",
         "channels:read",
@@ -85,8 +84,8 @@ exports[`manifest-template > produces expected manifest structure 1`] = `
     "event_subscriptions": {
       "bot_events": [
         "app_home_opened",
-        "app_mention",
         "message.channels",
+        "message.groups",
         "message.im",
       ],
     },

@@ -13,7 +13,7 @@ _Every thread a stage, every response a dance_
 
 > _In Japanese mythology, Ame-no-Uzume performed a divine dance before the closed doors of Amano-Iwato — the heavenly rock cave where Amaterasu had hidden herself, plunging the world into darkness. Her dance, accompanied by music and laughter, drew the sun goddess back into the world. This was the first **kagura** (神楽) — "the entertainment of the gods."_
 
-**Kagura** brings that spirit to Slack. Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) or [OpenAI Codex CLI](https://github.com/openai/codex) natively in your workspace — `@mention` the bot, it routes the session into the right repository, and replies with Slack-native rich text, live progress, and persistent memory.
+**Kagura** brings that spirit to Slack. Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) or [OpenAI Codex CLI](https://github.com/openai/codex) natively in your workspace — mention the bot, a configured agent user group, or use a Message Action; Kagura routes the session into the right repository and replies with Slack-native rich text, live progress, and persistent memory.
 
 ## Why
 
@@ -22,7 +22,9 @@ Running a coding agent inside Slack requires gluing together thread context, wor
 ## How it works
 
 ```
-@mention / Message Action
+Slack message event / Message Action
+  → ignore ordinary channel chatter
+  → route direct bot mentions or configured agent user-group mentions
   → resolve target repo
   → load thread history (text + files + images)
   → run agent in repo cwd
@@ -42,11 +44,13 @@ Running a coding agent inside Slack requires gluing together thread context, wor
 
 **Agent control** — Pluggable provider registry, stop via `stop`/`cancel` keyword, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
 
-**Operations** — Auto-provisioned manifest (commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
+**Operations** — Auto-provisioned manifest (message events + commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
 
 ## A2A conversation mode
 
-Kagura separates normal Slack chat from Agent-to-Agent (A2A) coordination. General chat still behaves like a single mentioned bot session. A2A mode starts when the root message either mentions a configured Slack user group, such as `@agents`, or co-mentions multiple configured agent apps.
+Kagura separates normal Slack chat from Agent-to-Agent (A2A) coordination. The Slack app subscribes to message events (`message.channels`, `message.groups`, and `message.im`) and filters them in process: ordinary channel messages are ignored, direct bot mentions become single-agent sessions, and configured agent user-group mentions become A2A sessions. The app no longer depends on Slack's `app_mention` event.
+
+A2A mode starts when the root message either mentions a configured Slack user group, such as `@agents`, or co-mentions multiple configured agent apps. Slack user groups cannot contain bot users, so the user group is only the group-moment signal; the actual agent participants come from `agentTeams` config and any explicit agent `@mentions` in the same first non-empty line.
 
 In an A2A thread, one agent is the lead. The lead owns user-facing coordination, task assignment, and the final summary. Standby agents only run when they are explicitly addressed by the user or by the lead.
 
@@ -64,13 +68,16 @@ Configure A2A teams in `config.json`:
 }
 ```
 
-`agentTeams` keys are Slack user group IDs from `<!subteam^S...>`. `defaultLead` and `members` are bot user IDs. Every production bot instance that should participate in the same team must load compatible `agentTeams` config.
+`agentTeams` keys are Slack user group IDs from `<!subteam^S...>`. `defaultLead` and `members` are bot user IDs. Every production bot instance that should participate in the same team must load compatible `agentTeams` config and be present in the Slack channel where message events should be received.
 
 ### A2A routing cases
 
 | Case                                                                  | Expected behavior                                                                                     |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Ordinary root message without bot or configured group mention         | Ignored.                                                                                              |
+| Root message directly mentions one bot                                | Creates a normal single-agent session for that bot.                                                   |
 | Root message mentions `@agents`                                       | Creates an A2A session; the configured/default lead runs first.                                       |
+| Root message mentions `@agents` and explicitly mentions one agent     | Creates an A2A session; the explicitly mentioned configured agent becomes lead.                       |
 | Root message co-mentions multiple agent apps                          | Creates an A2A session; the first mentioned/configured lead runs first, other agents stay on standby. |
 | User replies in the A2A thread without mentioning an agent            | The lead handles the reply.                                                                           |
 | User explicitly mentions one standby agent                            | That mentioned agent handles the reply.                                                               |
@@ -87,7 +94,7 @@ Final summaries are driven by Kagura's execution lifecycle, not by parsing Slack
 The live E2E suite includes:
 
 - `dual-agent-a2a-auto-summary`: user starts with `@agents`; lead assigns a standby agent; standby completes; Kagura wakes the lead for a final summary.
-- `dual-agent-a2a-user-reply-routing`: user replies mid-thread with no explicit agent mention, one explicit agent mention, and multiple explicit agent mentions. The multi-agent reply path validates `lead reply -> task dispatch -> standby completion -> lead summary`.
+- `dual-agent-a2a-user-reply-routing`: verifies ordinary root messages are ignored, `@agents` root messages start the lead, user replies route correctly with no explicit agent mention, one explicit agent mention, and multiple explicit agent mentions, and a later standby agent can use prior thread history. The multi-agent reply path validates `lead reply -> task dispatch -> standby completion -> lead summary`.
 
 ## Install
 
