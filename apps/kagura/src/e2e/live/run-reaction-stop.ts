@@ -50,14 +50,18 @@ async function main(): Promise<void> {
     runId,
   };
 
-  const application = createApplication();
+  const application = createApplication({ claudePermissionMode: 'bypassPermissions' });
   let caughtError: unknown;
 
   try {
     await application.start();
     await delay(3_000);
 
-    const mentionText = `<@${botIdentity.user_id}> [e2e:${runId}] ${targetRepo} — list all files in the project root and describe what each one does in detail`;
+    const mentionText = [
+      `<@${botIdentity.user_id}> [e2e:${runId}] ${targetRepo}`,
+      `Run this exact shell command before replying: sleep 45 && echo REACTION_STOP_SHOULD_NOT_COMPLETE_${runId}.`,
+      'Do not reply until that command completes.',
+    ].join(' ');
     const posted = await triggerClient.postMessage({
       channel: env.SLACK_E2E_CHANNEL_ID,
       text: mentionText,
@@ -65,26 +69,17 @@ async function main(): Promise<void> {
     result.rootMessageTs = posted.ts;
     console.info('[e2e] Posted trigger message: %s', posted.ts);
 
-    // Wait for the bot to post a meaningful reply (progress message with tool activity)
-    // This ensures the execution is registered before we try to stop it
+    // Wait for the execution registry, not the first visible reply. Fast model replies can
+    // otherwise complete before the stop reaction is added.
     let botStarted = false;
     for (let i = 0; i < 30; i++) {
-      await delay(2_000);
-      const replies = await pollReplies(triggerClient, env.SLACK_E2E_CHANNEL_ID, posted.ts);
-      const botMessages = (replies.messages ?? []).filter(
-        (m) => (m.user === botIdentity.user_id || m.bot_id) && m.ts !== posted.ts,
-      );
-      if (botMessages.length > 0) {
+      if (application.threadExecutionRegistry.listActive(posted.ts).length > 0) {
         botStarted = true;
         result.matched.botStartedReplying = true;
-        console.info(
-          '[e2e] Bot posted %d message(s) in thread, waiting 3s for execution to stabilize...',
-          botMessages.length,
-        );
-        // Extra delay to ensure the Claude executor is running and registered
-        await delay(3_000);
+        console.info('[e2e] Execution registered for thread, adding stop reaction...');
         break;
       }
+      await delay(1_000);
     }
 
     if (!botStarted) {
@@ -124,10 +119,7 @@ async function main(): Promise<void> {
     await application.stop().catch(() => {});
   }
 
-  const outputPath = path.resolve('data', 'reaction-stop-result.json');
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`);
-  console.info('[e2e] Result written to %s', outputPath);
+  await writeResult(result);
   console.info('[e2e] Passed: %s', result.passed);
 
   if (caughtError) {
@@ -137,6 +129,17 @@ async function main(): Promise<void> {
   if (!result.passed) {
     throw new Error(`E2E failed: ${result.failureMessage ?? 'unknown reason'}`);
   }
+}
+
+async function writeResult(result: ReactionStopResult): Promise<void> {
+  const resultPath = env.SLACK_E2E_RESULT_PATH.replace(
+    /result\.json$/,
+    'reaction-stop-result.json',
+  );
+  const absolutePath = path.resolve(process.cwd(), resultPath);
+  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+  await fs.writeFile(absolutePath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  console.info('[e2e] Result written to %s', absolutePath);
 }
 
 async function pollReplies(

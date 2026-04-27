@@ -1,5 +1,5 @@
-import type { AgentTeamsConfig, MentionCoordinationDecision } from './agent-team-routing.js';
-import { parseUserMentions } from './agent-team-routing.js';
+import type { AgentTeamsConfig, MentionCoordinationDecision } from '../../agent-team-routing.js';
+import { parseUserMentions } from '../../agent-team-routing.js';
 
 export interface A2AIdentity {
   userId?: string | undefined;

@@ -15,16 +15,16 @@ import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
 import type { A2ACoordinatorStore } from './ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
+import { createAppMentionHandler } from './ingress/app-mention-handler.js';
 import {
-  createAppMentionHandler,
   createAssistantThreadStartedHandler,
   createAssistantUserMessageHandler,
-  createThreadReplyHandler,
-  startA2ASummaryPoller,
-  WORKSPACE_PICKER_ACTION_ID,
-} from './ingress/app-mention-handler.js';
+} from './ingress/assistant-message-handler.js';
 import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home-tab-handler.js';
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
+import { startA2ASummaryPoller } from './ingress/scenarios/a2a/summary-runner.js';
+import { createThreadReplyHandler } from './ingress/thread-reply-handler.js';
+import { WORKSPACE_PICKER_ACTION_ID } from './ingress/workspace-resolution.js';
 import type { SlackPermissionBridge } from './interaction/permission-bridge.js';
 import {
   createPermissionActionHandler,

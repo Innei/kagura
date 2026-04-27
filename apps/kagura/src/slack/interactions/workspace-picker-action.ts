@@ -1,7 +1,5 @@
-import {
-  type SlackIngressDependencies,
-  WORKSPACE_PICKER_ACTION_ID,
-} from '../ingress/app-mention-handler.js';
+import type { SlackIngressDependencies } from '../ingress/types.js';
+import { WORKSPACE_PICKER_ACTION_ID } from '../ingress/workspace-resolution.js';
 import type { SlackWebClientLike } from '../types.js';
 import {
   createWorkspaceSelectionModal,

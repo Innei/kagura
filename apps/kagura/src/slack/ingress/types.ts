@@ -18,8 +18,8 @@ import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 import type { A2ACoordinatorStore } from './a2a-coordinator-store.js';
-import type { A2AThreadContext } from './a2a-routing.js';
 import type { AgentTeamsConfig } from './agent-team-routing.js';
+import type { A2AThreadContext } from './scenarios/a2a/routing.js';
 
 export interface SlackIngressDependencies {
   a2aCoordinatorStore?: A2ACoordinatorStore | undefined;

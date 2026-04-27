@@ -63,6 +63,10 @@ async function main(): Promise<void> {
   const appTwoClient = new SlackApiClient(env.SLACK_BOT_2_TOKEN);
   const appOneIdentity = await appOneClient.authTest();
   const appTwoIdentity = await appTwoClient.authTest();
+  const coordinatorDbPath = withPathSuffix(
+    env.A2A_COORDINATOR_DB_PATH,
+    `team-${runId.slice(0, 8)}`,
+  );
   const leadApp = resolveLeadApp();
   const lead =
     leadApp === 'app2'
@@ -100,8 +104,13 @@ async function main(): Promise<void> {
     teamMentionId,
   };
 
-  const appOne = createApplication({ agentTeams, instanceLabel: 'bootstrap:app1' });
+  const appOne = createApplication({
+    a2aCoordinatorDbPath: coordinatorDbPath,
+    agentTeams,
+    instanceLabel: 'bootstrap:app1',
+  });
   const appTwo = createApplication({
+    a2aCoordinatorDbPath: coordinatorDbPath,
     agentTeams,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, 'app2'),
     instanceLabel: 'bootstrap:app2',

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  getA2AContextFromSession,
-  resolveA2AThreadReplyDecision,
-} from '~/slack/ingress/a2a-routing.js';
-import {
   isParticipantInMentionedAgentTeam,
   parseSubteamMentions,
   parseUserMentions,
   resolveMentionCoordinationDecision,
 } from '~/slack/ingress/agent-team-routing.js';
+import {
+  getA2AContextFromSession,
+  resolveA2AThreadReplyDecision,
+} from '~/slack/ingress/scenarios/a2a/routing.js';
 
 describe('agent team routing', () => {
   it('parses Slack user group and user mentions in message order', () => {

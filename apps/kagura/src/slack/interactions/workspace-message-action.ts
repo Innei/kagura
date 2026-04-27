@@ -2,10 +2,8 @@ import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackMessageActionShortcutSchema } from '~/schemas/slack/message-action-shortcut.js';
 import type { ResolvedWorkspace } from '~/workspace/types.js';
 
-import {
-  handleThreadConversation,
-  type SlackIngressDependencies,
-} from '../ingress/app-mention-handler.js';
+import { handleThreadConversation } from '../ingress/conversation-pipeline.js';
+import type { SlackIngressDependencies } from '../ingress/types.js';
 import type { SlackWebClientLike } from '../types.js';
 
 const MAX_REPO_OPTIONS = 100;

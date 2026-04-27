@@ -290,6 +290,32 @@ describe('thread reply ingress', () => {
     expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
   });
 
+  it('lets the A2A lead handle an explicitly mentioned bot-authored participant reply', async () => {
+    const threadTs = '1712345678.000133';
+    const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+    });
+    client.conversations.replies.mockResolvedValue({
+      messages: [{ ts: threadTs, user: 'U_TRIGGER', text: 'root' }],
+    });
+
+    await handler({
+      client,
+      event: {
+        bot_id: 'B_OTHER',
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> A2A worker finished',
+        thread_ts: threadTs,
+        ts: '1712345678.000134',
+        type: 'message',
+        user: 'U_OTHER_BOT',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+  });
+
   it('keeps non-lead A2A participants idle when a user reply has no explicit mention', async () => {
     const threadTs = '1712345678.000120';
     const { claudeExecutor, client, handler, renderer, threadContextLoader } =
@@ -439,8 +465,8 @@ describe('thread reply ingress', () => {
       const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
         .calls[0]!;
       expect(request.mentionText).toContain(`A2A_FINAL_SUMMARY ${assignment.assignmentId}`);
-      expect(request.mentionText).toContain('<@U_OTHER_BOT>: failed');
-      expect(request.mentionText).toContain('<@U_THIRD_BOT>: stopped');
+      expect(request.mentionText).toContain('U_OTHER_BOT: failed');
+      expect(request.mentionText).toContain('U_THIRD_BOT: stopped');
     } finally {
       vi.useRealTimers();
     }

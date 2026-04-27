@@ -20,8 +20,8 @@ interface DualAgentLongGapHistoryResult {
   appOneReadyText?: string;
   appOneReadyTs?: string;
   appTwoBotUserId: string;
-  appTwoReadyText?: string;
-  appTwoReadyTs?: string;
+  appTwoInitialText?: string;
+  appTwoInitialTs?: string;
   appTwoResponseText?: string;
   appTwoResponseTs?: string;
   channelId: string;
@@ -34,8 +34,8 @@ interface DualAgentLongGapHistoryResult {
     appOneFinalObserved: boolean;
     appOneHandoffObserved: boolean;
     appOneReadyObserved: boolean;
+    appTwoInitialSuppressed: boolean;
     appTwoLongGapHistoryObserved: boolean;
-    appTwoReadyObserved: boolean;
     fillerAcksObserved: boolean;
     userHandoffPromptPosted: boolean;
   };
@@ -70,6 +70,7 @@ async function main(): Promise<void> {
   const appTwoClient = new SlackApiClient(env.SLACK_BOT_2_TOKEN);
   const appOneIdentity = await appOneClient.authTest();
   const appTwoIdentity = await appTwoClient.authTest();
+  const coordinatorDbPath = withPathSuffix(env.A2A_COORDINATOR_DB_PATH, `gap-${runId.slice(0, 8)}`);
 
   const result: DualAgentLongGapHistoryResult = {
     appOneBotUserId: appOneIdentity.user_id,
@@ -82,8 +83,8 @@ async function main(): Promise<void> {
       appOneFinalObserved: false,
       appOneHandoffObserved: false,
       appOneReadyObserved: false,
+      appTwoInitialSuppressed: false,
       appTwoLongGapHistoryObserved: false,
-      appTwoReadyObserved: false,
       fillerAcksObserved: false,
       userHandoffPromptPosted: false,
     },
@@ -91,8 +92,12 @@ async function main(): Promise<void> {
     runId,
   };
 
-  const appOne = createApplication({ instanceLabel: 'bootstrap:app1' });
+  const appOne = createApplication({
+    a2aCoordinatorDbPath: coordinatorDbPath,
+    instanceLabel: 'bootstrap:app1',
+  });
   const appTwo = createApplication({
+    a2aCoordinatorDbPath: coordinatorDbPath,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, 'app2'),
     instanceLabel: 'bootstrap:app2',
     sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, 'app2'),
@@ -121,7 +126,7 @@ async function main(): Promise<void> {
       'This is a Slack routing test. Do not use code, file, memory, or interactive question tools.',
       `Early history marker: DUAL_AGENT_EARLY_CONTEXT ${runId} codeword ${GAP_CODEWORD}.`,
       `The host injects your current Slack app identity. If your identity is <@${appOneIdentity.user_id}>, reply exactly "DUAL_AGENT_GAP_APP1_READY ${runId}".`,
-      `If your identity is <@${appTwoIdentity.user_id}>, reply exactly "DUAL_AGENT_GAP_APP2_READY ${runId}".`,
+      `If your identity is <@${appTwoIdentity.user_id}>, do not reply to this initial co-mention; app two is standby until directly mentioned later.`,
       `Later, when app one receives DUAL_AGENT_GAP_HANDOFF ${runId}, app one must reply exactly "<@${appTwoIdentity.user_id}> DUAL_AGENT_GAP_REQUEST ${runId}".`,
       `Later, when app two receives DUAL_AGENT_GAP_REQUEST ${runId}, app two must inspect this Slack thread history. If it can see DUAL_AGENT_EARLY_CONTEXT ${runId}, ${GAP_CODEWORD}, and all of these gap acknowledgements: ${ackMarkers.join(', ')}, app two must reply exactly "<@${appOneIdentity.user_id}> DUAL_AGENT_GAP_RESPONSE ${runId} ${GAP_CODEWORD} ACKS_OK".`,
       `Later, when app one receives DUAL_AGENT_GAP_RESPONSE ${runId} ${GAP_CODEWORD} ACKS_OK, app one must reply exactly "DUAL_AGENT_GAP_FINAL ${runId} ${GAP_CODEWORD} ACKS_OK".`,
@@ -149,7 +154,7 @@ async function main(): Promise<void> {
     result.matched.appOneReadyObserved = true;
     console.info('Observed app one long-gap ready reply: %s', appOneReady.ts);
 
-    const appTwoReady = await waitForBotReply({
+    const appTwoInitial = await findBotReply({
       botClient: appTwoClient,
       botUserId: appTwoIdentity.user_id,
       channelId: env.SLACK_E2E_CHANNEL_ID,
@@ -157,12 +162,14 @@ async function main(): Promise<void> {
       sinceTs: rootMessage.ts,
       textIncludes: `DUAL_AGENT_GAP_APP2_READY ${runId}`,
     });
-    result.appTwoReadyText = appTwoReady.text;
-    result.appTwoReadyTs = appTwoReady.ts;
-    result.matched.appTwoReadyObserved = true;
-    console.info('Observed app two long-gap ready reply: %s', appTwoReady.ts);
+    if (appTwoInitial) {
+      result.appTwoInitialText = appTwoInitial.text;
+      result.appTwoInitialTs = appTwoInitial.ts;
+    } else {
+      result.matched.appTwoInitialSuppressed = true;
+    }
 
-    let sinceTs = maxSlackTs(appOneReady.ts, appTwoReady.ts);
+    let sinceTs = appOneReady.ts;
     for (let step = 1; step <= GAP_STEP_COUNT; step += 1) {
       const stepPrompt = await triggerClient.postMessage({
         channel: env.SLACK_E2E_CHANNEL_ID,
@@ -302,6 +309,24 @@ async function waitForBotReply(input: {
   throw new Error(`Timed out waiting for bot reply containing "${input.textIncludes}".`);
 }
 
+async function findBotReply(input: {
+  botClient: SlackApiClient;
+  botUserId: string;
+  channelId: string;
+  rootTs: string;
+  sinceTs: string;
+  textIncludes: string;
+}): Promise<{ text: string; ts: string } | undefined> {
+  const replies = await input.botClient.conversationReplies({
+    channel: input.channelId,
+    inclusive: true,
+    limit: 160,
+    ts: input.rootTs,
+  });
+
+  return findBotMessageAfterTs(replies, input.botUserId, input.sinceTs, input.textIncludes);
+}
+
 function findBotMessageAfterTs(
   replies: SlackConversationRepliesResponse,
   botUserId: string,
@@ -342,8 +367,10 @@ function assertResult(result: DualAgentLongGapHistoryResult): void {
   if (!result.matched.appOneReadyObserved) {
     failures.push('first app did not reply to the initial long-gap co-mention');
   }
-  if (!result.matched.appTwoReadyObserved) {
-    failures.push('second app did not reply to the initial long-gap co-mention');
+  if (!result.matched.appTwoInitialSuppressed) {
+    failures.push(
+      'second app replied to the initial long-gap co-mention instead of staying standby',
+    );
   }
   if (!result.matched.fillerAcksObserved) {
     failures.push(`first app did not complete all ${GAP_STEP_COUNT} filler acknowledgements`);

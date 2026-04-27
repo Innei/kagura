@@ -99,7 +99,10 @@ async function main(): Promise<void> {
       triggerClient,
     });
 
-    result.matched.defaultWorkspacePersisted = readChannelPreference(channelId) === targetRepo;
+    result.matched.defaultWorkspacePersisted = await waitForChannelPreference(
+      channelId,
+      targetRepo,
+    );
 
     await runFallbackWorkspacePhase({
       botIdentityUserId: botIdentity.user_id,
@@ -292,6 +295,17 @@ function readChannelPreference(channelId: string): string | undefined {
   } finally {
     sqlite.close();
   }
+}
+
+async function waitForChannelPreference(channelId: string, expected: string): Promise<boolean> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (readChannelPreference(channelId) === expected) {
+      return true;
+    }
+    await delay(1_000);
+  }
+  return false;
 }
 
 function restoreChannelPreference(channelId: string, workspaceInput: string | undefined): void {
