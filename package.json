@@ -51,7 +51,7 @@
     "prettier-plugin-sort-json": "^4.2.0",
     "simple-git-hooks": "^2.13.1"
   },
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.0.0",
   "engines": {
     "node": ">=22.0.0"
   },
