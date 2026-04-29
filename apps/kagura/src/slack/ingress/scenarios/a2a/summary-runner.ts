@@ -125,7 +125,6 @@ async function runReadyA2ASummary(
   await dispatchThreadConversation(client, deps, {
     a2aSummaryAssignmentId: running.assignmentId,
     addAcknowledgementReaction: false,
-    agentProviderOverride: running.leadProviderId,
     channelId: running.channelId,
     currentBotUserId,
     currentBotUserName: identity.currentBotUserName,

@@ -556,6 +556,57 @@ describe('thread reply ingress', () => {
     }
   });
 
+  it('keeps the lead app on its local provider when summarizing a standby-created A2A assignment', async () => {
+    vi.useFakeTimers();
+    try {
+      const threadTs = '1712345678.000130';
+      const a2aCoordinatorStore = new MemoryA2ACoordinatorStore();
+      const assignment = a2aCoordinatorStore.createAssignment({
+        agentIds: ['U_OTHER_BOT'],
+        channelId: 'C123',
+        leadId: 'U_BOT',
+        leadProviderId: 'codex-cli',
+        threadTs,
+        triggerTs: '1712345678.000127',
+      });
+      a2aCoordinatorStore.markAgentTerminal(assignment.assignmentId, 'U_OTHER_BOT', 'completed');
+      const { claudeExecutor, client, codexExecutor, handler, sessionStore } =
+        createThreadReplyTestHarness(threadTs, {
+          a2aCoordinatorStore,
+          initialSessions: [
+            {
+              ...createA2ASession(threadTs, { lead: 'U_BOT' }),
+              agentProvider: 'claude-code',
+            },
+          ],
+          providerRegistryDefaultId: 'claude-code',
+        });
+
+      await handler({
+        client,
+        event: {
+          bot_id: 'B_OTHER',
+          channel: 'C123',
+          team: 'T123',
+          text: 'A2A worker finished',
+          thread_ts: threadTs,
+          ts: '1712345678.000131',
+          type: 'message',
+          user: 'U_OTHER_BOT',
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+      expect(codexExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+      expect(sessionStore.get(threadTs)).toMatchObject({ agentProvider: 'claude-code' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps direct co-mentioned root messages on standby when another bot is first', async () => {
     const threadTs = '1712345678.000117';
     const { claudeExecutor, client, threadReplyHandler } = createDualIngressTestHarness(threadTs);
@@ -818,9 +869,11 @@ function createThreadReplyTestHarness(
     a2aCoordinatorStore?: A2ACoordinatorStore;
     agentTeams?: AgentTeamsConfig;
     initialSessions?: SessionRecord[];
+    providerRegistryDefaultId?: 'claude-code' | 'codex-cli';
   } = {},
 ): {
   claudeExecutor: AgentExecutor;
+  codexExecutor: AgentExecutor;
   client: SlackWebClientLike & {
     auth: {
       test: ReturnType<typeof vi.fn>;
@@ -852,6 +905,11 @@ function createThreadReplyTestHarness(
     execute: vi.fn().mockResolvedValue(undefined),
     drain: vi.fn().mockResolvedValue(undefined),
   } as unknown as AgentExecutor;
+  const codexExecutor = {
+    providerId: 'codex-cli',
+    execute: vi.fn().mockResolvedValue(undefined),
+    drain: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AgentExecutor;
   const renderer = createRendererStub();
   const threadContextLoader = {
     loadThread: vi.fn().mockResolvedValue({
@@ -880,6 +938,21 @@ function createThreadReplyTestHarness(
     claudeExecutor,
     logger,
     memoryStore: createMemoryStore(),
+    ...(options.providerRegistryDefaultId
+      ? {
+          providerRegistry: {
+            defaultProviderId: options.providerRegistryDefaultId,
+            drain: vi.fn().mockResolvedValue(undefined),
+            getExecutor: (id: string) => {
+              if (id === 'codex-cli') return codexExecutor;
+              if (id === 'claude-code') return claudeExecutor;
+              throw new Error(`Unknown test provider ${id}`);
+            },
+            has: (id: string) => id === 'claude-code' || id === 'codex-cli',
+            providerIds: ['claude-code', 'codex-cli'],
+          },
+        }
+      : {}),
     renderer,
     sessionStore,
     threadContextLoader,
@@ -891,6 +964,7 @@ function createThreadReplyTestHarness(
 
   return {
     claudeExecutor,
+    codexExecutor,
     client,
     handler,
     logger,
