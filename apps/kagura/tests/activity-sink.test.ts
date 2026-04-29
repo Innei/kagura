@@ -129,6 +129,88 @@ describe('createActivitySink', () => {
     expect(renderer.clearUiState).toHaveBeenCalled();
   });
 
+  it('buffers quiet A2A assistant messages and posts only the final one on completion', async () => {
+    const renderer = createRendererStub();
+    const recorder = { record: vi.fn().mockResolvedValue(undefined) };
+    const sink = createActivitySink({
+      assistantMessageVisibility: 'quiet-final',
+      channel: 'C123',
+      client: createMockClient(),
+      executionId: 'exec-1',
+      logger: createTestLogger(),
+      logLabel: 'A2A thread reply',
+      quietAssistantMessageRecorder: recorder,
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U123',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'I will inspect the repo.' });
+    await sink.onEvent({ type: 'assistant-message', text: 'Final answer.' });
+
+    expect(renderer.postThreadReply).not.toHaveBeenCalled();
+    expect(recorder.record).toHaveBeenCalledTimes(2);
+    expect(recorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'C123',
+        executionId: 'exec-1',
+        logLabel: 'A2A thread reply',
+        reason: 'quiet_final_buffered',
+        text: 'I will inspect the repo.',
+        threadTs: 'ts1',
+        userId: 'U123',
+      }),
+    );
+
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(renderer.postThreadReply).toHaveBeenCalledTimes(1);
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Final answer.',
+      expect.any(Object),
+    );
+  });
+
+  it('keeps quiet A2A delegation messages public when they mention a configured participant', async () => {
+    const renderer = createRendererStub();
+    const recorder = { record: vi.fn().mockResolvedValue(undefined) };
+    const sink = createActivitySink({
+      assistantMessageVisibility: 'quiet-final',
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      quietAssistantMessageRecorder: recorder,
+      quietAssistantPublicMentionIds: ['U_HELPER'],
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'I will delegate this.' });
+    await sink.onEvent({ type: 'assistant-message', text: '<@U_HELPER> please review this.' });
+
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      '<@U_HELPER> please review this.',
+      expect.any(Object),
+    );
+    expect(recorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'I will delegate this.' }),
+    );
+
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(renderer.postThreadReply).toHaveBeenCalledTimes(1);
+  });
+
   it('patches session with resume handle on lifecycle events', async () => {
     const sessionStore = createMockSessionStore();
     const sink = createActivitySink({

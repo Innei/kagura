@@ -23,6 +23,7 @@ import {
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
 import { SqliteA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
+import { FileQuietAssistantMessageRecorder } from '~/slack/ingress/a2a-output-diagnostics.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
@@ -38,6 +39,8 @@ export interface RuntimeApplication {
 
 export interface RuntimeApplicationOptions {
   a2aCoordinatorDbPath?: string | undefined;
+  a2aDiagnosticsDir?: string | undefined;
+  a2aOutputMode?: typeof env.A2A_OUTPUT_MODE | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   claudePermissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
   defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
@@ -90,6 +93,10 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     : undefined;
   const permissionBridge = new SlackPermissionBridge(logger.withTag('slack:permission'));
   const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
+  const a2aQuietMessageRecorder = new FileQuietAssistantMessageRecorder(
+    options?.a2aDiagnosticsDir ?? env.A2A_DIAGNOSTICS_DIR,
+    logger.withTag('a2a:diagnostics'),
+  );
 
   const ccExecutor = new ClaudeAgentSdkExecutor(
     logger.withTag('claude:session'),
@@ -118,6 +125,8 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const slackApp: KaguraSlackApp = createSlackApp(
     {
       a2aCoordinatorStore,
+      a2aOutputMode: options?.a2aOutputMode ?? env.A2A_OUTPUT_MODE,
+      a2aQuietMessageRecorder,
       analyticsStore,
       agentTeams: options?.agentTeams ?? appConfigAgentTeams,
       channelPreferenceStore,

@@ -151,6 +151,17 @@ describe('prompt assembly', () => {
       );
     });
 
+    it('instructs the model to persist explicit channel workspace declarations', () => {
+      const { systemPrompt } = assemblePrompt(baseRequest());
+
+      expect(systemPrompt).toContain(
+        'states that this channel uses a specific repository/workspace',
+      );
+      expect(systemPrompt).toContain(
+        'persist it even when the same workspace is already injected in session context',
+      );
+    });
+
     it('keeps repository workflow conditional on implementation work', () => {
       const { systemPrompt } = assemblePrompt(baseRequest());
 
@@ -195,6 +206,42 @@ describe('prompt assembly', () => {
 
       expect(userText).toContain(
         'Your current Slack app identity is <@U_BOT> (user id U_BOT, name kagura-codex).',
+      );
+    });
+
+    it('includes A2A roster labels and roles when provided', () => {
+      const request = baseRequest({
+        a2aContext: {
+          leadId: 'U_CODEX',
+          participants: [
+            {
+              id: 'U_CODEX',
+              isCurrentAgent: true,
+              isLead: true,
+              label: 'codex',
+              role: 'implementation and final summary',
+            },
+            {
+              id: 'U_CLAUDE',
+              isCurrentAgent: false,
+              isLead: false,
+              label: 'claude',
+              role: 'design review',
+            },
+          ],
+          teamId: 'S_AGENTS',
+        },
+      });
+      const { userText } = assemblePrompt(request);
+
+      expect(userText).toContain('<a2a_collaboration_context>');
+      expect(userText).toContain('Lead agent: <@U_CODEX>.');
+      expect(userText).toContain(
+        '<@U_CODEX> (lead, current agent, label: codex, role: implementation and final summary)',
+      );
+      expect(userText).toContain('<@U_CLAUDE> (standby, label: claude, role: design review)');
+      expect(userText).toContain(
+        'Slack-visible message that explicitly mentions exactly that agent',
       );
     });
 

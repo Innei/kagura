@@ -3,8 +3,22 @@ const SLACK_SUBTEAM_MENTION_PATTERN = /<!subteam\^([\dA-Z_]+)(?:\|[^>]+)?>/g;
 
 export interface AgentTeamConfig {
   defaultLead?: string | undefined;
-  members?: string[] | undefined;
+  members?: AgentTeamMemberConfig[] | undefined;
   name?: string | undefined;
+}
+
+export type AgentTeamMemberConfig =
+  | string
+  | {
+      id: string;
+      label?: string | undefined;
+      role?: string | undefined;
+    };
+
+export interface AgentTeamRosterEntry {
+  id: string;
+  label?: string | undefined;
+  role?: string | undefined;
 }
 
 export type AgentTeamsConfig = Record<string, AgentTeamConfig>;
@@ -66,7 +80,9 @@ export function isParticipantInMentionedAgentTeam(
     if (team && candidateMatchesParticipant(participant, team.defaultLead)) {
       return true;
     }
-    if (team?.members?.some((member) => candidateMatchesParticipant(participant, member))) {
+    if (
+      getAgentTeamMemberIds(team).some((member) => candidateMatchesParticipant(participant, member))
+    ) {
       return true;
     }
   }
@@ -101,7 +117,7 @@ function resolveAgentTeamDecision(
     const explicitLead = directMentions.find((mention) =>
       isConfiguredTeamParticipant(mention, team),
     );
-    const lead = explicitLead ?? team.defaultLead ?? team.members?.[0];
+    const lead = explicitLead ?? team.defaultLead ?? getAgentTeamMemberIds(team)[0];
     if (!lead) {
       continue;
     }
@@ -122,14 +138,62 @@ function isCurrentBotTeamParticipant(
   if (candidateMatchesIdentity(identity, team.defaultLead)) {
     return true;
   }
-  return team.members?.some((member) => candidateMatchesIdentity(identity, member)) ?? false;
+  return getAgentTeamMemberIds(team).some((member) => candidateMatchesIdentity(identity, member));
 }
 
 function isConfiguredTeamParticipant(candidate: string, team: AgentTeamConfig): boolean {
   if (candidateMatchesParticipant(candidate, team.defaultLead)) {
     return true;
   }
-  return team.members?.some((member) => candidateMatchesParticipant(candidate, member)) ?? false;
+  return getAgentTeamMemberIds(team).some((member) =>
+    candidateMatchesParticipant(candidate, member),
+  );
+}
+
+export function getAgentTeamRoster(team: AgentTeamConfig | undefined): AgentTeamRosterEntry[] {
+  if (!team) {
+    return [];
+  }
+
+  const entries = new Map<string, AgentTeamRosterEntry>();
+  for (const member of team.members ?? []) {
+    const entry = normalizeAgentTeamMember(member);
+    if (!entry) {
+      continue;
+    }
+    entries.set(normalizeParticipant(entry.id), entry);
+  }
+
+  if (team.defaultLead) {
+    const leadKey = normalizeParticipant(team.defaultLead);
+    entries.set(leadKey, {
+      id: team.defaultLead,
+      ...entries.get(leadKey),
+    });
+  }
+
+  return [...entries.values()];
+}
+
+export function getAgentTeamMemberIds(team: AgentTeamConfig | undefined): string[] {
+  return getAgentTeamRoster(team).map((member) => member.id);
+}
+
+function normalizeAgentTeamMember(member: AgentTeamMemberConfig): AgentTeamRosterEntry | undefined {
+  if (typeof member === 'string') {
+    const id = member.trim();
+    return id ? { id } : undefined;
+  }
+
+  const id = member.id.trim();
+  if (!id) {
+    return undefined;
+  }
+  return {
+    id,
+    ...(member.label?.trim() ? { label: member.label.trim() } : {}),
+    ...(member.role?.trim() ? { role: member.role.trim() } : {}),
+  };
 }
 
 function candidateMatchesIdentity(

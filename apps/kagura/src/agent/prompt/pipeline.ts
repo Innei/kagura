@@ -1,6 +1,7 @@
 import type { AgentExecutionRequest } from '~/agent/types.js';
 
 import {
+  a2aCollaborationContextProcessor,
   codingWorkflowProcessor,
   collaborationRulesProcessor,
   fileContextProcessor,
@@ -26,6 +27,7 @@ export const DEFAULT_PROMPT_PROCESSORS: PromptProcessor[] = [
   codingWorkflowProcessor,
   memoryPolicyProcessor,
   sessionContextProcessor,
+  a2aCollaborationContextProcessor,
   memoryContextProcessor,
   threadContextProcessor,
   fileContextProcessor,

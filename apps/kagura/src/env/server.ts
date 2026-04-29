@@ -15,16 +15,34 @@ dotenv.config({ override: false }); // dev mode: also read cwd .env if present
 const booleanStringSchema = z.enum(['true', 'false']).transform((value) => value === 'true');
 const optionalPositiveInteger = z.coerce.number().int().positive().optional();
 
+const agentTeamMemberConfigSchema = z.union([
+  z.string().min(1),
+  z
+    .object({
+      id: z.string().min(1),
+      label: z.string().min(1).optional(),
+      role: z.string().min(1).optional(),
+    })
+    .strict(),
+]);
+
 const agentTeamConfigSchema = z
   .object({
     defaultLead: z.string().min(1).optional(),
-    members: z.array(z.string().min(1)).optional(),
+    members: z.array(agentTeamMemberConfigSchema).optional(),
     name: z.string().min(1).optional(),
   })
   .strict();
 
 const appConfigSchema = z
   .object({
+    a2a: z
+      .object({
+        diagnosticsDir: z.string().optional(),
+        outputMode: z.enum(['verbose', 'quiet']).optional(),
+      })
+      .strict()
+      .optional(),
     agentTeams: z.record(z.string().min(1), agentTeamConfigSchema).optional(),
     claude: z
       .object({
@@ -129,6 +147,8 @@ export const env = createEnv({
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
     A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
+    A2A_OUTPUT_MODE: z.enum(['verbose', 'quiet']).default('verbose'),
+    A2A_DIAGNOSTICS_DIR: z.string().min(1).default('./data/a2a-diagnostics'),
     SLACK_E2E_ENABLED: booleanStringSchema.default(false),
     SLACK_E2E_CHANNEL_ID: z.string().min(1).optional(),
     SLACK_E2E_RESULT_PATH: z.string().min(1).default('./artifacts/slack-live-e2e/result.json'),
@@ -181,6 +201,11 @@ export const env = createEnv({
     A2A_COORDINATOR_DB_PATH: envOrConfig(
       'A2A_COORDINATOR_DB_PATH',
       configString(appConfig.a2aCoordinatorDbPath),
+    ),
+    A2A_OUTPUT_MODE: envOrConfig('A2A_OUTPUT_MODE', appConfig.a2a?.outputMode),
+    A2A_DIAGNOSTICS_DIR: envOrConfig(
+      'A2A_DIAGNOSTICS_DIR',
+      configString(appConfig.a2a?.diagnosticsDir),
     ),
     SLACK_E2E_ENABLED: process.env.SLACK_E2E_ENABLED,
     SLACK_E2E_CHANNEL_ID: process.env.SLACK_E2E_CHANNEL_ID,

@@ -83,7 +83,8 @@ export const hostCapabilityProcessor: PromptProcessor = {
       `- ${SAVE_MEMORY_TOOL_NAME}: save durable memories for future sessions (supports global and workspace scope).`,
       `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: deliver a local file into the current Slack thread when this provider exposes that tool directly.`,
       '- Provider-specific instructions may describe an equivalent file-based upload path; follow that path when the direct upload tool is unavailable.',
-      '- set_channel_default_workspace: ONLY call when the user explicitly asks to set or change the workspace. NEVER call proactively — the workspace is already auto-injected in the session context.',
+      '- set_channel_default_workspace: call when the user explicitly asks to set/change the current Slack channel workspace, or states that this channel uses a specific repository/workspace. This persists the channel default for future threads.',
+      '- Do not call set_channel_default_workspace just because a workspace was auto-detected for the current turn. But if the user explicitly declares the channel workspace, persist it even when the same workspace is already injected in session context.',
       '',
       ...SLACK_ATTACHMENT_CAPABILITY_LINES,
     );
@@ -164,6 +165,39 @@ export const sessionContextProcessor: PromptProcessor = {
     }
 
     ctx.contextParts.push(`<session_context>\n${lines.join('\n')}\n</session_context>`);
+  },
+};
+
+export const a2aCollaborationContextProcessor: PromptProcessor = {
+  name: 'a2a-collaboration-context',
+  process(ctx) {
+    const context = ctx.request.a2aContext;
+    if (!context) {
+      return;
+    }
+
+    const lines = [
+      'A2A COLLABORATION CONTEXT:',
+      '- This Slack thread is in Agent-to-Agent mode.',
+      `- Lead agent: <@${context.leadId}>.`,
+      '- Available agents:',
+      ...context.participants.map((participant) => {
+        const markers = [
+          participant.isLead ? 'lead' : 'standby',
+          participant.isCurrentAgent ? 'current agent' : undefined,
+          participant.label ? `label: ${participant.label}` : undefined,
+          participant.role ? `role: ${participant.role}` : undefined,
+        ].filter(Boolean);
+        return `  - <@${participant.id}> (${markers.join(', ')})`;
+      }),
+      '- To ask another agent to respond, post a Slack-visible message that explicitly mentions exactly that agent with its <@USERID> token.',
+      '- Do not rely on hidden state, internal tools, or plain names to contact another agent; Slack-visible mentions are the routing mechanism.',
+      '- Use the listed roles to choose the right agent for delegation or review.',
+    ];
+
+    ctx.contextParts.push(
+      `<a2a_collaboration_context>\n${lines.join('\n')}\n</a2a_collaboration_context>`,
+    );
   },
 };
 

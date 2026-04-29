@@ -60,17 +60,34 @@ Configure A2A teams in `config.json`:
 
 ```json
 {
+  "a2a": {
+    "outputMode": "quiet",
+    "diagnosticsDir": "./data/a2a-diagnostics"
+  },
   "agentTeams": {
     "S0123456789": {
       "name": "agents",
       "defaultLead": "U0123456789",
-      "members": ["U0123456789", "U9876543210"]
+      "members": [
+        {
+          "id": "U0123456789",
+          "label": "codex",
+          "role": "implementation, verification, and final summary"
+        },
+        {
+          "id": "U9876543210",
+          "label": "claude",
+          "role": "design review and alternate implementation"
+        }
+      ]
     }
   }
 }
 ```
 
-`agentTeams` keys are Slack user group IDs from `<!subteam^S...>`. `defaultLead` and `members` are bot user IDs. Every production bot instance that should participate in the same team must load compatible `agentTeams` config and be present in the Slack channel where message events should be received.
+`agentTeams` keys are Slack user group IDs from `<!subteam^S...>`. `defaultLead` is a bot user ID. `members` accepts either bot user ID strings or objects with `id`, optional `label`, and optional `role`; labels and roles are injected into A2A prompts so agents know which peer to mention for delegation or review. Every production bot instance that should participate in the same team must load compatible `agentTeams` config and be present in the Slack channel where message events should be received.
+
+Set `a2a.outputMode` to `quiet` to reduce Slack thread noise during A2A work. In quiet mode, Kagura buffers non-delegation assistant messages and posts the final message for the turn; explicit `<@agent>` delegation remains public so standby agents can still wake up. Buffered messages are written to `a2a.diagnosticsDir` as per-thread JSONL files for debugging. The default `verbose` mode preserves the legacy behavior.
 
 ### A2A routing cases
 

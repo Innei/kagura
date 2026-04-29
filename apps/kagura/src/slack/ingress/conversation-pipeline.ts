@@ -9,6 +9,7 @@ import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
 import { createActivitySink } from './activity-sink.js';
+import { getA2AContextFromSession, serializeA2AParticipants } from './scenarios/a2a/routing.js';
 import { resolveAndPersistSession } from './session-manager.js';
 import type {
   ConversationPipelineContext,
@@ -237,7 +238,7 @@ export async function resolveSessionStep(
   const a2aFields = options.a2aContext
     ? {
         a2aLead: options.a2aContext.lead,
-        a2aParticipantsJson: JSON.stringify(options.a2aContext.participants),
+        a2aParticipantsJson: serializeA2AParticipants(options.a2aContext),
         ...(options.a2aContext.teamId ? { a2aTeamId: options.a2aContext.teamId } : {}),
         conversationMode: 'a2a' as const,
       }
@@ -312,12 +313,22 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   }
 
   const executor = resolveExecutor(ctx.existingSession, deps, ctx.options.agentProviderOverride);
+  const executionId = randomUUID();
+  const a2aContext = ctx.options.a2aContext ?? getA2AContextFromSession(ctx.existingSession ?? {});
+  const quietA2A =
+    deps.a2aOutputMode === 'quiet' &&
+    Boolean(a2aContext || ctx.options.a2aAssignmentId || ctx.options.a2aSummaryAssignmentId);
   const sink = createActivitySink({
     analyticsStore: deps.analyticsStore,
+    assistantMessageVisibility: quietA2A ? 'quiet-final' : 'public',
     channel: message.channel,
     client,
+    executionId,
     logger: deps.logger,
+    logLabel: ctx.options.logLabel,
     permissionBridge: deps.permissionBridge,
+    quietAssistantMessageRecorder: deps.a2aQuietMessageRecorder,
+    quietAssistantPublicMentionIds: a2aContext?.participants,
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
     threadTs,
@@ -327,7 +338,6 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   });
 
   const controller = new AbortController();
-  const executionId = randomUUID();
   const startedAt = new Date().toISOString();
   let executionReleasedFromRegistry = false;
   let resolveExecutionDone: () => void;
@@ -397,6 +407,23 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         ...(ctx.previousTurnTriggerTs ? { previousTurnTriggerTs: ctx.previousTurnTriggerTs } : {}),
         ...(ctx.options.currentBotUserName ? { botUserName: ctx.options.currentBotUserName } : {}),
         ...(ctx.options.currentBotUserId ? { botUserId: ctx.options.currentBotUserId } : {}),
+        ...(a2aContext
+          ? {
+              a2aContext: {
+                leadId: a2aContext.lead,
+                participants: a2aContext.roster.map((participant) => ({
+                  id: participant.id,
+                  isCurrentAgent:
+                    Boolean(ctx.options.currentBotUserId) &&
+                    participant.id === ctx.options.currentBotUserId,
+                  isLead: participant.id === a2aContext.lead,
+                  ...(participant.label ? { label: participant.label } : {}),
+                  ...(participant.role ? { role: participant.role } : {}),
+                })),
+                ...(a2aContext.teamId ? { teamId: a2aContext.teamId } : {}),
+              },
+            }
+          : {}),
       },
       sink,
     );

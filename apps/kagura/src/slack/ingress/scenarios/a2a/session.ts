@@ -25,7 +25,7 @@ export function persistA2ASession(
   const existing = deps.sessionStore.get(input.threadTs);
   const patch = {
     a2aLead: input.context.lead,
-    a2aParticipantsJson: serializeA2AParticipants(input.context.participants),
+    a2aParticipantsJson: serializeA2AParticipants(input.context),
     ...(input.context.teamId ? { a2aTeamId: input.context.teamId } : {}),
     conversationMode: 'a2a' as const,
     ...(deps.providerRegistry ? { agentProvider: deps.providerRegistry.defaultProviderId } : {}),

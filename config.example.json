@@ -1,9 +1,24 @@
 {
+  "a2a": {
+    "outputMode": "verbose",
+    "diagnosticsDir": "./data/a2a-diagnostics"
+  },
   "agentTeams": {
     "S0123456789": {
       "name": "kagura-agents",
       "defaultLead": "U0123456789",
-      "members": ["U0123456789", "U9876543210"]
+      "members": [
+        {
+          "id": "U0123456789",
+          "label": "codex",
+          "role": "implementation, verification, and final summary"
+        },
+        {
+          "id": "U9876543210",
+          "label": "claude",
+          "role": "design review and alternate implementation"
+        }
+      ]
     }
   },
   "claude": {

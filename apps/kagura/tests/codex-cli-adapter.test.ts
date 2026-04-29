@@ -720,6 +720,10 @@ describe('CodexCliExecutor', () => {
     );
     expect(prompt).toContain('The direct upload_slack_file tool is not available');
     expect(prompt).toContain('To call set_channel_default_workspace');
+    expect(prompt).toContain('including statements like "this channel\'s workspace is X"');
+    expect(prompt).toContain(
+      'session context applies to this turn, while the channel default is needed for future threads',
+    );
     expect(prompt).toContain(
       'Do not save routine turn summaries, ephemeral status, transcript restatements',
     );

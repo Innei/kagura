@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getAgentTeamMemberIds,
+  getAgentTeamRoster,
   isParticipantInMentionedAgentTeam,
   parseSubteamMentions,
   parseUserMentions,
@@ -57,6 +59,34 @@ describe('agent team routing', () => {
       lead: 'codex',
       reason: 'team_member_standby',
       teamId: 'S123',
+    });
+  });
+
+  it('supports configured member labels and roles while routing by id', () => {
+    const team = {
+      defaultLead: 'U_CODEX',
+      members: [
+        { id: 'U_CODEX', label: 'codex', role: 'implementation and final summary' },
+        { id: 'U_CLAUDE', label: 'claude', role: 'design review' },
+      ],
+    };
+
+    expect(getAgentTeamMemberIds(team)).toEqual(['U_CODEX', 'U_CLAUDE']);
+    expect(getAgentTeamRoster(team)).toEqual([
+      { id: 'U_CODEX', label: 'codex', role: 'implementation and final summary' },
+      { id: 'U_CLAUDE', label: 'claude', role: 'design review' },
+    ]);
+
+    expect(
+      resolveMentionCoordinationDecision(
+        '<!subteam^S123|@agents> handle this',
+        { userId: 'U_CLAUDE' },
+        { S123: team },
+      ),
+    ).toMatchObject({
+      action: 'standby',
+      lead: 'U_CODEX',
+      reason: 'team_member_standby',
     });
   });
 

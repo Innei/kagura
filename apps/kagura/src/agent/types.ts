@@ -9,7 +9,22 @@ export interface GeneratedOutputFile {
 
 export type GeneratedImageFile = GeneratedOutputFile;
 
+export interface AgentA2AParticipant {
+  id: string;
+  isCurrentAgent: boolean;
+  isLead: boolean;
+  label?: string | undefined;
+  role?: string | undefined;
+}
+
+export interface AgentA2AContext {
+  leadId: string;
+  participants: AgentA2AParticipant[];
+  teamId?: string | undefined;
+}
+
 export interface AgentExecutionRequest {
+  a2aContext?: AgentA2AContext | undefined;
   abortSignal?: AbortSignal;
   botUserId?: string;
   botUserName?: string;

@@ -14,6 +14,10 @@ import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
 import type { A2ACoordinatorStore } from './ingress/a2a-coordinator-store.js';
+import type {
+  A2AOutputMode,
+  QuietAssistantMessageRecorder,
+} from './ingress/a2a-output-diagnostics.js';
 import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
 import {
   createAssistantThreadStartedHandler,
@@ -49,6 +53,8 @@ import type { SlackWebClientLike } from './types.js';
 
 export interface SlackApplicationDependencies {
   a2aCoordinatorStore?: A2ACoordinatorStore | undefined;
+  a2aOutputMode?: A2AOutputMode | undefined;
+  a2aQuietMessageRecorder?: QuietAssistantMessageRecorder | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
@@ -102,6 +108,8 @@ export function createSlackApp(
   );
   const ingressDeps = {
     a2aCoordinatorStore: deps.a2aCoordinatorStore,
+    a2aOutputMode: deps.a2aOutputMode,
+    a2aQuietMessageRecorder: deps.a2aQuietMessageRecorder,
     analyticsStore: deps.analyticsStore,
     agentTeams: deps.agentTeams,
     channelPreferenceStore: deps.channelPreferenceStore,

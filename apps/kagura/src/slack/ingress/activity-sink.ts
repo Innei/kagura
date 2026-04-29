@@ -26,13 +26,19 @@ import {
   THINKING_LOADING_MESSAGES,
 } from '../thinking-messages.js';
 import type { SlackWebClientLike } from '../types.js';
+import type { QuietAssistantMessageRecorder } from './a2a-output-diagnostics.js';
 
 export interface ActivitySinkOptions {
   analyticsStore?: SessionAnalyticsStore;
+  assistantMessageVisibility?: 'public' | 'quiet-final' | undefined;
   channel: string;
   client: SlackWebClientLike;
+  executionId?: string | undefined;
   logger: AppLogger;
+  logLabel?: string | undefined;
   permissionBridge?: SlackPermissionBridge | undefined;
+  quietAssistantMessageRecorder?: QuietAssistantMessageRecorder | undefined;
+  quietAssistantPublicMentionIds?: string[] | undefined;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadTs: string;
@@ -70,10 +76,15 @@ const TOOL_VERB_PATTERN =
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const {
     analyticsStore,
+    assistantMessageVisibility = 'public',
     channel,
     client,
+    executionId,
     logger,
+    logLabel,
     permissionBridge,
+    quietAssistantMessageRecorder,
+    quietAssistantPublicMentionIds = [],
     renderer,
     sessionStore,
     threadTs,
@@ -97,6 +108,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let hasSentToolbarInTurn = false;
   let sessionUsageInfo: SessionUsageInfo | undefined;
   let lastAssistantReply: PostedThreadReply | undefined;
+  const quietAssistantMessages: string[] = [];
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -191,7 +203,32 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
   };
 
-  const handleAssistantMessage = async (text: string): Promise<void> => {
+  const shouldPublishQuietAssistantMessage = (text: string): boolean => {
+    return (
+      text.includes('<@') ||
+      quietAssistantPublicMentionIds.some((id) => id && text.includes(`<@${id}>`))
+    );
+  };
+
+  const recordQuietAssistantMessage = async (text: string): Promise<void> => {
+    await quietAssistantMessageRecorder
+      ?.record({
+        channelId: channel,
+        createdAt: new Date().toISOString(),
+        ...(executionId ? { executionId } : {}),
+        ...(logLabel ? { logLabel } : {}),
+        mode: 'quiet',
+        reason: 'quiet_final_buffered',
+        text,
+        threadTs,
+        ...(userId ? { userId } : {}),
+      })
+      .catch((error) => {
+        logger.warn('Failed to record quiet A2A assistant message: %s', String(error));
+      });
+  };
+
+  const postAssistantMessage = async (text: string): Promise<void> => {
     // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
     const includeToolbar = !hasSentToolbarInTurn;
     try {
@@ -244,6 +281,35 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     await renderer.clearUiState(client, channel, threadTs).catch((error) => {
       logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
     });
+  };
+
+  const handleAssistantMessage = async (text: string): Promise<void> => {
+    if (assistantMessageVisibility === 'quiet-final' && !shouldPublishQuietAssistantMessage(text)) {
+      quietAssistantMessages.push(text);
+      await recordQuietAssistantMessage(text);
+      if (!progressMessageActive) {
+        await activateProgressMessage({
+          activities: ['A2A update captured in diagnostics.'],
+          status: 'Working in quiet A2A mode...',
+          threadTs,
+        });
+      }
+      return;
+    }
+
+    if (assistantMessageVisibility === 'quiet-final') {
+      quietAssistantMessages.length = 0;
+    }
+    await postAssistantMessage(text);
+  };
+
+  const flushQuietAssistantMessage = async (): Promise<void> => {
+    const text = quietAssistantMessages.at(-1);
+    quietAssistantMessages.length = 0;
+    if (!text) {
+      return;
+    }
+    await postAssistantMessage(text);
   };
 
   const handleActivityState = async (state: AgentActivityState): Promise<void> => {
@@ -477,6 +543,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       await renderer.clearUiState(client, channel, threadTs).catch((err) => {
         logger.warn('Failed to clear UI state: %s', String(err));
       });
+      if (executionCompletedSuccessfully) {
+        await flushQuietAssistantMessage();
+      }
       if (executionCompletedSuccessfully && pendingGeneratedFiles.length > 0) {
         const batch = [...pendingGeneratedFiles];
         try {

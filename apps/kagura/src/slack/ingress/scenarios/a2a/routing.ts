@@ -1,5 +1,9 @@
-import type { AgentTeamsConfig, MentionCoordinationDecision } from '../../agent-team-routing.js';
-import { parseUserMentions } from '../../agent-team-routing.js';
+import type {
+  AgentTeamRosterEntry,
+  AgentTeamsConfig,
+  MentionCoordinationDecision,
+} from '../../agent-team-routing.js';
+import { getAgentTeamRoster, parseUserMentions } from '../../agent-team-routing.js';
 
 export interface A2AIdentity {
   userId?: string | undefined;
@@ -9,6 +13,7 @@ export interface A2AIdentity {
 export interface A2AThreadContext {
   lead: string;
   participants: string[];
+  roster: AgentTeamRosterEntry[];
   teamId?: string | undefined;
 }
 
@@ -45,8 +50,8 @@ export function buildA2AThreadContext(
     if (team?.defaultLead) {
       participants.add(team.defaultLead);
     }
-    for (const member of team?.members ?? []) {
-      participants.add(member);
+    for (const member of getAgentTeamRoster(team)) {
+      participants.add(member.id);
     }
   }
 
@@ -54,18 +59,34 @@ export function buildA2AThreadContext(
     participants.add(mention);
   }
 
+  const participantIds = [...participants];
   return {
     lead: decision.lead,
-    participants: [...participants],
+    participants: participantIds,
+    roster: buildA2ARoster(participantIds, decision, agentTeams),
     ...(decision.teamId ? { teamId: decision.teamId } : {}),
   };
 }
 
-export function serializeA2AParticipants(participants: string[]): string {
-  return JSON.stringify(unique(participants));
+export function serializeA2AParticipants(
+  context: Pick<A2AThreadContext, 'participants' | 'roster'>,
+): string {
+  const rosterById = new Map(
+    context.roster.map((entry) => [normalizeParticipant(entry.id), entry] as const),
+  );
+  return JSON.stringify(
+    unique(context.participants).map((participant) => {
+      const entry = rosterById.get(normalizeParticipant(participant));
+      return entry ?? { id: participant };
+    }),
+  );
 }
 
 export function parseA2AParticipants(raw: string | undefined): string[] {
+  return parseA2ARoster(raw).map((entry) => entry.id);
+}
+
+export function parseA2ARoster(raw: string | undefined): AgentTeamRosterEntry[] {
   if (!raw) {
     return [];
   }
@@ -74,9 +95,29 @@ export function parseA2AParticipants(raw: string | undefined): string[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter(
-      (value): value is string => typeof value === 'string' && value.trim().length > 0,
-    );
+    const entries: AgentTeamRosterEntry[] = [];
+    for (const value of parsed) {
+      if (typeof value === 'string' && value.trim()) {
+        entries.push({ id: value.trim() });
+        continue;
+      }
+      if (value && typeof value === 'object') {
+        const entry = value as { id?: unknown; label?: unknown; role?: unknown };
+        if (typeof entry.id !== 'string' || !entry.id.trim()) {
+          continue;
+        }
+        entries.push({
+          id: entry.id.trim(),
+          ...(typeof entry.label === 'string' && entry.label.trim()
+            ? { label: entry.label.trim() }
+            : {}),
+          ...(typeof entry.role === 'string' && entry.role.trim()
+            ? { role: entry.role.trim() }
+            : {}),
+        });
+      }
+    }
+    return uniqueRoster(entries);
   } catch {
     return [];
   }
@@ -103,6 +144,10 @@ export function getA2AContextFromSession(session: {
   return {
     lead: session.a2aLead,
     participants: unique([session.a2aLead, ...parseA2AParticipants(session.a2aParticipantsJson)]),
+    roster: ensureA2ARosterIncludesParticipants(
+      parseA2ARoster(session.a2aParticipantsJson),
+      unique([session.a2aLead, ...parseA2AParticipants(session.a2aParticipantsJson)]),
+    ),
     ...(session.a2aTeamId ? { teamId: session.a2aTeamId } : {}),
   };
 }
@@ -201,6 +246,51 @@ function unique(values: string[]): string[] {
     result.push(value);
   }
   return result;
+}
+
+function buildA2ARoster(
+  participants: string[],
+  decision: MentionCoordinationDecision,
+  agentTeams: AgentTeamsConfig | undefined,
+): AgentTeamRosterEntry[] {
+  const teamRoster =
+    decision.action !== 'none' && decision.teamId && agentTeams?.[decision.teamId]
+      ? getAgentTeamRoster(agentTeams[decision.teamId])
+      : [];
+  return ensureA2ARosterIncludesParticipants(teamRoster, participants);
+}
+
+function ensureA2ARosterIncludesParticipants(
+  roster: AgentTeamRosterEntry[],
+  participants: string[],
+): AgentTeamRosterEntry[] {
+  const entries = new Map<string, AgentTeamRosterEntry>();
+  for (const entry of roster) {
+    const id = entry.id.trim();
+    if (!id) {
+      continue;
+    }
+    entries.set(normalizeParticipant(id), {
+      id,
+      ...(entry.label?.trim() ? { label: entry.label.trim() } : {}),
+      ...(entry.role?.trim() ? { role: entry.role.trim() } : {}),
+    });
+  }
+  for (const participant of participants) {
+    const id = participant.trim();
+    const key = normalizeParticipant(id);
+    if (id && !entries.has(key)) {
+      entries.set(key, { id });
+    }
+  }
+  return [...entries.values()];
+}
+
+function uniqueRoster(roster: AgentTeamRosterEntry[]): AgentTeamRosterEntry[] {
+  return ensureA2ARosterIncludesParticipants(
+    roster,
+    roster.map((entry) => entry.id),
+  );
 }
 
 function getRoutingText(messageText: string): string {

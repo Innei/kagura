@@ -32,11 +32,26 @@ Example:
 
 ```json
 {
+  "a2a": {
+    "outputMode": "quiet",
+    "diagnosticsDir": "./data/a2a-diagnostics"
+  },
   "agentTeams": {
     "S0123456789": {
       "name": "kagura-agents",
       "defaultLead": "U0123456789",
-      "members": ["U0123456789", "U9876543210"]
+      "members": [
+        {
+          "id": "U0123456789",
+          "label": "codex",
+          "role": "implementation, verification, and final summary"
+        },
+        {
+          "id": "U9876543210",
+          "label": "claude",
+          "role": "design review and alternate implementation"
+        }
+      ]
     }
   },
   "codex": {
@@ -48,7 +63,9 @@ Example:
 }
 ```
 
-`agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
+`agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. `members` can be a list of bot user ID strings or objects with `id`, optional `label`, and optional `role`. Labels and roles are shown in the A2A prompt roster so agents know which peer to mention for implementation, review, or other delegated work. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
+
+`a2a.outputMode` controls how much Agent-to-Agent activity is posted into the Slack thread. `verbose` preserves the legacy behavior. `quiet` buffers non-delegation assistant messages during A2A turns and posts only the final assistant message for the turn; messages that explicitly mention another configured agent still post immediately so delegation continues to work. Buffered messages are written as JSONL files under `a2a.diagnosticsDir` for later incident review.
 
 ## Environment variables
 
@@ -199,16 +216,17 @@ The production model is one OS process per Slack App. Do not use the `SLACK_BOT_
 
 Each instance needs its own Slack App credentials and its own local runtime state:
 
-| Per-instance value                  | Why it must be separate                                               |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| `SLACK_BOT_TOKEN`                   | Identifies the Slack bot user that receives mentions                  |
-| `SLACK_APP_TOKEN`                   | Opens that Slack App's Socket Mode connection                         |
-| `SLACK_SIGNING_SECRET`              | Belongs to that Slack App                                             |
-| `SLACK_APP_ID`                      | Required if manifest sync is enabled                                  |
-| `SLACK_CONFIG_TOKEN_STORE_PATH`     | Avoids rotated config-token files overwriting each other              |
-| `APP_CONFIG_PATH`                   | Lets each Agent use a different provider/model/repo/log configuration |
-| `SESSION_DB_PATH` / `sessionDbPath` | Avoids session collisions because Slack threads share `thread_ts`     |
-| `LOG_DIR` / `logDir`                | Keeps per-Agent logs readable                                         |
+| Per-instance value                           | Why it must be separate                                               |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `SLACK_BOT_TOKEN`                            | Identifies the Slack bot user that receives mentions                  |
+| `SLACK_APP_TOKEN`                            | Opens that Slack App's Socket Mode connection                         |
+| `SLACK_SIGNING_SECRET`                       | Belongs to that Slack App                                             |
+| `SLACK_APP_ID`                               | Required if manifest sync is enabled                                  |
+| `SLACK_CONFIG_TOKEN_STORE_PATH`              | Avoids rotated config-token files overwriting each other              |
+| `APP_CONFIG_PATH`                            | Lets each Agent use a different provider/model/repo/log configuration |
+| `SESSION_DB_PATH` / `sessionDbPath`          | Avoids session collisions because Slack threads share `thread_ts`     |
+| `LOG_DIR` / `logDir`                         | Keeps per-Agent logs readable                                         |
+| `A2A_DIAGNOSTICS_DIR` / `a2a.diagnosticsDir` | Keeps quiet-mode suppressed A2A messages inspectable per Agent        |
 
 `REPO_ROOT_DIR` can be shared when both Agents should see the same repositories.
 
