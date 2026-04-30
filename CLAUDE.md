@@ -18,6 +18,16 @@ Project conventions and guidelines for AI-assisted development on **kagura**.
 | `pnpm e2e -- -s <term>` | Search/filter by keyword    |
 | `pnpm e2e:list`         | List all discovered cases   |
 
+## Push & Deploy
+
+The repo has an auto-updater (`ops/pm2/update-loop.sh`) that pulls and restarts the bot every 60s. **Always use `ops/pm2/push-with-lock.sh` instead of plain `git push`** — it writes a 120s lock file so the updater defers the restart until the current task finishes.
+
+```bash
+# Commit first, then push with lock protection:
+git commit -m "..."
+./ops/pm2/push-with-lock.sh
+```
+
 ## Development workflow
 
 Every feature or bugfix **must** include:
