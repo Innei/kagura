@@ -754,6 +754,21 @@ function extractUploadedFileId(response: SlackFilesUploadV2Response): string | u
   return fromFile || undefined;
 }
 
+function formatDurationSmart(ms: number): string {
+  const totalSeconds = ms / 1000;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds.toFixed(0)}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds.toFixed(0)}s`;
+  }
+  return `${seconds.toFixed(1)}s`;
+}
+
 function formatToolHistorySummary(toolHistory?: Map<string, number>): string | undefined {
   if (!toolHistory || toolHistory.size === 0) {
     return undefined;
@@ -772,11 +787,7 @@ function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
     return undefined;
   }
 
-  const parts: string[] = [];
-
-  // Format duration
-  const durationSec = (usage.durationMs / 1000).toFixed(1);
-  parts.push(`${durationSec}s`);
+  const parts: string[] = [formatDurationSmart(usage.durationMs)];
 
   if (usage.costKnown !== false) {
     parts.push(`$${usage.totalCostUSD.toFixed(4)}`);
