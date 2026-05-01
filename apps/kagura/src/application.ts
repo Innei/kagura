@@ -18,6 +18,7 @@ import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp, type KaguraSlackApp, type SlackAppCredentials } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import { SqlitePersistentExecutionStore } from '~/slack/execution/persistent-execution-store.js';
 import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
@@ -78,6 +79,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger.withTag('channel-preference'),
   );
   const analyticsStore = new SqliteAnalyticsStore(db, logger.withTag('analytics'));
+  const persistentExecutionStore = new SqlitePersistentExecutionStore(sqlite);
   memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
@@ -133,6 +135,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       logger,
       memoryStore,
       permissionBridge,
+      persistentExecutionStore,
       sessionStore,
       providerRegistry,
       threadExecutionRegistry,
@@ -168,6 +171,12 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
+      void slackApp.recoverPendingExecutions?.().catch((error) => {
+        logger.error(
+          'Failed to recover interrupted agent executions: %s',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
     },
     async stop() {
       slackApp.stopA2ASummaryPoller?.();

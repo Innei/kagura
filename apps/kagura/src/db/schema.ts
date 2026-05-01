@@ -58,3 +58,21 @@ export const channelPreferences = sqliteTable('channel_preferences', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const agentExecutions = sqliteTable('agent_executions', {
+  executionId: text('execution_id').primaryKey(),
+  threadTs: text('thread_ts').notNull(),
+  channelId: text('channel_id').notNull(),
+  messageTs: text('message_ts').notNull(),
+  rootMessageTs: text('root_message_ts').notNull(),
+  userId: text('user_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  status: text('status').notNull(),
+  text: text('text').notNull(),
+  teamId: text('team_id'),
+  resumeHandle: text('resume_handle'),
+  terminalPhase: text('terminal_phase'),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  startedAt: text('started_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

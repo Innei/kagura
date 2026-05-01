@@ -12,6 +12,7 @@ import type {
   NormalizedThreadContext,
   SlackThreadContextLoader,
 } from '../context/thread-context-loader.js';
+import type { PersistentExecutionStore } from '../execution/persistent-execution-store.js';
 import type { ThreadExecutionRegistry } from '../execution/thread-execution-registry.js';
 import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
@@ -33,6 +34,7 @@ export interface SlackIngressDependencies {
   logger: AppLogger;
   memoryStore: MemoryStore;
   permissionBridge?: SlackPermissionBridge;
+  persistentExecutionStore?: PersistentExecutionStore | undefined;
   providerRegistry?: AgentProviderRegistry;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
@@ -67,8 +69,10 @@ export interface ThreadConversationOptions {
   agentProviderOverride?: string | undefined;
   currentBotUserId?: string | undefined;
   currentBotUserName?: string | undefined;
+  executionId?: string | undefined;
   forceNewSession?: boolean;
   logLabel: string;
+  resumeHandleOverride?: string | undefined;
   rootMessageTs: string;
   workspaceOverride?: ResolvedWorkspace;
 }

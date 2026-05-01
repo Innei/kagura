@@ -63,6 +63,26 @@ export function createDatabase(dbPath: string) {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS agent_executions (
+      execution_id TEXT PRIMARY KEY,
+      thread_ts TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_ts TEXT NOT NULL,
+      root_message_ts TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      text TEXT NOT NULL,
+      team_id TEXT,
+      resume_handle TEXT,
+      terminal_phase TEXT,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   migrateMemoriesRepoIdNullable(sqlite);
 
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { AgentExecutor } from '~/agent/types.js';
+import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import type { SessionRecord } from '~/session/types.js';
@@ -9,7 +9,7 @@ import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
 
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
-import { createActivitySink } from './activity-sink.js';
+import { type ActivitySink, createActivitySink } from './activity-sink.js';
 import { getA2AContextFromSession, serializeA2AParticipants } from './scenarios/a2a/routing.js';
 import { resolveAndPersistSession } from './session-manager.js';
 import type {
@@ -255,7 +255,7 @@ export async function resolveSessionStep(
     options.forceNewSession === true,
     deps.sessionStore,
   );
-  ctx.resumeHandle = resumeHandle;
+  ctx.resumeHandle = options.resumeHandleOverride ?? resumeHandle;
   ctx.previousTurnTriggerTs = resumeHandle ? session.lastTurnTriggerTs : undefined;
 
   deps.sessionStore.patch(threadTs, {
@@ -316,12 +316,12 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   }
 
   const executor = resolveExecutor(ctx.existingSession, deps, ctx.options.agentProviderOverride);
-  const executionId = randomUUID();
+  const executionId = ctx.options.executionId ?? randomUUID();
   const a2aContext = ctx.options.a2aContext ?? getA2AContextFromSession(ctx.existingSession ?? {});
   const quietA2A =
     deps.a2aOutputMode === 'quiet' &&
     Boolean(a2aContext || ctx.options.a2aAssignmentId || ctx.options.a2aSummaryAssignmentId);
-  const sink = createActivitySink({
+  const baseSink = createActivitySink({
     analyticsStore: deps.analyticsStore,
     assistantMessageVisibility: quietA2A ? 'quiet-final' : 'public',
     channel: message.channel,
@@ -347,6 +347,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     ...(workspace ? { workspacePath: workspace.workspacePath } : {}),
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
   });
+  const sink = createPersistentExecutionSink(baseSink, deps, executionId);
 
   const controller = new AbortController();
   const startedAt = new Date().toISOString();
@@ -385,6 +386,18 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   });
 
   deps.threadExecutionRegistry.trackMessage(message.ts, threadTs);
+  deps.persistentExecutionStore?.start({
+    channelId: message.channel,
+    executionId,
+    messageTs: message.ts,
+    providerId: executor.providerId,
+    rootMessageTs: ctx.options.rootMessageTs,
+    startedAt,
+    ...(message.team ? { teamId: message.team } : {}),
+    text: message.text,
+    threadTs,
+    userId: message.user,
+  });
 
   try {
     runtimeInfo(
@@ -488,6 +501,11 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
           deps.logger.warn('Failed to add completion reaction: %s', String(error));
         });
     }
+    deps.persistentExecutionStore?.markTerminal(
+      executionId,
+      normalizeTerminalPhase(sink.terminalPhase),
+      sink.terminalPhase,
+    );
     resolveExecutionDone!();
     runtimeInfo(
       deps.logger,
@@ -498,6 +516,43 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   }
 
   return CONTINUE;
+}
+
+function createPersistentExecutionSink(
+  baseSink: ActivitySink,
+  deps: SlackIngressDependencies,
+  executionId: string,
+): ActivitySink {
+  return {
+    finalize: () => baseSink.finalize(),
+    onEvent: async (event: AgentExecutionEvent) => {
+      if (event.type === 'lifecycle' && event.resumeHandle) {
+        deps.persistentExecutionStore?.recordResumeHandle(executionId, event.resumeHandle);
+      }
+      await baseSink.onEvent(event);
+    },
+    ...(baseSink.requestPermission
+      ? { requestPermission: baseSink.requestPermission.bind(baseSink) }
+      : {}),
+    ...(baseSink.requestUserInput
+      ? { requestUserInput: baseSink.requestUserInput.bind(baseSink) }
+      : {}),
+    get terminalPhase() {
+      return baseSink.terminalPhase;
+    },
+    get toolHistory() {
+      return baseSink.toolHistory;
+    },
+  };
+}
+
+function normalizeTerminalPhase(
+  terminalPhase: ActivitySink['terminalPhase'],
+): 'completed' | 'failed' | 'stopped' {
+  if (terminalPhase === 'completed' || terminalPhase === 'failed' || terminalPhase === 'stopped') {
+    return terminalPhase;
+  }
+  return 'failed';
 }
 
 function resolveExecutor(

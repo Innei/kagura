@@ -12,6 +12,8 @@ import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
+import { recoverPendingExecutions } from './execution/execution-recovery.js';
+import type { PersistentExecutionStore } from './execution/persistent-execution-store.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
 import type { A2ACoordinatorStore } from './ingress/a2a-coordinator-store.js';
 import type {
@@ -61,6 +63,7 @@ export interface SlackApplicationDependencies {
   logger: AppLogger;
   memoryStore: MemoryStore;
   permissionBridge: SlackPermissionBridge;
+  persistentExecutionStore?: PersistentExecutionStore | undefined;
   providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
@@ -76,6 +79,7 @@ export interface SlackAppCredentials {
 }
 
 export type KaguraSlackApp = App & {
+  recoverPendingExecutions?: () => Promise<void>;
   startA2ASummaryPoller?: () => void;
   stopA2ASummaryPoller?: () => void;
 };
@@ -121,6 +125,7 @@ export function createSlackApp(
     claudeExecutor: defaultExecutor,
     providerRegistry: deps.providerRegistry,
     permissionBridge: deps.permissionBridge,
+    persistentExecutionStore: deps.persistentExecutionStore,
     threadExecutionRegistry: deps.threadExecutionRegistry,
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,
@@ -199,5 +204,7 @@ export function createSlackApp(
     stopA2ASummaryPoller?.();
     stopA2ASummaryPoller = undefined;
   };
+  kaguraApp.recoverPendingExecutions = () =>
+    recoverPendingExecutions(app.client as unknown as SlackWebClientLike, ingressDeps);
   return kaguraApp;
 }

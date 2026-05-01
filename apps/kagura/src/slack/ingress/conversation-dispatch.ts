@@ -15,10 +15,12 @@ export interface ConversationDispatchInput {
   channelId: string;
   currentBotUserId?: string | undefined;
   currentBotUserName?: string | undefined;
+  executionId?: string | undefined;
   files?: ThreadConversationMessage['files'];
   forceNewSession?: boolean;
   logLabel: string;
   messageTs: string;
+  resumeHandleOverride?: string | undefined;
   rootMessageTs: string;
   teamId?: string | undefined;
   text: string;
@@ -54,7 +56,9 @@ export async function dispatchThreadConversation(
     ...(input.agentProviderOverride ? { agentProviderOverride: input.agentProviderOverride } : {}),
     ...(input.currentBotUserId ? { currentBotUserId: input.currentBotUserId } : {}),
     ...(input.currentBotUserName ? { currentBotUserName: input.currentBotUserName } : {}),
+    ...(input.executionId ? { executionId: input.executionId } : {}),
     ...(input.forceNewSession !== undefined ? { forceNewSession: input.forceNewSession } : {}),
+    ...(input.resumeHandleOverride ? { resumeHandleOverride: input.resumeHandleOverride } : {}),
     ...(input.workspaceOverride ? { workspaceOverride: input.workspaceOverride } : {}),
   };
 
