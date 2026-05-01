@@ -38,6 +38,7 @@ export interface AgentExecutionRequest {
   threadContext: NormalizedThreadContext;
   threadTs: string;
   userId: string;
+  workspaceBranch?: string;
   workspaceLabel?: string;
   workspacePath?: string;
   workspaceRepoId?: string;

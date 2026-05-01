@@ -1,5 +1,6 @@
 import './load-e2e-env.js';
 
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -25,6 +26,7 @@ interface ToolbarFirstMessageResult {
   failureMessage?: string;
   firstReply?: ToolbarFirstMessageReply;
   matched: {
+    firstReplyHasWorkspaceBranch: boolean;
     firstReplyHasNoToolHistory: boolean;
     firstReplyHasWorkspaceLabel: boolean;
     firstReplyObserved: boolean;
@@ -37,6 +39,7 @@ interface ToolbarFirstMessageResult {
   runId: string;
   secondReply?: ToolbarFirstMessageReply;
   targetRepo: string;
+  targetWorkspaceBranch?: string;
 }
 
 async function main(): Promise<void> {
@@ -53,6 +56,7 @@ async function main(): Promise<void> {
   const runId = randomUUID();
   const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'kagura';
   const targetWorkspacePath = process.cwd();
+  const targetWorkspaceBranch = resolveCurrentBranch(targetWorkspacePath);
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
   const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
   const botIdentity = await botClient.authTest();
@@ -61,6 +65,7 @@ async function main(): Promise<void> {
     botUserId: botIdentity.user_id,
     channelId: env.SLACK_E2E_CHANNEL_ID,
     matched: {
+      firstReplyHasWorkspaceBranch: false,
       firstReplyHasNoToolHistory: false,
       firstReplyHasWorkspaceLabel: false,
       firstReplyObserved: false,
@@ -70,6 +75,7 @@ async function main(): Promise<void> {
     },
     passed: false,
     runId,
+    ...(targetWorkspaceBranch ? { targetWorkspaceBranch } : {}),
     targetRepo,
   };
 
@@ -118,6 +124,10 @@ async function main(): Promise<void> {
         result.matched.firstReplyObserved = true;
         result.matched.firstReplyHasWorkspaceLabel = hasWorkspaceLabelContext(
           firstReply.contextTexts,
+        );
+        result.matched.firstReplyHasWorkspaceBranch = hasWorkspaceBranchContext(
+          firstReply.contextTexts,
+          targetWorkspaceBranch,
         );
         result.matched.firstReplyHasNoToolHistory = !hasToolHistoryContext(firstReply.contextTexts);
       }
@@ -200,6 +210,17 @@ function hasWorkspaceLabelContext(contextTexts: readonly string[]): boolean {
   return contextTexts.some((text) => text.includes('Working in'));
 }
 
+function hasWorkspaceBranchContext(
+  contextTexts: readonly string[],
+  expectedBranch: string | undefined,
+): boolean {
+  if (!expectedBranch) {
+    return true;
+  }
+
+  return contextTexts.some((text) => text.includes(`branch: ${expectedBranch}`));
+}
+
 function hasToolHistoryContext(contextTexts: readonly string[]): boolean {
   return contextTexts.some((text) => /\bx\d+\b/.test(text) && !text.includes('Working in'));
 }
@@ -212,6 +233,11 @@ function assertResult(result: ToolbarFirstMessageResult): void {
   }
   if (!result.matched.firstReplyHasWorkspaceLabel) {
     failures.push('first assistant reply does not contain a workspace label context block');
+  }
+  if (result.targetWorkspaceBranch && !result.matched.firstReplyHasWorkspaceBranch) {
+    failures.push(
+      `first assistant reply does not contain the current workspace branch (${result.targetWorkspaceBranch})`,
+    );
   }
   if (!result.matched.firstReplyHasNoToolHistory) {
     failures.push('first assistant reply unexpectedly contains a tool history context block');
@@ -242,6 +268,19 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function resolveCurrentBranch(workspacePath: string): string | undefined {
+  try {
+    const branch = execFileSync('git', ['-C', workspacePath, 'branch', '--show-current'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+    return branch || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export const scenario: LiveE2EScenario = {

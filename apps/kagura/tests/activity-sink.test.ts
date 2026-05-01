@@ -8,6 +8,7 @@ import { createActivitySink } from '~/slack/ingress/activity-sink.js';
 import type { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
+import * as workspaceResolverModule from '~/workspace/resolver.js';
 
 function createTestLogger(): AppLogger {
   const logger = {
@@ -34,6 +35,7 @@ function createRendererStub(): SlackRenderer {
     postGeneratedImages: vi.fn().mockResolvedValue([]),
     finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
+    updateThreadReplyWorkspaceContext: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
     upsertThreadProgressMessage: vi.fn().mockResolvedValue('progress-ts'),
@@ -735,6 +737,7 @@ describe('createActivitySink', () => {
       renderer,
       sessionStore: createMockSessionStore(),
       threadTs: 'ts1',
+      workspaceBranch: 'feature/my-work',
       workspaceLabel: 'my-workspace',
     });
 
@@ -756,7 +759,7 @@ describe('createActivitySink', () => {
       'C123',
       'ts1',
       'First message',
-      { workspaceLabel: 'my-workspace' },
+      { workspaceBranch: 'feature/my-work', workspaceLabel: 'my-workspace' },
     );
 
     // Simulate more tool activity between messages
@@ -789,6 +792,96 @@ describe('createActivitySink', () => {
       'Third message',
       {},
     );
+  });
+
+  it('updates the first assistant reply when workspace branch metadata changes mid-run', async () => {
+    const metadataSpy = vi
+      .spyOn(workspaceResolverModule, 'resolveWorkspaceDisplayMetadata')
+      .mockReturnValueOnce({
+        workspaceBranch: 'feature/my-work',
+        workspacePullRequestNumber: 123,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/123',
+      })
+      .mockReturnValueOnce({
+        workspaceBranch: 'feature/renamed-work',
+        workspacePullRequestNumber: 456,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/456',
+      });
+
+    const renderer = createRendererStub();
+    const postThreadReply = vi.mocked(renderer.postThreadReply).mockResolvedValue({
+      blocks: [
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: '_Working in my-workspace (branch: feature/my-work)_' },
+          ],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: 'First message' },
+        },
+      ] as never,
+      text: 'First message',
+      ts: 'reply-ts',
+    });
+    const updateThreadReplyWorkspaceContext = vi
+      .mocked(renderer.updateThreadReplyWorkspaceContext)
+      .mockResolvedValue({
+        blocks: [
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: '_Working in my-workspace (branch: feature/renamed-work)_' },
+            ],
+          },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: 'First message' },
+          },
+        ] as never,
+        text: 'First message',
+        ts: 'reply-ts',
+      });
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      workspaceBranch: 'feature/my-work',
+      workspaceLabel: 'my-workspace',
+      workspacePath: '/tmp/my-workspace',
+      workspacePullRequestNumber: 123,
+      workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/123',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'First message' });
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        status: 'Reading files...',
+        activities: ['Reading src/index.ts...'],
+        clear: false,
+      },
+    });
+
+    expect(postThreadReply).toHaveBeenCalled();
+    expect(updateThreadReplyWorkspaceContext).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      expect.objectContaining({ ts: 'reply-ts' }),
+      {
+        workspaceBranch: 'feature/renamed-work',
+        workspaceLabel: 'my-workspace',
+      },
+    );
+
+    metadataSpy.mockRestore();
   });
 
   it('forwards permission requests to the Slack permission bridge', async () => {
@@ -913,6 +1006,7 @@ describe('createActivitySink', () => {
         ts: 'reply-ts',
       },
       usage,
+      {},
     );
     expect(renderer.postSessionUsageInfo).not.toHaveBeenCalled();
   });

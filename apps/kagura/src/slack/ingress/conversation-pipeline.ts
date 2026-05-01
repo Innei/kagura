@@ -5,6 +5,7 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import type { SessionRecord } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
+import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
 
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -217,7 +218,9 @@ export async function resolveWorkspaceStep(
   }
 
   ctx.workspace =
-    workspaceResolution.status === 'unique' ? workspaceResolution.workspace : undefined;
+    workspaceResolution.status === 'unique'
+      ? enrichResolvedWorkspace(workspaceResolution.workspace)
+      : undefined;
 
   if (workspaceResolution.status === 'missing') {
     runtimeInfo(
@@ -334,6 +337,14 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     threadTs,
     userId: message.user,
     userInputBridge: deps.userInputBridge,
+    ...(workspace?.workspaceBranch ? { workspaceBranch: workspace.workspaceBranch } : {}),
+    ...(workspace?.workspacePullRequestNumber
+      ? { workspacePullRequestNumber: workspace.workspacePullRequestNumber }
+      : {}),
+    ...(workspace?.workspacePullRequestUrl
+      ? { workspacePullRequestUrl: workspace.workspacePullRequestUrl }
+      : {}),
+    ...(workspace ? { workspacePath: workspace.workspacePath } : {}),
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
   });
 
@@ -398,6 +409,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         ...(contextMemories ? { contextMemories } : {}),
         ...(workspace
           ? {
+              ...(workspace.workspaceBranch ? { workspaceBranch: workspace.workspaceBranch } : {}),
               workspaceLabel: workspace.workspaceLabel,
               workspacePath: workspace.workspacePath,
               workspaceRepoId: workspace.repo.id,

@@ -1,3 +1,4 @@
+import * as childProcess from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -311,15 +312,127 @@ function createResolvedWorkspace(
 ): ResolvedWorkspace {
   const relativeWorkspace = normalizeRelativePath(path.relative(repo.repoPath, workspacePath));
   const workspaceLabel = relativeWorkspace ? `${repo.label}/${relativeWorkspace}` : repo.label;
+  const workspaceBranch = resolveWorkspaceBranch(workspacePath);
 
   return {
     input,
     matchKind,
     repo,
     source,
+    ...(workspaceBranch ? { workspaceBranch } : {}),
     workspaceLabel,
     workspacePath,
   };
+}
+
+export function resolveWorkspaceBranch(workspacePath: string): string | undefined {
+  try {
+    const branch = childProcess
+      .execFileSync('git', ['-C', workspacePath, 'branch', '--show-current'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 1500,
+      })
+      .trim();
+
+    return branch || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const WORKSPACE_METADATA_CACHE_TTL_MS = 5_000;
+const workspaceMetadataCache = new Map<string, WorkspaceMetadataCacheEntry>();
+
+interface WorkspaceMetadataCacheEntry {
+  expiresAt: number;
+  metadata: Pick<
+    ResolvedWorkspace,
+    'workspaceBranch' | 'workspacePullRequestNumber' | 'workspacePullRequestUrl'
+  >;
+}
+
+export function enrichResolvedWorkspace(workspace: ResolvedWorkspace): ResolvedWorkspace {
+  const metadata = resolveWorkspaceDisplayMetadata(workspace.workspacePath);
+
+  return {
+    ...workspace,
+    ...metadata,
+  };
+}
+
+export function resolveWorkspaceDisplayMetadata(
+  workspacePath: string,
+): Pick<
+  ResolvedWorkspace,
+  'workspaceBranch' | 'workspacePullRequestNumber' | 'workspacePullRequestUrl'
+> {
+  const cacheKey = workspacePath;
+  const now = Date.now();
+  const cached = workspaceMetadataCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.metadata;
+  }
+
+  const workspaceBranch = resolveWorkspaceBranch(workspacePath);
+  const pullRequest = resolveWorkspacePullRequest(workspacePath, workspaceBranch);
+  const metadata: WorkspaceMetadataCacheEntry['metadata'] = {
+    ...(workspaceBranch ? { workspaceBranch } : {}),
+    ...(pullRequest?.number ? { workspacePullRequestNumber: pullRequest.number } : {}),
+    ...(pullRequest?.url ? { workspacePullRequestUrl: pullRequest.url } : {}),
+  };
+
+  workspaceMetadataCache.set(cacheKey, {
+    expiresAt: now + WORKSPACE_METADATA_CACHE_TTL_MS,
+    metadata,
+  });
+
+  return metadata;
+}
+
+function resolveWorkspacePullRequest(
+  workspacePath: string,
+  workspaceBranch: string | undefined,
+): { number?: number; url?: string } | undefined {
+  if (!workspaceBranch || workspaceBranch === 'main' || workspaceBranch === 'master') {
+    return undefined;
+  }
+
+  try {
+    const raw = childProcess.execFileSync(
+      'gh',
+      [
+        'pr',
+        'list',
+        '--head',
+        workspaceBranch,
+        '--state',
+        'open',
+        '--json',
+        'number,url',
+        '--limit',
+        '1',
+      ],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        cwd: workspacePath,
+        timeout: 2500,
+      },
+    );
+    const parsed = JSON.parse(raw) as Array<{ number?: number; url?: string }>;
+    const first = parsed[0];
+    if (!first?.url) {
+      return undefined;
+    }
+
+    return {
+      ...(typeof first.number === 'number' ? { number: first.number } : {}),
+      url: first.url,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function finalizeCandidates(

@@ -1,6 +1,7 @@
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { SessionRecord } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
+import { resolveWorkspaceBranch } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace, WorkspaceResolution } from '~/workspace/types.js';
 
 import { encodeWorkspacePickerButtonValue } from '../interactions/workspace-picker-payload.js';
@@ -29,6 +30,7 @@ export function resolveWorkspaceForConversation(
     existingSession.workspaceRepoPath &&
     existingSession.workspaceLabel
   ) {
+    const workspaceBranch = resolveWorkspaceBranch(existingSession.workspacePath);
     return {
       status: 'unique',
       workspace: {
@@ -45,6 +47,7 @@ export function resolveWorkspaceForConversation(
           relativePath: existingSession.workspaceRepoId,
         },
         source: existingSession.workspaceSource ?? 'manual',
+        ...(workspaceBranch ? { workspaceBranch } : {}),
         workspaceLabel: existingSession.workspaceLabel,
         workspacePath: existingSession.workspacePath,
       },

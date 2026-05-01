@@ -82,6 +82,8 @@ Everything lives under `~/.config/kagura/` by default (override with `$KAGURA_HO
 Secrets go in `.env`, tunables go in `config.json`. Precedence: `environment > config.json > built-in default`.  
 See [docs/configuration.md](docs/configuration.md) for the full layout, key reference, and `config.json` example.
 
+Git worktrees should be centralized under `REPO_ROOT_DIR/kagura-worktrees` by default; override with `WORKTREE_ROOT_DIR` or `worktreeRootDir` if you want a different parent directory.
+
 ## Subcommands
 
 | Command                          | What it does                                                        |

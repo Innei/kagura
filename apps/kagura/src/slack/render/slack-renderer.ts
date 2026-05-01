@@ -51,6 +51,14 @@ export interface PostedThreadReply {
   ts: string;
 }
 
+interface ThreadReplyContextOptions {
+  toolHistory?: Map<string, number>;
+  workspaceBranch?: string;
+  workspaceLabel?: string;
+  workspacePullRequestNumber?: number;
+  workspacePullRequestUrl?: string;
+}
+
 const DEFAULT_PROGRESS_STATUS = 'Working on your request...';
 const DEFAULT_SLACK_OPERATION_TIMEOUT_MS = 15_000;
 
@@ -386,7 +394,7 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     text: string,
-    options?: { workspaceLabel?: string; toolHistory?: Map<string, number> },
+    options?: ThreadReplyContextOptions,
   ): Promise<PostedThreadReply | undefined> {
     if (!text.trim()) {
       return undefined;
@@ -398,25 +406,7 @@ export class SlackRenderer {
     const batches = splitBlocksWithText(blocks);
 
     if (batches.length > 0) {
-      const prefixBlocks: Array<{
-        type: 'context';
-        elements: Array<{ type: 'mrkdwn'; text: string }>;
-      }> = [];
-
-      if (options?.workspaceLabel) {
-        prefixBlocks.push({
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: `_Working in ${options.workspaceLabel}_` }],
-        });
-      }
-
-      const toolSummary = formatToolHistorySummary(options?.toolHistory);
-      if (toolSummary) {
-        prefixBlocks.push({
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: toolSummary }],
-        });
-      }
+      const prefixBlocks = buildThreadReplyContextBlocks(options);
 
       if (prefixBlocks.length > 0) {
         const first = batches[0]!;
@@ -447,6 +437,33 @@ export class SlackRenderer {
     }
 
     return lastReply;
+  }
+
+  async updateThreadReplyWorkspaceContext(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    reply: PostedThreadReply,
+    options: Omit<ThreadReplyContextOptions, 'toolHistory'>,
+  ): Promise<PostedThreadReply> {
+    const nextBlocks = replaceWorkspaceContextBlocks(reply.blocks ?? [], options);
+
+    await this.withSlackTiming(
+      'chat.update(thread-reply-workspace-context)',
+      `channel=${channelId} thread=${threadTs} messageTs=${reply.ts} textLength=${reply.text.length}`,
+      async () =>
+        client.chat.update({
+          channel: channelId,
+          ts: reply.ts,
+          text: reply.text,
+          blocks: nextBlocks,
+        }),
+    );
+
+    return {
+      ...reply,
+      blocks: nextBlocks,
+    };
   }
 
   async postGeneratedImages(
@@ -491,8 +508,12 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     usage: SessionUsageInfo,
+    options?: {
+      workspacePullRequestNumber?: number | undefined;
+      workspacePullRequestUrl?: string | undefined;
+    },
   ): Promise<void> {
-    const usageText = formatSessionUsageInfo(usage);
+    const usageText = formatSessionUsageInfo(usage, options);
     if (!usageText) return;
 
     await this.withSlackTiming(
@@ -519,8 +540,12 @@ export class SlackRenderer {
     threadTs: string,
     reply: PostedThreadReply,
     usage: SessionUsageInfo,
+    options?: {
+      workspacePullRequestNumber?: number | undefined;
+      workspacePullRequestUrl?: string | undefined;
+    },
   ): Promise<boolean> {
-    const usageText = formatSessionUsageInfo(usage);
+    const usageText = formatSessionUsageInfo(usage, options);
     if (!usageText) return true;
 
     const existingBlocks = reply.blocks ?? [];
@@ -782,12 +807,110 @@ function formatToolHistorySummary(toolHistory?: Map<string, number>): string | u
   return items.join('  \u00B7  ');
 }
 
-function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
+function buildThreadReplyContextBlocks(options?: ThreadReplyContextOptions): Array<{
+  type: 'context';
+  elements: Array<{ type: 'mrkdwn'; text: string }>;
+}> {
+  const prefixBlocks: Array<{
+    type: 'context';
+    elements: Array<{ type: 'mrkdwn'; text: string }>;
+  }> = [];
+
+  const workspaceContext = formatWorkspaceContext(
+    options?.workspaceLabel,
+    options?.workspaceBranch,
+  );
+  if (workspaceContext) {
+    prefixBlocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: workspaceContext }],
+    });
+  }
+
+  const toolSummary = formatToolHistorySummary(options?.toolHistory);
+  if (toolSummary) {
+    prefixBlocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: toolSummary }],
+    });
+  }
+  return prefixBlocks;
+}
+
+function replaceWorkspaceContextBlocks(
+  blocks: SlackBlock[],
+  options: Omit<ThreadReplyContextOptions, 'toolHistory'>,
+): SlackBlock[] {
+  const preservedBlocks = blocks.filter((block) => {
+    if (block.type !== 'context') {
+      return true;
+    }
+
+    const texts = block.elements
+      .map((element) => element.text)
+      .filter((text): text is string => typeof text === 'string');
+
+    if (texts.some((text) => text.startsWith('_Working in '))) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return [...buildThreadReplyContextBlocks(options), ...preservedBlocks];
+}
+
+function formatWorkspaceContext(
+  workspaceLabel?: string,
+  workspaceBranch?: string,
+): string | undefined {
+  if (!workspaceLabel) {
+    return undefined;
+  }
+
+  if (!workspaceBranch) {
+    return `_Working in ${workspaceLabel}_`;
+  }
+
+  return `_Working in ${workspaceLabel} (branch: ${workspaceBranch})_`;
+}
+
+function formatWorkspacePullRequestContext(
+  workspacePullRequestUrl?: string,
+  workspacePullRequestNumber?: number,
+): string | undefined {
+  if (!workspacePullRequestUrl) {
+    return undefined;
+  }
+
+  const label =
+    typeof workspacePullRequestNumber === 'number' ? `#${workspacePullRequestNumber}` : 'Open PR';
+
+  return `PR: <${workspacePullRequestUrl}|${label}>`;
+}
+
+function formatSessionUsageInfo(
+  usage: SessionUsageInfo,
+  options?: {
+    workspacePullRequestNumber?: number | undefined;
+    workspacePullRequestUrl?: string | undefined;
+  },
+): string | undefined {
   if (!usage.modelUsage || usage.modelUsage.length === 0) {
     return undefined;
   }
 
-  const parts: string[] = [formatDurationSmart(usage.durationMs)];
+  const parts: string[] = [];
+
+  const pullRequestContext = formatWorkspacePullRequestContext(
+    options?.workspacePullRequestUrl,
+    options?.workspacePullRequestNumber,
+  );
+  if (pullRequestContext) {
+    parts.push(pullRequestContext);
+  }
+
+  parts.push(formatDurationSmart(usage.durationMs));
 
   if (usage.costKnown !== false) {
     parts.push(`$${usage.totalCostUSD.toFixed(4)}`);

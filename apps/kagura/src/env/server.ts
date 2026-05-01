@@ -66,6 +66,7 @@ const appConfigSchema = z
     logToFile: z.boolean().optional(),
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
+    worktreeRootDir: z.string().optional(),
     sessionDbPath: z.string().optional(),
     a2aCoordinatorDbPath: z.string().optional(),
     slackConfigTokenStorePath: z.string().optional(),
@@ -112,6 +113,19 @@ function envOrConfig(envName: string, configValue: string | undefined): string |
   return trimmed.length > 0 ? raw : configValue;
 }
 
+function resolveDefaultRepoRootDir(): string | undefined {
+  return envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir));
+}
+
+function resolveDefaultWorktreeRootDir(): string {
+  const repoRootDir = resolveDefaultRepoRootDir();
+  if (repoRootDir) {
+    return path.join(repoRootDir, 'kagura-worktrees');
+  }
+
+  return path.join(kaguraPaths.configDir, 'kagura-worktrees');
+}
+
 export const env = createEnv({
   server: {
     APP_CONFIG_PATH: z.string().min(1).optional(),
@@ -145,6 +159,7 @@ export const env = createEnv({
     LOG_DIR: z.string().min(1).default('./logs'),
     REPO_ROOT_DIR: z.string().min(1),
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
+    WORKTREE_ROOT_DIR: z.string().min(1).default(resolveDefaultWorktreeRootDir()),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
     A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
     A2A_OUTPUT_MODE: z.enum(['verbose', 'quiet']).default('verbose'),
@@ -197,6 +212,7 @@ export const env = createEnv({
     LOG_DIR: envOrConfig('LOG_DIR', configString(appConfig.logDir)),
     REPO_ROOT_DIR: envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir)),
     REPO_SCAN_DEPTH: envOrConfig('REPO_SCAN_DEPTH', configNumber(appConfig.repoScanDepth)),
+    WORKTREE_ROOT_DIR: envOrConfig('WORKTREE_ROOT_DIR', configString(appConfig.worktreeRootDir)),
     SESSION_DB_PATH: envOrConfig('SESSION_DB_PATH', configString(appConfig.sessionDbPath)),
     A2A_COORDINATOR_DB_PATH: envOrConfig(
       'A2A_COORDINATOR_DB_PATH',

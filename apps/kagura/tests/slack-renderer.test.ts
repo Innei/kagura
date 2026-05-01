@@ -258,6 +258,69 @@ describe('SlackRenderer.appendSessionUsageInfoToThreadReply', () => {
       ],
     });
   });
+
+  it('renders the PR link in the same usage context row when provided', async () => {
+    const { client } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+    const usage: SessionUsageInfo = {
+      durationMs: 12_345,
+      totalCostUSD: 0.1234,
+      modelUsage: [
+        {
+          cacheCreationInputTokens: 0,
+          cacheHitRate: 50,
+          cacheReadInputTokens: 50_000,
+          costUSD: 0.1234,
+          inputTokens: 100_000,
+          inputTokensIncludeCache: true,
+          model: 'gpt-5.5',
+          outputTokens: 5_000,
+        },
+      ],
+    };
+
+    await renderer.appendSessionUsageInfoToThreadReply(
+      client,
+      'C1',
+      '1712345678.000100',
+      {
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: 'Done' },
+          },
+        ],
+        text: 'Done',
+        ts: 'reply-ts',
+      },
+      usage,
+      {
+        workspacePullRequestNumber: 123,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/123',
+      },
+    );
+
+    expect(client.chat.update).toHaveBeenCalledWith({
+      channel: 'C1',
+      ts: 'reply-ts',
+      text: expect.stringContaining('PR: <https://github.com/Innei/kagura/pull/123|#123>'),
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: 'Done' },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: expect.stringContaining('PR: <https://github.com/Innei/kagura/pull/123|#123>'),
+            },
+          ],
+        },
+      ],
+    });
+  });
 });
 
 describe('SlackRenderer.postGeneratedFiles', () => {
@@ -347,6 +410,81 @@ describe('SlackRenderer.postThreadReply', () => {
           .filter(Boolean),
       );
     expect(contextTexts).toEqual(['_Working in repo/worktree_']);
+  });
+
+  it('includes the current branch in the workspace context when available', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.postThreadReply(client, 'C1', 'ts-root', 'Hello from Slack.', {
+      workspaceBranch: 'feature/slack-branch-pill',
+      workspaceLabel: 'repo/worktree',
+    });
+
+    const contextTexts = (imagePostCalls[0]!.blocks as SlackBlock[] | undefined)
+      ?.filter((block) => block.type === 'context')
+      .flatMap((block) =>
+        (block.elements ?? [])
+          .map((element) =>
+            'text' in element && typeof element.text === 'string' ? element.text : '',
+          )
+          .filter(Boolean),
+      );
+
+    expect(contextTexts).toEqual([
+      '_Working in repo/worktree (branch: feature/slack-branch-pill)_',
+    ]);
+  });
+});
+
+describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {
+  it('updates the existing workspace context block when branch metadata changes', async () => {
+    const { client } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    const updated = await renderer.updateThreadReplyWorkspaceContext(
+      client,
+      'C1',
+      'ts-root',
+      {
+        blocks: [
+          {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree (branch: old-branch)_' }],
+          },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: 'Hello from Slack.' },
+          },
+        ],
+        text: 'Hello from Slack.',
+        ts: 'reply-ts',
+      },
+      {
+        workspaceBranch: 'new-branch',
+        workspaceLabel: 'repo/worktree',
+      },
+    );
+
+    expect(client.chat.update).toHaveBeenCalledWith({
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree (branch: new-branch)_' }],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: 'Hello from Slack.' },
+        },
+      ],
+      channel: 'C1',
+      text: 'Hello from Slack.',
+      ts: 'reply-ts',
+    });
+    expect(updated.blocks?.[0]).toMatchObject({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree (branch: new-branch)_' }],
+    });
   });
 });
 

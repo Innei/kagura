@@ -168,9 +168,12 @@ Example `config.json`:
   },
   "defaultProviderId": "codex-cli",
   "logLevel": "info",
-  "repoRootDir": "~/git"
+  "repoRootDir": "~/git",
+  "worktreeRootDir": "~/git/kagura-worktrees"
 }
 ```
+
+When agents create git worktrees, the default centralized root is `REPO_ROOT_DIR/kagura-worktrees` unless `WORKTREE_ROOT_DIR` or `worktreeRootDir` overrides it.
 
 ## Subcommands
 

@@ -14,8 +14,11 @@ export interface ResolvedWorkspace {
   matchKind: 'path' | 'repo';
   repo: WorkspaceRepo;
   source: WorkspaceSource;
+  workspaceBranch?: string | undefined;
   workspaceLabel: string;
   workspacePath: string;
+  workspacePullRequestNumber?: number | undefined;
+  workspacePullRequestUrl?: string | undefined;
 }
 
 export type WorkspaceResolution =

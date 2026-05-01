@@ -5,6 +5,7 @@ import {
   UPLOAD_SLACK_FILE_TOOL_NAME,
 } from '~/agent/slack-runtime-tools.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
+import { env } from '~/env/server.js';
 import {
   type LoadedThreadFile,
   renderThreadPrompt,
@@ -102,6 +103,7 @@ export const codingWorkflowProcessor: PromptProcessor = {
       '- Before implementation work where freshness matters, fetch the relevant remote and check whether the active branch or its base/upstream branch has received new commits.',
       '- If the upstream/base branch moved, sync it first and rebase your working branch onto the updated remote base before continuing, unless the user explicitly instructs otherwise.',
       '- If the repository is hosted on GitHub, prefer using a git worktree for implementation work when branch isolation would reduce risk or keep concurrent tasks separate.',
+      `- When creating or reusing git worktrees, keep them under the centralized worktree root ${env.WORKTREE_ROOT_DIR} instead of scattering ad-hoc worktree folders across the filesystem.`,
       '- When using a git worktree, inspect the original/source workspace for ignored environment files and local config that may be required by the task; if such files exist there, copy the necessary ones into the worktree before proceeding.',
       '- For read-only analysis, inspect only the files and metadata needed to answer; do not fetch, rebase, or otherwise change repository state unless freshness is central to the request.',
     );
@@ -152,8 +154,15 @@ export const sessionContextProcessor: PromptProcessor = {
     }
 
     if (request.workspacePath) {
+      const workspaceDetails = [
+        request.workspaceLabel,
+        request.workspaceRepoId ? `repo id ${request.workspaceRepoId}` : undefined,
+        request.workspaceBranch ? `branch ${request.workspaceBranch}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(', ');
       lines.push(
-        `Your working directory is ${request.workspacePath} (${request.workspaceLabel}, repo id ${request.workspaceRepoId}).`,
+        `Your working directory is ${request.workspacePath}${workspaceDetails ? ` (${workspaceDetails}).` : '.'}`,
         'Always treat that workspace as the canonical filesystem root for this Slack thread.',
       );
     } else {

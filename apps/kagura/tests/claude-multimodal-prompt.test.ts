@@ -247,6 +247,7 @@ describe('prompt assembly', () => {
 
     it('includes workspace info in context when set', () => {
       const request = baseRequest({
+        workspaceBranch: 'feature/my-work',
         workspacePath: '/repos/my-project',
         workspaceLabel: 'my-project',
         workspaceRepoId: 'repo-123',
@@ -254,6 +255,7 @@ describe('prompt assembly', () => {
       const { userText } = assemblePrompt(request);
       expect(userText).toContain('/repos/my-project');
       expect(userText).toContain('my-project');
+      expect(userText).toContain('branch feature/my-work');
     });
 
     it('includes memory context when memories exist', () => {

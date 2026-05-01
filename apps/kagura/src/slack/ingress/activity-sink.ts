@@ -16,6 +16,7 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
+import { resolveWorkspaceDisplayMetadata } from '~/workspace/resolver.js';
 
 import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
@@ -44,7 +45,11 @@ export interface ActivitySinkOptions {
   threadTs: string;
   userId?: string;
   userInputBridge?: SlackUserInputBridge;
+  workspaceBranch?: string;
   workspaceLabel?: string;
+  workspacePath?: string;
+  workspacePullRequestNumber?: number;
+  workspacePullRequestUrl?: string;
 }
 
 export interface ActivitySink {
@@ -90,7 +95,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     threadTs,
     userId,
     userInputBridge,
+    workspaceBranch,
     workspaceLabel,
+    workspacePath,
+    workspacePullRequestNumber,
+    workspacePullRequestUrl,
   } = options;
 
   let progressMessageTs: string | undefined;
@@ -108,7 +117,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let hasSentToolbarInTurn = false;
   let sessionUsageInfo: SessionUsageInfo | undefined;
   let lastAssistantReply: PostedThreadReply | undefined;
+  let toolbarReply: PostedThreadReply | undefined;
   const quietAssistantMessages: string[] = [];
+  let currentWorkspaceBranch = workspaceBranch;
+  let currentWorkspacePullRequestNumber = workspacePullRequestNumber;
+  let currentWorkspacePullRequestUrl = workspacePullRequestUrl;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -130,6 +143,45 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     } catch (error) {
       logger.warn('Failed to %s: %s', label, String(error));
       return undefined;
+    }
+  };
+
+  const maybeRefreshWorkspaceContext = async (): Promise<void> => {
+    if (!workspacePath || !workspaceLabel) {
+      return;
+    }
+
+    const nextMetadata = resolveWorkspaceDisplayMetadata(workspacePath);
+    const changed =
+      nextMetadata.workspaceBranch !== currentWorkspaceBranch ||
+      nextMetadata.workspacePullRequestNumber !== currentWorkspacePullRequestNumber ||
+      nextMetadata.workspacePullRequestUrl !== currentWorkspacePullRequestUrl;
+
+    if (!changed) {
+      return;
+    }
+
+    currentWorkspaceBranch = nextMetadata.workspaceBranch;
+    currentWorkspacePullRequestNumber = nextMetadata.workspacePullRequestNumber;
+    currentWorkspacePullRequestUrl = nextMetadata.workspacePullRequestUrl;
+
+    if (!toolbarReply || !hasSentToolbarInTurn) {
+      return;
+    }
+
+    const replyToUpdate = toolbarReply;
+    const updatedReply = await safeRender('update assistant workspace context', () =>
+      renderer.updateThreadReplyWorkspaceContext(client, channel, threadTs, replyToUpdate, {
+        ...(currentWorkspaceBranch ? { workspaceBranch: currentWorkspaceBranch } : {}),
+        workspaceLabel,
+      }),
+    );
+
+    if (updatedReply) {
+      toolbarReply = updatedReply;
+      if (lastAssistantReply?.ts === updatedReply.ts) {
+        lastAssistantReply = updatedReply;
+      }
     }
   };
 
@@ -231,12 +283,25 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const postAssistantMessage = async (text: string): Promise<void> => {
     // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
     const includeToolbar = !hasSentToolbarInTurn;
+    await maybeRefreshWorkspaceContext();
     try {
       const postedReply = await renderer.postThreadReply(client, channel, threadTs, text, {
+        ...(includeToolbar && currentWorkspaceBranch
+          ? { workspaceBranch: currentWorkspaceBranch }
+          : {}),
         ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
+        ...(includeToolbar && currentWorkspacePullRequestNumber
+          ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
+          : {}),
+        ...(includeToolbar && currentWorkspacePullRequestUrl
+          ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
+          : {}),
       });
       if (postedReply) {
         lastAssistantReply = postedReply;
+        if (includeToolbar) {
+          toolbarReply = postedReply;
+        }
       }
       hasSentToolbarInTurn = true;
     } catch (error) {
@@ -313,6 +378,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   };
 
   const handleActivityState = async (state: AgentActivityState): Promise<void> => {
+    await maybeRefreshWorkspaceContext();
     const nextStateKey = JSON.stringify(state);
     if (nextStateKey === lastStateKey) return;
     lastStateKey = nextStateKey;
@@ -540,6 +606,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     },
 
     async finalize(): Promise<void> {
+      await maybeRefreshWorkspaceContext();
       await renderer.clearUiState(client, channel, threadTs).catch((err) => {
         logger.warn('Failed to clear UI state: %s', String(err));
       });
@@ -620,6 +687,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
                 threadTs,
                 lastAssistantReply,
                 sessionUsageInfo,
+                {
+                  ...(currentWorkspacePullRequestNumber
+                    ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
+                    : {}),
+                  ...(currentWorkspacePullRequestUrl
+                    ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
+                    : {}),
+                },
               )
               .catch((err) => {
                 logger.warn('Failed to append session usage info: %s', String(err));
@@ -628,7 +703,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         }
         if (!usageAttached) {
           await renderer
-            .postSessionUsageInfo(client, channel, threadTs, sessionUsageInfo)
+            .postSessionUsageInfo(client, channel, threadTs, sessionUsageInfo, {
+              ...(currentWorkspacePullRequestNumber
+                ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
+                : {}),
+              ...(currentWorkspacePullRequestUrl
+                ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
+                : {}),
+            })
             .catch((err) => {
               logger.warn('Failed to post session usage info: %s', String(err));
             });

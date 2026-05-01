@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -97,10 +98,41 @@ describe('WorkspaceResolver', () => {
     expect(resolution.workspace.workspacePath).toBe(subdirPath);
     expect(resolution.workspace.workspaceLabel).toBe('team/kagura/packages/bot');
   });
+
+  it('captures the current git branch when the repository is real', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-resolver-'));
+    const repoPath = createRealRepo(repoRoot, 'team/kagura');
+
+    const resolver = new WorkspaceResolver({
+      repoRootDir: repoRoot,
+      scanDepth: 2,
+    });
+
+    const resolution = resolver.resolveFromText('please check kagura for this issue');
+
+    expect(resolution.status).toBe('unique');
+    if (resolution.status !== 'unique') {
+      return;
+    }
+
+    expect(resolution.workspace.workspaceBranch).toBe('feature/test-branch');
+    expect(resolution.workspace.repo.repoPath).toBe(repoPath);
+  });
 });
 
 function createRepo(repoRoot: string, relativePath: string): string {
   const repoPath = path.join(repoRoot, relativePath);
   fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+  return repoPath;
+}
+
+function createRealRepo(repoRoot: string, relativePath: string): string {
+  const repoPath = path.join(repoRoot, relativePath);
+  fs.mkdirSync(repoPath, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['checkout', '-b', 'feature/test-branch'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
   return repoPath;
 }
