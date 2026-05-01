@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
@@ -704,6 +704,52 @@ describe('CodexCliExecutor', () => {
     expect(prompt).toContain('<codex_workspace_skills>');
     expect(prompt).toContain('## /demo-skill');
     expect(prompt).toContain('Reply with DEMO_SKILL_OK.');
+  });
+
+  it('persists Slack thread images as local Codex input files and references them in the prompt', () => {
+    const request = createRequest({
+      executionId: 'exec-image-input',
+      threadContext: {
+        channelId: 'C1',
+        fileLoadFailures: [],
+        imageLoadFailures: [],
+        loadedFiles: [],
+        loadedImages: [
+          {
+            authorId: 'U1',
+            base64Data: Buffer.from('image-bytes').toString('base64'),
+            fileId: 'F_IMG',
+            fileName: 'red.png',
+            messageIndex: 2,
+            messageTs: '1712345678.000200',
+            mimeType: 'image/png',
+            slackUrl: 'https://files.slack.example/red.png',
+          },
+        ],
+        messages: [
+          {
+            authorId: 'U1',
+            files: [],
+            images: [],
+            rawText: '<@U_BOT> what color is this?',
+            text: '<@U_BOT> what color is this?',
+            threadTs: '1712345678.000100',
+            ts: '1712345678.000200',
+          },
+        ],
+        renderedPrompt: 'Slack thread context:',
+        threadTs: '1712345678.000100',
+      },
+    });
+    const runtimePaths = getCodexRuntimePaths(request);
+
+    const prompt = buildCodexPrompt(request, runtimePaths);
+
+    const imagePath = '/tmp/kagura/cache/images/01-1712345678.000200-F_IMG.png';
+    expect(prompt).toContain('<codex_slack_image_inputs>');
+    expect(prompt).toContain(`path=${imagePath}`);
+    expect(prompt).not.toContain('This Codex CLI adapter currently does not forward Slack image');
+    expect(readFileSync(imagePath, 'utf8')).toBe('image-bytes');
   });
 
   it('includes the shared Kagura host behavior in the Codex prompt', () => {
