@@ -44,8 +44,8 @@ describe('GitReviewService', () => {
     const service = new GitReviewService(store);
     const session = service.getSession('exec-1');
     expect(session?.changedFiles).toEqual([
-      { path: 'src/index.ts', status: 'M' },
-      { path: 'src/new.ts', status: '??' },
+      { path: 'src/index.ts', status: 'M', additions: 1, deletions: 1 },
+      { path: 'src/new.ts', status: '??', additions: 1, deletions: 0 },
     ]);
 
     expect(service.listTree('exec-1')).toContainEqual({
