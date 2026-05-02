@@ -20,11 +20,11 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths: true,
     },
     plugins: [
-      react(),
       codeInspectorPlugin({
         bundler: 'vite',
         hotKeys: ['altKey'],
       }),
+      react(),
       ...(useMockApi ? [createMockReviewApiPlugin()] : []),
     ],
     server: {

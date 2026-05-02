@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "panda codegen && vite build",
+    "build": "npm run codegen && vite build",
+    "codegen": "panda codegen",
     "dev": "vite --host 127.0.0.1",
     "dev:mock": "KAGURA_WEB_MOCK_API=true vite --host 127.0.0.1 --open /reviews/mock-review",
-    "prepare": "panda codegen",
+    "prepare": "npm run codegen",
     "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "panda codegen && tsc -p tsconfig.json --noEmit"
+    "typecheck": "npm run codegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fontsource/geist": "^5.2.8",
@@ -22,7 +23,8 @@
     "react-dom": "^19.2.3",
     "react-resizable-panels": "^3.0.2",
     "typescript": "^6.0.2",
-    "vite": "8.0.10"
+    "vite": "8.0.10",
+    "wouter": "^3.9.0"
   },
   "devDependencies": {
     "@pandacss/dev": "^1.10.0",

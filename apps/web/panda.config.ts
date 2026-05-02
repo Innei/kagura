@@ -1,5 +1,3 @@
-import process from 'node:process';
-
 import { defineConfig } from '@pandacss/dev';
 
 const neutral = {
@@ -15,10 +13,10 @@ const neutral = {
   900: '#171717',
   950: '#0a0a0a',
 } as const;
-const __DEV__ = process.env.NODE_ENV === 'development';
+
 export default defineConfig({
   syntax: 'template-literal',
-  hash: !__DEV__,
+  hash: true,
   preflight: true,
   jsxFramework: 'react',
   include: ['./src/**/*.{ts,tsx}'],

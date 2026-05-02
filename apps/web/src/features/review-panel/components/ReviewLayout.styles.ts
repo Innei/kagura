@@ -48,7 +48,7 @@ export const expandButton = css`
 export const resizeHandle = css`
   background: transparent;
   cursor: col-resize;
-  width: 4px;
+  width: 2px;
   outline: none;
   position: relative;
   &:hover,
