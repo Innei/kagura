@@ -41,6 +41,7 @@ export interface ActivitySinkOptions {
   quietAssistantMessageRecorder?: QuietAssistantMessageRecorder | undefined;
   quietAssistantPublicMentionIds?: string[] | undefined;
   renderer: SlackRenderer;
+  reviewUrl?: string | undefined;
   sessionStore: SessionStore;
   threadTs: string;
   userId?: string;
@@ -91,6 +92,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     quietAssistantMessageRecorder,
     quietAssistantPublicMentionIds = [],
     renderer,
+    reviewUrl,
     sessionStore,
     threadTs,
     userId,
@@ -722,6 +724,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         } catch (err) {
           logger.warn('Failed to persist session analytics: %s', String(err));
         }
+      }
+      if (executionCompletedSuccessfully && reviewUrl) {
+        await renderer.postReviewPanelLink(client, channel, threadTs, reviewUrl).catch((err) => {
+          logger.warn('Failed to post review panel link: %s', String(err));
+        });
       }
     },
   };

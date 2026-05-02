@@ -64,6 +64,7 @@ export interface SlackButtonElement {
   style?: 'danger' | 'primary';
   text: SlackPlainTextObject;
   type: 'button';
+  url?: string;
   value?: string;
 }
 

@@ -15,6 +15,8 @@ import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { GitReviewService } from '~/review/git-review-service.js';
+import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp, type KaguraSlackApp, type SlackAppCredentials } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
@@ -29,6 +31,7 @@ import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
+import { createReviewPanelServer, type ReviewPanelServer } from '~/web/review-panel.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
@@ -80,6 +83,8 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   );
   const analyticsStore = new SqliteAnalyticsStore(db, logger.withTag('analytics'));
   const persistentExecutionStore = new SqlitePersistentExecutionStore(sqlite);
+  const reviewSessionStore = new SqliteReviewSessionStore(sqlite);
+  const reviewService = new GitReviewService(reviewSessionStore);
   memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
@@ -136,6 +141,10 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       memoryStore,
       permissionBridge,
       persistentExecutionStore,
+      reviewPanelBaseUrl: env.KAGURA_REVIEW_PANEL_ENABLED
+        ? env.KAGURA_REVIEW_PANEL_BASE_URL
+        : undefined,
+      reviewSessionStore,
       sessionStore,
       providerRegistry,
       threadExecutionRegistry,
@@ -145,6 +154,15 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     },
     options?.slackCredentials ? { credentials: options.slackCredentials } : undefined,
   );
+  const reviewPanelServer: ReviewPanelServer | undefined = env.KAGURA_REVIEW_PANEL_ENABLED
+    ? createReviewPanelServer({
+        baseUrl: env.KAGURA_REVIEW_PANEL_BASE_URL,
+        host: env.KAGURA_REVIEW_PANEL_HOST,
+        logger: logger.withTag('review:web'),
+        port: env.KAGURA_REVIEW_PANEL_PORT,
+        reviewService,
+      })
+    : undefined;
 
   return {
     logger,
@@ -169,6 +187,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         });
       }
       await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
+      await reviewPanelServer?.start();
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
       void slackApp.recoverPendingExecutions?.().catch((error) => {
@@ -180,6 +199,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     },
     async stop() {
       slackApp.stopA2ASummaryPoller?.();
+      await reviewPanelServer?.stop();
       await slackApp.stop();
       await providerRegistry.drain();
       a2aCoordinatorStore.close?.();

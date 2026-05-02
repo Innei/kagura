@@ -67,6 +67,15 @@ const appConfigSchema = z
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
     worktreeRootDir: z.string().optional(),
+    reviewPanel: z
+      .object({
+        baseUrl: z.string().url().optional(),
+        enabled: z.boolean().optional(),
+        host: z.string().optional(),
+        port: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     sessionDbPath: z.string().optional(),
     a2aCoordinatorDbPath: z.string().optional(),
     slackConfigTokenStorePath: z.string().optional(),
@@ -160,6 +169,10 @@ export const env = createEnv({
     REPO_ROOT_DIR: z.string().min(1),
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
     WORKTREE_ROOT_DIR: z.string().min(1).default(resolveDefaultWorktreeRootDir()),
+    KAGURA_REVIEW_PANEL_ENABLED: booleanStringSchema.default(false),
+    KAGURA_REVIEW_PANEL_HOST: z.string().min(1).default('127.0.0.1'),
+    KAGURA_REVIEW_PANEL_PORT: z.coerce.number().int().positive().default(3077),
+    KAGURA_REVIEW_PANEL_BASE_URL: z.string().url().default('http://127.0.0.1:3077'),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
     A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
     A2A_OUTPUT_MODE: z.enum(['verbose', 'quiet']).default('verbose'),
@@ -213,6 +226,22 @@ export const env = createEnv({
     REPO_ROOT_DIR: envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir)),
     REPO_SCAN_DEPTH: envOrConfig('REPO_SCAN_DEPTH', configNumber(appConfig.repoScanDepth)),
     WORKTREE_ROOT_DIR: envOrConfig('WORKTREE_ROOT_DIR', configString(appConfig.worktreeRootDir)),
+    KAGURA_REVIEW_PANEL_ENABLED: envOrConfig(
+      'KAGURA_REVIEW_PANEL_ENABLED',
+      configBoolean(appConfig.reviewPanel?.enabled),
+    ),
+    KAGURA_REVIEW_PANEL_HOST: envOrConfig(
+      'KAGURA_REVIEW_PANEL_HOST',
+      configString(appConfig.reviewPanel?.host),
+    ),
+    KAGURA_REVIEW_PANEL_PORT: envOrConfig(
+      'KAGURA_REVIEW_PANEL_PORT',
+      configNumber(appConfig.reviewPanel?.port),
+    ),
+    KAGURA_REVIEW_PANEL_BASE_URL: envOrConfig(
+      'KAGURA_REVIEW_PANEL_BASE_URL',
+      configString(appConfig.reviewPanel?.baseUrl),
+    ),
     SESSION_DB_PATH: envOrConfig('SESSION_DB_PATH', configString(appConfig.sessionDbPath)),
     A2A_COORDINATOR_DB_PATH: envOrConfig(
       'A2A_COORDINATOR_DB_PATH',

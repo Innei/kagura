@@ -4,6 +4,7 @@ import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { ContextMemories, MemoryStore } from '~/memory/types.js';
+import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace } from '~/workspace/types.js';
@@ -37,6 +38,8 @@ export interface SlackIngressDependencies {
   persistentExecutionStore?: PersistentExecutionStore | undefined;
   providerRegistry?: AgentProviderRegistry;
   renderer: SlackRenderer;
+  reviewPanelBaseUrl?: string | undefined;
+  reviewSessionStore?: ReviewSessionStore | undefined;
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
   threadExecutionRegistry: ThreadExecutionRegistry;

@@ -76,3 +76,18 @@ export const agentExecutions = sqliteTable('agent_executions', {
   startedAt: text('started_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const reviewSessions = sqliteTable('review_sessions', {
+  executionId: text('execution_id').primaryKey(),
+  threadTs: text('thread_ts').notNull(),
+  channelId: text('channel_id').notNull(),
+  workspacePath: text('workspace_path').notNull(),
+  workspaceRepoId: text('workspace_repo_id'),
+  workspaceLabel: text('workspace_label'),
+  baseHead: text('base_head'),
+  baseBranch: text('base_branch'),
+  head: text('head'),
+  status: text('status').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

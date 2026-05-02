@@ -7,6 +7,7 @@ import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redactUnknown } from '~/logger/redact.js';
 import type { MemoryStore } from '~/memory/types.js';
+import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
@@ -65,6 +66,8 @@ export interface SlackApplicationDependencies {
   permissionBridge: SlackPermissionBridge;
   persistentExecutionStore?: PersistentExecutionStore | undefined;
   providerRegistry: AgentProviderRegistry;
+  reviewPanelBaseUrl?: string | undefined;
+  reviewSessionStore?: ReviewSessionStore | undefined;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
@@ -126,6 +129,8 @@ export function createSlackApp(
     providerRegistry: deps.providerRegistry,
     permissionBridge: deps.permissionBridge,
     persistentExecutionStore: deps.persistentExecutionStore,
+    reviewPanelBaseUrl: deps.reviewPanelBaseUrl,
+    reviewSessionStore: deps.reviewSessionStore,
     threadExecutionRegistry: deps.threadExecutionRegistry,
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,

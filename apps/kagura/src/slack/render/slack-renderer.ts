@@ -534,6 +534,51 @@ export class SlackRenderer {
     );
   }
 
+  async postReviewPanelLink(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    reviewUrl: string,
+  ): Promise<void> {
+    const text = `Review diff: ${reviewUrl}`;
+    await this.withSlackTiming(
+      'chat.postMessage(review-panel-link)',
+      `channel=${channelId} thread=${threadTs} url=${reviewUrl}`,
+      async () =>
+        client.chat.postMessage({
+          channel: channelId,
+          thread_ts: threadTs,
+          text,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '*Review diff is ready.*',
+              },
+            },
+            {
+              type: 'actions',
+              block_id: 'review_panel_actions',
+              elements: [
+                {
+                  action_id: 'open_review_panel',
+                  style: 'primary',
+                  text: {
+                    emoji: true,
+                    text: 'Open Review Panel',
+                    type: 'plain_text',
+                  },
+                  type: 'button',
+                  url: reviewUrl,
+                },
+              ],
+            },
+          ],
+        }),
+    );
+  }
+
   async appendSessionUsageInfoToThreadReply(
     client: SlackWebClientLike,
     channelId: string,

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
+import { resolveGitBranch, resolveGitHead } from '~/review/git-review-service.js';
 import type { SessionRecord } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
@@ -317,6 +318,10 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
 
   const executor = resolveExecutor(ctx.existingSession, deps, ctx.options.agentProviderOverride);
   const executionId = ctx.options.executionId ?? randomUUID();
+  const reviewUrl =
+    workspace && deps.reviewSessionStore && deps.reviewPanelBaseUrl
+      ? `${deps.reviewPanelBaseUrl.replace(/\/$/, '')}/reviews/${encodeURIComponent(executionId)}`
+      : undefined;
   const a2aContext = ctx.options.a2aContext ?? getA2AContextFromSession(ctx.existingSession ?? {});
   const quietA2A =
     deps.a2aOutputMode === 'quiet' &&
@@ -346,6 +351,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       : {}),
     ...(workspace ? { workspacePath: workspace.workspacePath } : {}),
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
+    ...(reviewUrl ? { reviewUrl } : {}),
   });
   const sink = createPersistentExecutionSink(baseSink, deps, executionId);
 
@@ -398,6 +404,19 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     threadTs,
     userId: message.user,
   });
+  if (workspace && deps.reviewSessionStore) {
+    deps.reviewSessionStore.start({
+      baseBranch: resolveGitBranch(workspace.workspacePath),
+      baseHead: resolveGitHead(workspace.workspacePath),
+      channelId: message.channel,
+      createdAt: startedAt,
+      executionId,
+      threadTs,
+      workspaceLabel: workspace.workspaceLabel,
+      workspacePath: workspace.workspacePath,
+      workspaceRepoId: workspace.repo.id,
+    });
+  }
 
   try {
     runtimeInfo(
@@ -505,6 +524,11 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       executionId,
       normalizeTerminalPhase(sink.terminalPhase),
       sink.terminalPhase,
+    );
+    deps.reviewSessionStore?.complete(
+      executionId,
+      normalizeTerminalPhase(sink.terminalPhase),
+      workspace ? resolveGitHead(workspace.workspacePath) : undefined,
     );
     resolveExecutionDone!();
     runtimeInfo(

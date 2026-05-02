@@ -37,6 +37,12 @@
   "logToFile": false,
   "repoRootDir": "~/git",
   "repoScanDepth": 2,
+  "reviewPanel": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 3077,
+    "baseUrl": "http://127.0.0.1:3077"
+  },
   "sessionDbPath": "./data/sessions.db",
   "slackConfigTokenStorePath": "./data/slack-config-tokens.json"
 }
