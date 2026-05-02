@@ -40,6 +40,8 @@ function splitDecorationSpan(span: HTMLElement): void {
   delEl.textContent = deletions ?? '';
   span.replaceChildren(addEl, sep, delEl);
   span.dataset.reviewSplit = '1';
+  span.style.display = 'flex';
+  span.style.gap = '4px';
 }
 
 function observeDecorations(host: HTMLElement): () => void {
@@ -64,6 +66,7 @@ function observeDecorations(host: HTMLElement): () => void {
           target.closest('[data-item-section="decoration"]')
         ) {
           target.dataset.reviewSplit = '';
+
           splitDecorationSpan(target);
         }
         continue;
@@ -118,18 +121,26 @@ export function FileNav({
 
   return (
     <div className={styles.root}>
-      {view === 'tree' ? (
-        <TreeView
-          changedFiles={filtered}
-          colorScheme={colorScheme}
-          selectedPath={selectedPath}
-          onSelectPath={onSelectPath}
-        />
-      ) : (
-        <FlatList changedFiles={filtered} selectedPath={selectedPath} onSelectPath={onSelectPath} />
-      )}
+      <TreeView
+        changedFiles={filtered}
+        colorScheme={colorScheme}
+        key={view}
+        selectedPath={selectedPath}
+        view={view}
+        onSelectPath={onSelectPath}
+      />
     </div>
   );
+}
+
+const FLAT_SEP = '·';
+
+function toDisplayPath(realPath: string, view: FileNavView): string {
+  return view === 'flat' ? realPath.replaceAll('/', FLAT_SEP) : realPath;
+}
+
+function toRealPath(displayPath: string, view: FileNavView): string {
+  return view === 'flat' ? displayPath.replaceAll(FLAT_SEP, '/') : displayPath;
 }
 
 interface TreeViewProps {
@@ -137,29 +148,37 @@ interface TreeViewProps {
   colorScheme: 'dark' | 'light';
   onSelectPath: (path: string) => void;
   selectedPath?: string | undefined;
+  view: FileNavView;
 }
 
-function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath }: TreeViewProps) {
-  const paths = useMemo(() => changedFiles.map((file) => file.path), [changedFiles]);
-  const filesByPath = useMemo(
-    () => new Map(changedFiles.map((file) => [file.path, file])),
-    [changedFiles],
+function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath, view }: TreeViewProps) {
+  const paths = useMemo(
+    () => changedFiles.map((file) => toDisplayPath(file.path, view)),
+    [changedFiles, view],
+  );
+  const filesByDisplayPath = useMemo(
+    () => new Map(changedFiles.map((file) => [toDisplayPath(file.path, view), file])),
+    [changedFiles, view],
   );
   const gitStatus = useMemo(
     () =>
       changedFiles.flatMap((file) => {
         const status = mapGitStatus(file.status);
-        return status ? [{ path: file.path, status }] : [];
+        return status ? [{ path: toDisplayPath(file.path, view), status }] : [];
       }),
-    [changedFiles],
+    [changedFiles, view],
   );
 
-  const selectedPathRef = useRef(selectedPath);
-  selectedPathRef.current = selectedPath;
+  const displaySelectedPath = selectedPath ? toDisplayPath(selectedPath, view) : undefined;
+
+  const selectedPathRef = useRef(displaySelectedPath);
+  selectedPathRef.current = displaySelectedPath;
   const onSelectPathRef = useRef(onSelectPath);
   onSelectPathRef.current = onSelectPath;
-  const filesByPathRef = useRef(filesByPath);
-  filesByPathRef.current = filesByPath;
+  const filesByPathRef = useRef(filesByDisplayPath);
+  filesByPathRef.current = filesByDisplayPath;
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   const tokens = colorScheme === 'dark' ? darkTokens : lightTokens;
 
@@ -169,16 +188,16 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath }: Tre
     gitStatus,
     initialExpansion: 'open',
     paths,
-    stickyFolders: true,
+    stickyFolders: view === 'tree',
     unsafeCSS: TREE_DECORATION_CSS,
     onSelectionChange: (paths) => {
       const next = paths.find((path) => filesByPathRef.current.has(path));
       if (!next) return;
       if (next === selectedPathRef.current) return;
-      onSelectPathRef.current(next);
+      onSelectPathRef.current(toRealPath(next, viewRef.current));
     },
     renderRowDecoration: ({ item }) => {
-      const file = filesByPath.get(item.path);
+      const file = filesByDisplayPath.get(item.path);
       if (!file) return null;
       const additions = file.additions ?? 0;
       const deletions = file.deletions ?? 0;
@@ -199,15 +218,15 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath }: Tre
   const lastCommanded = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!selectedPath || lastCommanded.current === selectedPath) return;
+    if (!displaySelectedPath || lastCommanded.current === displaySelectedPath) return;
     for (const path of model.getSelectedPaths()) {
-      if (path !== selectedPath) model.getItem(path)?.deselect();
+      if (path !== displaySelectedPath) model.getItem(path)?.deselect();
     }
-    lastCommanded.current = selectedPath;
-    const item = model.getItem(selectedPath);
+    lastCommanded.current = displaySelectedPath;
+    const item = model.getItem(displaySelectedPath);
     item?.select();
     item?.focus();
-  }, [model, selectedPath]);
+  }, [model, displaySelectedPath]);
 
   useEffect(() => {
     let disposed = false;
@@ -245,60 +264,5 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath }: Tre
     <div className={styles.treeWrap} style={treeStyle}>
       <FileTree className={styles.tree} model={model} />
     </div>
-  );
-}
-
-interface FlatListProps {
-  changedFiles: ReviewChangedFile[];
-  onSelectPath: (path: string) => void;
-  selectedPath?: string | undefined;
-}
-
-function FlatList({ changedFiles, onSelectPath, selectedPath }: FlatListProps) {
-  return (
-    <ul className={styles.flatList} role="list">
-      {changedFiles.map((file) => {
-        const active = file.path === selectedPath;
-        const status = (file.status || '?').slice(0, 1);
-        const additions = file.additions ?? 0;
-        const deletions = file.deletions ?? 0;
-        return (
-          <li key={file.path}>
-            <button
-              aria-current={active ? 'true' : undefined}
-              className={active ? `${styles.flatRow} ${styles.flatRowActive}` : styles.flatRow}
-              title={file.path}
-              type="button"
-              onClick={() => onSelectPath(file.path)}
-            >
-              <span className={active ? `${styles.badge} ${styles.badgeActive}` : styles.badge}>
-                {status}
-              </span>
-              <span className={styles.path}>{file.path}</span>
-              <span className={active ? `${styles.stats} ${styles.statsActive}` : styles.stats}>
-                {additions > 0 ? (
-                  <span
-                    className={
-                      active ? `${styles.additions} ${styles.additionsActive}` : styles.additions
-                    }
-                  >
-                    +{additions}
-                  </span>
-                ) : null}
-                {deletions > 0 ? (
-                  <span
-                    className={
-                      active ? `${styles.deletions} ${styles.deletionsActive}` : styles.deletions
-                    }
-                  >
-                    −{deletions}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }

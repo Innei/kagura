@@ -28,7 +28,7 @@ export function DiffView({ colorScheme, diff, diffStyle }: DiffViewProps) {
               diffStyle,
               hunkSeparators: 'line-info-basic',
               lineDiffType: 'word',
-              theme: { dark: 'pierre-dark', light: 'pierre-light' },
+              theme: { dark: 'github-dark-high-contrast', light: 'github-light-high-contrast' },
               themeType: colorScheme,
             }}
           />
