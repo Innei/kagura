@@ -20,7 +20,7 @@ const STYLE_OPTIONS = [
   { value: 'unified' as const, label: 'Unified' },
 ];
 
-const ICON_SIZE = 14;
+const ICON_SIZE = 12;
 
 export function DiffToolbar({
   diffStyle,

@@ -30,7 +30,7 @@ export const iconButton = css`
   gap: token(spacing.1.5);
   height: token(sizes.control.sm);
   justify-content: center;
-  padding: 0 token(spacing.2);
+
   &:hover:not(:disabled) {
     background: token(colors.bg.hover);
     color: token(colors.fg.default);

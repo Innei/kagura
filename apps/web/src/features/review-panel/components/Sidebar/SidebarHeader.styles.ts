@@ -7,12 +7,12 @@ export const root = css`
 
 export const meta = css`
   display: grid;
-  gap: token(spacing.1.5);
-  padding: 14px 16px 12px;
+  gap: token(spacing.1);
+  padding: token(spacing.2.5) token(spacing.3) token(spacing.2);
 `;
 
 export const repo = css`
-  font-size: token(fontSizes.lg);
+  font-size: token(fontSizes.md);
   font-weight: 600;
   letter-spacing: -0.01em;
   overflow: hidden;
@@ -21,19 +21,26 @@ export const repo = css`
   min-width: 0;
 `;
 
-export const branch = css`
+export const subtitle = css`
+  align-items: center;
   color: token(colors.fg.muted);
+  display: flex;
+  flex-wrap: wrap;
   font: token(fontSizes.xs) / 1.4 token(fonts.mono);
+  gap: token(spacing.1.5);
+  min-width: 0;
+`;
+
+export const branch = css`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 50%;
 `;
 
-export const counts = css`
-  display: flex;
-  gap: token(spacing.2.5);
-  font: token(fontSizes.xs) / 1 token(fonts.mono);
-  color: token(colors.fg.muted);
+export const subtitleDot = css`
+  color: token(colors.border.strong);
+  opacity: 0.4;
 `;
 
 export const additions = css`
@@ -56,7 +63,7 @@ export const filterField = css`
   border-right: 1px solid token(colors.border.default);
   display: flex;
   gap: token(spacing.2);
-  height: token(sizes.control.lg);
+  height: token(sizes.control.md);
   padding-left: token(spacing.3);
   padding-right: token(spacing.2);
   min-width: 0;
@@ -92,7 +99,7 @@ export const filterInput = css`
 export const viewSwitch = css`
   align-items: stretch;
   display: inline-flex;
-  height: token(sizes.control.lg);
+  height: token(sizes.control.md);
 `;
 
 export const viewButton = css`

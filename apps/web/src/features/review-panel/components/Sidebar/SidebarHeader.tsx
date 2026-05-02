@@ -54,15 +54,25 @@ export function SidebarHeader({
         <span className={styles.repo} title={repo}>
           {repo}
         </span>
-        {branchLabel ? <div className={styles.branch}>{branchLabel}</div> : null}
-        <div className={styles.counts}>
+        <div className={styles.subtitle}>
+          {branchLabel ? (
+            <>
+              <span className={styles.branch} title={branchLabel}>
+                {branchLabel}
+              </span>
+              <span aria-hidden="true" className={styles.subtitleDot}>
+                ·
+              </span>
+            </>
+          ) : null}
           <span>
             {fileCount} {fileCount === 1 ? 'file' : 'files'}
           </span>
-          <span>
-            <span className={styles.additions}>+{additions}</span>{' '}
-            <span className={styles.deletions}>−{deletions}</span>
+          <span aria-hidden="true" className={styles.subtitleDot}>
+            ·
           </span>
+          <span className={styles.additions}>+{additions}</span>
+          <span className={styles.deletions}>−{deletions}</span>
         </div>
       </div>
       <div className={styles.filterContainer}>
