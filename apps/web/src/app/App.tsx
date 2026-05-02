@@ -1,6 +1,6 @@
 import { Route, Router, Switch } from 'wouter';
 
-import { ShellState } from '../features/review-panel/components/ShellState';
+import { NotFoundPage } from './NotFoundPage';
 import { ReviewPage } from './ReviewPage';
 import { getApiBasePath } from './routing';
 
@@ -24,7 +24,7 @@ export function App() {
           </Route>
         )}
         <Route>
-          <ShellState text="Review not found." />
+          <NotFoundPage />
         </Route>
       </Switch>
     </Router>

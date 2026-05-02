@@ -78,6 +78,11 @@ async function handleRequest(
     return;
   }
 
+  if (pathname.startsWith('/api/')) {
+    sendJson(response, 404, { error: 'Not Found' });
+    return;
+  }
+
   await serveReviewPanelAsset(response, options.assetsDir, pathname);
 }
 
@@ -159,34 +164,25 @@ async function serveReviewPanelAsset(
   assetsDir: string,
   urlPathname: string,
 ): Promise<void> {
-  const filePath = resolveAssetPath(assetsDir, urlPathname);
+  const filePath = resolveAssetPath(assetsDir, decodeAssetPathname(urlPathname));
   if (!filePath) {
-    sendHtml(response, renderMissingAssetsPage(assetsDir), 503);
+    sendJson(response, 404, { error: 'Not Found' });
     return;
   }
 
   try {
-    const content = await fs.readFile(filePath);
-    const contentType = CONTENT_TYPES[path.extname(filePath)] ?? 'application/octet-stream';
-    response.writeHead(200, {
-      'cache-control': filePath.endsWith('index.html') ? 'no-store' : 'public, max-age=31536000',
-      'content-type': contentType,
-    });
-    response.end(content);
+    await sendAssetFile(response, filePath);
   } catch {
     if (urlPathname.startsWith('/assets/')) {
       sendJson(response, 404, { error: 'Not Found' });
       return;
     }
-    sendHtml(response, renderMissingAssetsPage(assetsDir), 503);
+    await sendAssetFile(response, resolveSpaRouteEntry(assetsDir));
   }
 }
 
 function resolveAssetPath(assetsDir: string, urlPathname: string): string | undefined {
-  const relativePath =
-    urlPathname === '/' || urlPathname.startsWith('/reviews/')
-      ? 'index.html'
-      : decodeURIComponent(urlPathname.replace(/^\/+/, ''));
+  const relativePath = urlPathname === '/' ? 'index.html' : urlPathname.replace(/^\/+/, '');
   const absoluteAssetsDir = path.resolve(assetsDir);
   const absoluteTarget = path.resolve(absoluteAssetsDir, relativePath);
   const relative = path.relative(absoluteAssetsDir, absoluteTarget);
@@ -196,38 +192,32 @@ function resolveAssetPath(assetsDir: string, urlPathname: string): string | unde
   return absoluteTarget;
 }
 
+function resolveSpaRouteEntry(assetsDir: string): string {
+  return path.resolve(assetsDir, 'index.html');
+}
+
+function decodeAssetPathname(urlPathname: string): string {
+  try {
+    return decodeURIComponent(urlPathname);
+  } catch {
+    return urlPathname;
+  }
+}
+
+async function sendAssetFile(response: http.ServerResponse, filePath: string): Promise<void> {
+  const content = await fs.readFile(filePath);
+  const contentType = CONTENT_TYPES[path.extname(filePath)] ?? 'application/octet-stream';
+  response.writeHead(200, {
+    'cache-control': filePath.endsWith('index.html') ? 'no-store' : 'public, max-age=31536000',
+    'content-type': contentType,
+  });
+  response.end(content);
+}
+
 function sendJson(response: http.ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
   });
   response.end(JSON.stringify(body));
-}
-
-function sendHtml(response: http.ServerResponse, html: string, status = 200): void {
-  response.writeHead(status, {
-    'content-type': 'text/html; charset=utf-8',
-    'cache-control': 'no-store',
-  });
-  response.end(html);
-}
-
-function renderMissingAssetsPage(assetsDir: string): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kagura Review</title>
-</head>
-<body>
-  <p>Kagura Review Panel assets were not found.</p>
-  <p>Run <code>pnpm -F @kagura/web build</code> and set <code>KAGURA_REVIEW_PANEL_ASSETS_DIR</code> to the generated dist directory.</p>
-  <p>Current assets directory: <code>${escapeHtml(assetsDir)}</code></p>
-</body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
