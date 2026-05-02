@@ -83,7 +83,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   );
   const analyticsStore = new SqliteAnalyticsStore(db, logger.withTag('analytics'));
   const persistentExecutionStore = new SqlitePersistentExecutionStore(sqlite);
-  const reviewSessionStore = new SqliteReviewSessionStore(sqlite);
+  const reviewSessionStore = new SqliteReviewSessionStore(db);
   const reviewService = new GitReviewService(reviewSessionStore);
   memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({

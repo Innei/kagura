@@ -27,8 +27,8 @@ describe('GitReviewService', () => {
     fs.writeFileSync(path.join(workspacePath, 'src/new.ts'), 'export const added = true;\n');
 
     const dbPath = path.join(createTempDir(), 'sessions.db');
-    const { sqlite } = createDatabase(dbPath);
-    const store = new SqliteReviewSessionStore(sqlite);
+    const { db, sqlite } = createDatabase(dbPath);
+    const store = new SqliteReviewSessionStore(db);
     store.start({
       baseBranch: 'main',
       baseHead,
