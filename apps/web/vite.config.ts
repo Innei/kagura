@@ -1,5 +1,6 @@
-import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
+import pandacss from '@pandacss/dev/postcss';
 import react from '@vitejs/plugin-react';
+import autoprefixer from 'autoprefixer';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -10,11 +11,15 @@ export default defineConfig(({ mode }) => {
   const useMockApi = env.KAGURA_WEB_MOCK_API === 'true';
 
   return {
+    css: {
+      postcss: {
+        plugins: [pandacss() as never, autoprefixer() as never],
+      },
+    },
     resolve: {
       tsconfigPaths: true,
     },
     plugins: [
-      vanillaExtractPlugin(),
       react(),
       codeInspectorPlugin({
         bundler: 'vite',

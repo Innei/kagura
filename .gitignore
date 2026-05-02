@@ -14,3 +14,4 @@ data/
 slack-live-e2e
 .worktrees/
 *.tsbuildinfo
+apps/web/styled-system/

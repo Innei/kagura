@@ -1,4 +1,4 @@
-import * as styles from './DiffStatusBar.css';
+import * as styles from './DiffStatusBar.styles';
 
 interface DiffStatusBarProps {
   additions?: number | undefined;

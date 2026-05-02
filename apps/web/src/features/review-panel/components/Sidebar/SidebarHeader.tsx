@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent, RefObject } from 'react';
 
-import * as styles from './SidebarHeader.css';
+import * as styles from './SidebarHeader.styles';
 
 export type FileNavView = 'tree' | 'flat';
 

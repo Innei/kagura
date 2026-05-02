@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { darkTokens, lightTokens } from '../../../../theme/tokens';
 import type { ReviewChangedFile } from '../../types';
 import { mapGitStatus } from '../../utils/git-status';
-import * as styles from './FileNav.css';
+import * as styles from './FileNav.styles';
 import type { FileNavView } from './SidebarHeader';
 
 const TREE_DECORATION_CSS = `

@@ -9,7 +9,7 @@ import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { ReviewSession } from '../types';
 import { DiffPane } from './DiffPane/DiffPane';
 import type { DiffStyle } from './DiffPane/DiffToolbar';
-import * as styles from './ReviewLayout.css';
+import * as styles from './ReviewLayout.styles';
 import { FileNav } from './Sidebar/FileNav';
 import type { FileNavView } from './Sidebar/SidebarHeader';
 import { SidebarHeader } from './Sidebar/SidebarHeader';

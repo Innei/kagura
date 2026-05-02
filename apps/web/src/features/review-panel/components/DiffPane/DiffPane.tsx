@@ -1,5 +1,5 @@
 import type { ReviewChangedFile } from '../../types';
-import * as styles from './DiffPane.css';
+import * as styles from './DiffPane.styles';
 import { DiffStatusBar } from './DiffStatusBar';
 import type { DiffStyle } from './DiffToolbar';
 import { DiffToolbar } from './DiffToolbar';

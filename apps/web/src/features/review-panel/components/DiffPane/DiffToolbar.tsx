@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Copy, GitCompare } from 'lucide-react';
 
 import { SegmentedControl } from '../Sidebar/SegmentedControl';
-import * as styles from './DiffToolbar.css';
+import * as styles from './DiffToolbar.styles';
 
 export type DiffStyle = 'split' | 'unified';
 

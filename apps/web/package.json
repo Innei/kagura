@@ -4,17 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "panda codegen && vite build",
     "dev": "vite --host 127.0.0.1",
     "dev:mock": "KAGURA_WEB_MOCK_API=true vite --host 127.0.0.1 --open /reviews/mock-review",
+    "prepare": "panda codegen",
     "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "panda codegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fontsource/geist": "^5.2.8",
+    "@fontsource/geist-mono": "^5.2.7",
     "@pierre/diffs": "^1.1.20",
     "@pierre/trees": "1.0.0-beta.3",
-    "@vanilla-extract/css": "^1.17.5",
-    "@vanilla-extract/vite-plugin": "^5.1.1",
     "@vitejs/plugin-react": "^6.0.1",
     "lucide-react": "^0.474.0",
     "react": "^19.2.3",
@@ -24,8 +25,10 @@
     "vite": "8.0.10"
   },
   "devDependencies": {
+    "@pandacss/dev": "^1.10.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.20",
     "code-inspector-plugin": "^1.5.1"
   }
 }

@@ -2,7 +2,7 @@ import { PatchDiff } from '@pierre/diffs/react';
 
 import { splitPatch } from '../../utils/split-patch';
 import type { DiffStyle } from './DiffToolbar';
-import * as styles from './DiffView.css';
+import * as styles from './DiffView.styles';
 
 interface DiffViewProps {
   colorScheme: 'dark' | 'light';

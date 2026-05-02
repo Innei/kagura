@@ -1,4 +1,4 @@
-import * as styles from './ShellState.css';
+import * as styles from './ShellState.styles';
 
 export function ShellState({ text }: { text: string }) {
   return (

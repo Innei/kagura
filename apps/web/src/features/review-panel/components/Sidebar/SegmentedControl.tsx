@@ -1,4 +1,4 @@
-import * as styles from './SegmentedControl.css';
+import * as styles from './SegmentedControl.styles';
 
 interface SegmentedControlProps<T extends string> {
   ariaLabel: string;
