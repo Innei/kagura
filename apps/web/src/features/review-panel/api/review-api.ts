@@ -1,16 +1,11 @@
-import type { ReviewDiffResponse, ReviewSession, ReviewTreeResponse } from '../types';
+import type { ReviewDiffResponse, ReviewSession } from '../types';
 import { getJson } from './http';
 
 export async function loadInitialReviewData(reviewExecutionId: string) {
-  const [session, tree] = await Promise.all([
-    getJson<ReviewSession>(`/api/reviews/${encodeURIComponent(reviewExecutionId)}`),
-    getJson<ReviewTreeResponse>(`/api/reviews/${encodeURIComponent(reviewExecutionId)}/tree`),
-  ]);
-
-  return {
-    session,
-    treeEntries: tree.entries,
-  };
+  const session = await getJson<ReviewSession>(
+    `/api/reviews/${encodeURIComponent(reviewExecutionId)}`,
+  );
+  return { session };
 }
 
 export async function loadDiff(

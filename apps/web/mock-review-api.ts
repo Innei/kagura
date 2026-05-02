@@ -3,20 +3,35 @@ import type { Plugin } from 'vite';
 const MOCK_EXECUTION_ID = 'mock-review';
 
 const changedFiles = [
-  { path: 'apps/kagura/src/slack/ingress/conversation-pipeline.ts', status: 'M' },
-  { path: 'apps/kagura/src/slack/ingress/activity-sink.ts', status: 'M' },
-  { path: 'apps/kagura/src/slack/render/slack-renderer.ts', status: 'M' },
-  { path: 'apps/kagura/src/web/review-panel.ts', status: 'M' },
-  { path: 'apps/web/src/main.tsx', status: 'M' },
-  { path: 'apps/web/src/styles.css.ts', status: 'M' },
-  { path: 'apps/web/src/mock-review-panel.tsx', status: 'A' },
-  { path: 'apps/web/src/lib/review-api.ts', status: 'A' },
-  { path: 'apps/web/src/legacy-diff-view.tsx', status: 'D' },
-  { path: 'apps/web/src/components/ReviewSidebar.tsx', status: 'R' },
-  { path: 'docs/review-panel.md', status: '??' },
-  { path: 'docs/specs/spec-008-review-panel.md', status: 'A' },
-  { path: 'package.json', status: 'M' },
-  { path: 'pnpm-lock.yaml', status: 'M' },
+  {
+    path: 'apps/kagura/src/slack/ingress/conversation-pipeline.ts',
+    status: 'M',
+    additions: 6,
+    deletions: 1,
+  },
+  {
+    path: 'apps/kagura/src/slack/ingress/activity-sink.ts',
+    status: 'M',
+    additions: 9,
+    deletions: 2,
+  },
+  {
+    path: 'apps/kagura/src/slack/render/slack-renderer.ts',
+    status: 'M',
+    additions: 17,
+    deletions: 2,
+  },
+  { path: 'apps/kagura/src/web/review-panel.ts', status: 'M', additions: 5, deletions: 0 },
+  { path: 'apps/web/src/main.tsx', status: 'M', additions: 8, deletions: 1 },
+  { path: 'apps/web/src/styles.css.ts', status: 'M', additions: 4, deletions: 1 },
+  { path: 'apps/web/src/mock-review-panel.tsx', status: 'A', additions: 24, deletions: 0 },
+  { path: 'apps/web/src/lib/review-api.ts', status: 'A', additions: 18, deletions: 0 },
+  { path: 'apps/web/src/legacy-diff-view.tsx', status: 'D', additions: 0, deletions: 9 },
+  { path: 'apps/web/src/components/ReviewSidebar.tsx', status: 'R', additions: 1, deletions: 1 },
+  { path: 'docs/review-panel.md', status: '??', additions: 16, deletions: 0 },
+  { path: 'docs/specs/spec-008-review-panel.md', status: 'A', additions: 20, deletions: 0 },
+  { path: 'package.json', status: 'M', additions: 4, deletions: 1 },
+  { path: 'pnpm-lock.yaml', status: 'M', additions: 6, deletions: 0 },
 ];
 
 const mockSession = {

@@ -3,14 +3,13 @@ import { useEffect, useState } from 'react';
 import { loadDiff, loadInitialReviewData } from '../features/review-panel/api/review-api';
 import { ReviewLayout } from '../features/review-panel/components/ReviewLayout';
 import { ShellState } from '../features/review-panel/components/ShellState';
-import type { ReviewSession, ReviewTreeEntry } from '../features/review-panel/types';
+import type { ReviewSession } from '../features/review-panel/types';
 import { getExecutionId } from './routing';
 
 const executionId = getExecutionId();
 
 export function App() {
   const [session, setSession] = useState<ReviewSession | undefined>();
-  const [treeEntries, setTreeEntries] = useState<ReviewTreeEntry[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [diff, setDiff] = useState('');
   const [loading, setLoading] = useState(true);
@@ -18,9 +17,8 @@ export function App() {
 
   useEffect(() => {
     void loadInitialReviewData(executionId)
-      .then(({ session: nextSession, treeEntries: nextTreeEntries }) => {
+      .then(({ session: nextSession }) => {
         setSession(nextSession);
-        setTreeEntries(nextTreeEntries);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -51,7 +49,6 @@ export function App() {
       diff={diff}
       selectedPath={selectedPath}
       session={session}
-      treeEntries={treeEntries}
       onSelectPath={setSelectedPath}
     />
   );

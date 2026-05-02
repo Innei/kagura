@@ -6,6 +6,8 @@ import path from 'node:path';
 import type { ReviewSessionRecord, ReviewSessionStore } from './types.js';
 
 export interface ReviewChangedFile {
+  additions?: number;
+  deletions?: number;
   path: string;
   status: string;
 }
@@ -140,7 +142,51 @@ function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {
     seen.add(filePath);
   }
 
+  const numstat = parseNumstat(
+    runGit(session.workspacePath, ['diff', '--numstat', '--find-renames', base]),
+  );
+  for (const file of changed) {
+    const stat = numstat.get(file.path);
+    if (stat) {
+      file.additions = stat.additions;
+      file.deletions = stat.deletions;
+    } else if (file.status === '??') {
+      file.additions = countUntrackedAdditions(session.workspacePath, file.path);
+      file.deletions = 0;
+    }
+  }
+
   return changed.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function parseNumstat(raw: string): Map<string, { additions: number; deletions: number }> {
+  const result = new Map<string, { additions: number; deletions: number }>();
+  for (const line of raw.split('\n')) {
+    if (!line) continue;
+    const [addsRaw, delsRaw, ...rest] = line.split('\t');
+    if (!addsRaw || !delsRaw || rest.length === 0) continue;
+    const target = rest.at(-1);
+    if (!target) continue;
+    const additions = addsRaw === '-' ? 0 : Number.parseInt(addsRaw, 10);
+    const deletions = delsRaw === '-' ? 0 : Number.parseInt(delsRaw, 10);
+    if (Number.isNaN(additions) || Number.isNaN(deletions)) continue;
+    result.set(target, { additions, deletions });
+  }
+  return result;
+}
+
+function countUntrackedAdditions(workspacePath: string, filePath: string): number {
+  try {
+    const absolutePath = path.resolve(workspacePath, filePath);
+    if (!fsSync.statSync(absolutePath).isFile()) return 0;
+    const content = fsSync.readFileSync(absolutePath, 'utf8');
+    if (!content) return 0;
+    const lines = content.split('\n');
+    if (lines.at(-1) === '') lines.pop();
+    return lines.length;
+  } catch {
+    return 0;
+  }
 }
 
 function parseNameStatus(line: string): ReviewChangedFile | undefined {

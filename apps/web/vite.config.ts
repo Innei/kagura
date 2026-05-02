@@ -1,5 +1,6 @@
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import react from '@vitejs/plugin-react';
+import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { defineConfig, loadEnv } from 'vite';
 
 import { createMockReviewApiPlugin } from './mock-review-api.js';
@@ -15,6 +16,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vanillaExtractPlugin(),
       react(),
+      codeInspectorPlugin({
+        bundler: 'vite',
+        hotKeys: ['altKey'],
+      }),
       ...(useMockApi ? [createMockReviewApiPlugin()] : []),
     ],
     server: {

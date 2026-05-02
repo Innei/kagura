@@ -1,5 +1,9 @@
-import * as styles from '../../../styles.css';
+import * as styles from './ShellState.css';
 
 export function ShellState({ text }: { text: string }) {
-  return <div className={`${styles.appFrame} ${styles.shellState}`}>{text}</div>;
+  return (
+    <div aria-live="polite" className={styles.root} role="status">
+      {text}
+    </div>
+  );
 }
