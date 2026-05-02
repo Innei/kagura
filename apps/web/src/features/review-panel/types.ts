@@ -1,12 +1,8 @@
 export interface ReviewChangedFile {
+  additions?: number;
+  deletions?: number;
   path: string;
   status: string;
-}
-
-export interface ReviewTreeEntry {
-  path: string;
-  status?: string | undefined;
-  type: 'file';
 }
 
 export interface ReviewSession {
@@ -20,10 +16,6 @@ export interface ReviewSession {
   workspaceLabel?: string | undefined;
   workspacePath: string;
   workspaceRepoId?: string | undefined;
-}
-
-export interface ReviewTreeResponse {
-  entries: ReviewTreeEntry[];
 }
 
 export interface ReviewDiffResponse {
