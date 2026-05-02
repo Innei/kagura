@@ -7,7 +7,7 @@
 _Every thread a stage, every response a dance_
 
 [![npm](https://img.shields.io/npm/v/@innei/kagura?style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@innei/kagura)
-[![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)](https://nodejs.org)
+[![Node version](https://img.shields.io/badge/Node.js->=24-3c873a?style=flat-square)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.33-f69220?style=flat-square)](https://pnpm.io)
 
@@ -55,7 +55,7 @@ npm install -g @innei/kagura
 # or: pnpm add -g @innei/kagura
 ```
 
-Requires Node.js ≥ 22. The package ships two bins: `kagura` (the CLI router + wizard) and `kagura-app` (the bot, bypassing the CLI).
+Requires Node.js ≥ 24. The package ships two bins: `kagura` (the CLI router + wizard) and `kagura-app` (the bot, bypassing the CLI).
 
 ## First run
 

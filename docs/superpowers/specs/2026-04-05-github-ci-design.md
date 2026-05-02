@@ -33,7 +33,7 @@ The workflow will run on:
 ### Runtime
 
 - Runner: `ubuntu-latest`
-- Node setup: `actions/setup-node` with `node-version: lts/*`
+- Node setup: `actions/setup-node` with `node-version: 24`
 - Package manager bootstrap: `corepack enable`
 
 The workflow will not explicitly set a `pnpm` version.

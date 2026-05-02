@@ -182,7 +182,7 @@ Edit `apps/kagura/package.json`:
     "lint-staged": "^16.4.0"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,yml,yaml}": ["eslint --fix"],

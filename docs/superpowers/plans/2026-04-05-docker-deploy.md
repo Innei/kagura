@@ -69,10 +69,10 @@ artifacts
 
 - Create: `Dockerfile`
 
-- [ ] **Step 1: Define a shared Node 22 + pnpm base**
+- [ ] **Step 1: Define a shared Node 24 + pnpm base**
 
 ```dockerfile
-FROM node:22-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
