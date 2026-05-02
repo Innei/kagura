@@ -6,8 +6,10 @@ export const root = css`
 `;
 
 export const meta = css`
+  align-content: center;
   display: grid;
   gap: token(spacing.1);
+  min-height: calc(token(sizes.control.xl) + token(sizes.control.sm) - 1px);
   padding: token(spacing.2.5) token(spacing.3) token(spacing.2);
 `;
 

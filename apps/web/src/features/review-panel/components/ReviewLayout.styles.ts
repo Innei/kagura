@@ -48,14 +48,22 @@ export const expandButton = css`
 export const resizeHandle = css`
   background: transparent;
   cursor: col-resize;
-  width: 2px;
   outline: none;
   position: relative;
-  &:hover,
-  &[data-resize-handle-active] {
+  width: 0px;
+  &::before {
+    background: transparent;
+    content: '';
+    inset: 0 -1px;
+    position: absolute;
+    z-index: 99999;
+    transition: background 120ms token(easings.standard);
+  }
+  &:hover::before,
+  &[data-resize-handle-active]::before {
     background: token(colors.border.strong);
   }
-  &:focus-visible {
+  &:focus-visible::before {
     background: token(colors.focus.ring);
   }
 `;
