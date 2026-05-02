@@ -1,10 +1,13 @@
+import fs from 'node:fs/promises';
 import http from 'node:http';
+import path from 'node:path';
 import { URL } from 'node:url';
 
 import type { AppLogger } from '~/logger/index.js';
 import type { GitReviewService } from '~/review/git-review-service.js';
 
 export interface ReviewPanelServerOptions {
+  assetsDir: string;
   baseUrl: string;
   host: string;
   logger: AppLogger;
@@ -16,6 +19,15 @@ export interface ReviewPanelServer {
   start: () => Promise<void>;
   stop: () => Promise<void>;
 }
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+};
 
 export function createReviewPanelServer(options: ReviewPanelServerOptions): ReviewPanelServer {
   const server = http.createServer((request, response) => {
@@ -51,7 +63,6 @@ async function handleRequest(
   options: ReviewPanelServerOptions,
 ): Promise<void> {
   const url = new URL(request.url ?? '/', options.baseUrl);
-  const reviewMatch = url.pathname.match(/^\/reviews\/([^/]+)$/);
   const apiMatch = url.pathname.match(/^\/api\/reviews\/([^/]+)(?:\/([^/]+))?$/);
 
   if (request.method !== 'GET') {
@@ -59,26 +70,25 @@ async function handleRequest(
     return;
   }
 
-  if (url.pathname === '/') {
-    sendHtml(response, renderIndexPage());
+  if (apiMatch?.[1]) {
+    await handleApiRequest(response, options.reviewService, apiMatch[1], apiMatch[2], url);
     return;
   }
 
-  if (reviewMatch?.[1]) {
-    sendHtml(response, renderReviewPage(reviewMatch[1]));
-    return;
-  }
+  await serveReviewPanelAsset(response, options.assetsDir, url.pathname);
+}
 
-  if (!apiMatch?.[1]) {
-    sendJson(response, 404, { error: 'Not Found' });
-    return;
-  }
+async function handleApiRequest(
+  response: http.ServerResponse,
+  reviewService: GitReviewService,
+  executionId: string,
+  resource: string | undefined,
+  url: URL,
+): Promise<void> {
+  const apiResource = resource ?? 'session';
 
-  const executionId = apiMatch[1];
-  const resource = apiMatch[2] ?? 'session';
-
-  if (resource === 'session') {
-    const session = options.reviewService.getSession(executionId);
+  if (apiResource === 'session') {
+    const session = reviewService.getSession(executionId);
     if (!session) {
       sendJson(response, 404, { error: 'Review session not found.' });
       return;
@@ -87,8 +97,8 @@ async function handleRequest(
     return;
   }
 
-  if (resource === 'tree') {
-    const tree = options.reviewService.listTree(executionId);
+  if (apiResource === 'tree') {
+    const tree = reviewService.listTree(executionId);
     if (!tree) {
       sendJson(response, 404, { error: 'Review session not found.' });
       return;
@@ -97,12 +107,9 @@ async function handleRequest(
     return;
   }
 
-  if (resource === 'diff') {
+  if (apiResource === 'diff') {
     try {
-      const diff = options.reviewService.getDiff(
-        executionId,
-        url.searchParams.get('path') ?? undefined,
-      );
+      const diff = reviewService.getDiff(executionId, url.searchParams.get('path') ?? undefined);
       if (diff === undefined) {
         sendJson(response, 404, { error: 'Review session not found.' });
         return;
@@ -114,14 +121,14 @@ async function handleRequest(
     return;
   }
 
-  if (resource === 'file') {
+  if (apiResource === 'file') {
     const filePath = url.searchParams.get('path');
     if (!filePath) {
       sendJson(response, 400, { error: 'Missing path.' });
       return;
     }
     try {
-      const file = await options.reviewService.getFile(executionId, filePath);
+      const file = await reviewService.getFile(executionId, filePath);
       if (!file) {
         sendJson(response, 404, { error: 'Review session not found.' });
         return;
@@ -136,6 +143,48 @@ async function handleRequest(
   sendJson(response, 404, { error: 'Not Found' });
 }
 
+async function serveReviewPanelAsset(
+  response: http.ServerResponse,
+  assetsDir: string,
+  urlPathname: string,
+): Promise<void> {
+  const filePath = resolveAssetPath(assetsDir, urlPathname);
+  if (!filePath) {
+    sendHtml(response, renderMissingAssetsPage(assetsDir), 503);
+    return;
+  }
+
+  try {
+    const content = await fs.readFile(filePath);
+    const contentType = CONTENT_TYPES[path.extname(filePath)] ?? 'application/octet-stream';
+    response.writeHead(200, {
+      'cache-control': filePath.endsWith('index.html') ? 'no-store' : 'public, max-age=31536000',
+      'content-type': contentType,
+    });
+    response.end(content);
+  } catch {
+    if (urlPathname.startsWith('/assets/')) {
+      sendJson(response, 404, { error: 'Not Found' });
+      return;
+    }
+    sendHtml(response, renderMissingAssetsPage(assetsDir), 503);
+  }
+}
+
+function resolveAssetPath(assetsDir: string, urlPathname: string): string | undefined {
+  const relativePath =
+    urlPathname === '/' || urlPathname.startsWith('/reviews/')
+      ? 'index.html'
+      : decodeURIComponent(urlPathname.replace(/^\/+/, ''));
+  const absoluteAssetsDir = path.resolve(assetsDir);
+  const absoluteTarget = path.resolve(absoluteAssetsDir, relativePath);
+  const relative = path.relative(absoluteAssetsDir, absoluteTarget);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return undefined;
+  }
+  return absoluteTarget;
+}
+
 function sendJson(response: http.ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -144,150 +193,30 @@ function sendJson(response: http.ServerResponse, status: number, body: unknown):
   response.end(JSON.stringify(body));
 }
 
-function sendHtml(response: http.ServerResponse, html: string): void {
-  response.writeHead(200, {
+function sendHtml(response: http.ServerResponse, html: string, status = 200): void {
+  response.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'no-store',
   });
   response.end(html);
 }
 
-function renderIndexPage(): string {
-  return '<!doctype html><meta charset="utf-8"><title>Kagura Review</title><body><p>Kagura review panel is running.</p></body>';
-}
-
-function renderReviewPage(executionId: string): string {
+function renderMissingAssetsPage(assetsDir: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kagura Review</title>
-  <style>${PANEL_CSS}</style>
 </head>
 <body>
-  <aside>
-    <header>
-      <strong id="title">Review</strong>
-      <small id="meta"></small>
-    </header>
-    <div class="section-title">Changed Files</div>
-    <div id="changed" class="list"></div>
-    <div class="section-title">File Tree</div>
-    <div id="tree" class="list"></div>
-  </aside>
-  <main>
-    <div class="toolbar">
-      <button id="allDiff" type="button">Full Diff</button>
-      <span id="selected"></span>
-    </div>
-    <pre id="diff"></pre>
-  </main>
-  <script>window.__REVIEW_EXECUTION_ID__ = ${JSON.stringify(executionId)};</script>
-  <script>${PANEL_JS}</script>
+  <p>Kagura Review Panel assets were not found.</p>
+  <p>Run <code>pnpm -F @kagura/web build</code> and set <code>KAGURA_REVIEW_PANEL_ASSETS_DIR</code> to the generated dist directory.</p>
+  <p>Current assets directory: <code>${escapeHtml(assetsDir)}</code></p>
 </body>
 </html>`;
 }
 
-const PANEL_CSS = `
-* { box-sizing: border-box; }
-body { margin: 0; height: 100vh; display: grid; grid-template-columns: 340px 1fr; font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202124; background: #f6f8fa; }
-aside { min-width: 0; border-right: 1px solid #d0d7de; background: #fff; overflow: auto; }
-header { padding: 14px 16px 12px; border-bottom: 1px solid #d0d7de; display: grid; gap: 4px; }
-header strong { font-size: 15px; }
-header small { color: #57606a; overflow-wrap: anywhere; }
-main { min-width: 0; display: grid; grid-template-rows: 44px 1fr; }
-.toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #d0d7de; background: #fff; }
-button { border: 1px solid #d0d7de; background: #f6f8fa; border-radius: 6px; height: 28px; padding: 0 10px; cursor: pointer; }
-button:hover { background: #eef1f4; }
-.section-title { padding: 12px 16px 6px; color: #57606a; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-.list { padding: 0 8px 8px; }
-.row { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; min-height: 28px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-.row:hover, .row.active { background: #eef6ff; }
-.status { color: #57606a; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-.path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#selected { color: #57606a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#diff { margin: 0; padding: 16px; overflow: auto; background: #fff; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.add { background: #e6ffec; color: #116329; display: block; }
-.del { background: #ffebe9; color: #82071e; display: block; }
-.hunk { background: #ddf4ff; color: #0550ae; display: block; }
-.file { color: #8250df; font-weight: 700; display: block; }
-@media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 44vh 56vh; } aside { border-right: 0; border-bottom: 1px solid #d0d7de; } }
-`;
-
-const PANEL_JS = `
-const executionId = window.__REVIEW_EXECUTION_ID__;
-const state = { selected: null };
-const $ = (id) => document.getElementById(id);
-
-async function getJson(path) {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
-
-function row(entry, onClick) {
-  const el = document.createElement('div');
-  el.className = 'row';
-  el.innerHTML = '<span class="status"></span><span class="path"></span>';
-  el.querySelector('.status').textContent = entry.status || '';
-  el.querySelector('.path').textContent = entry.path;
-  el.title = entry.path;
-  el.addEventListener('click', () => onClick(entry.path, el));
-  return el;
-}
-
-function renderList(id, entries) {
-  const container = $(id);
-  container.textContent = '';
-  for (const entry of entries) container.appendChild(row(entry, selectPath));
-}
-
-function setActive(path) {
-  for (const item of document.querySelectorAll('.row')) {
-    item.classList.toggle('active', item.title === path);
-  }
-}
-
-async function selectPath(path) {
-  state.selected = path;
-  setActive(path);
-  $('selected').textContent = path;
-  const payload = await getJson('/api/reviews/' + encodeURIComponent(executionId) + '/diff?path=' + encodeURIComponent(path));
-  renderDiff(payload.diff || 'No diff for this file.');
-}
-
-async function loadAllDiff() {
-  state.selected = null;
-  setActive('');
-  $('selected').textContent = 'All changed files';
-  const payload = await getJson('/api/reviews/' + encodeURIComponent(executionId) + '/diff');
-  renderDiff(payload.diff || 'No diff.');
-}
-
-function renderDiff(text) {
-  $('diff').innerHTML = text.split('\\n').map((line) => {
-    const escaped = line.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
-    const cls = line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') ? 'file' :
-      line.startsWith('@@') ? 'hunk' :
-      line.startsWith('+') ? 'add' :
-      line.startsWith('-') ? 'del' : '';
-    return cls ? '<span class="' + cls + '">' + escaped + '</span>' : escaped;
-  }).join('\\n');
-}
-
-async function init() {
-  const session = await getJson('/api/reviews/' + encodeURIComponent(executionId));
-  $('title').textContent = session.workspaceLabel || session.workspaceRepoId || 'Review';
-  $('meta').textContent = session.status + ' · ' + session.executionId;
-  renderList('changed', session.changedFiles || []);
-  const tree = await getJson('/api/reviews/' + encodeURIComponent(executionId) + '/tree');
-  renderList('tree', tree.entries || []);
-  await loadAllDiff();
-}
-
-$('allDiff').addEventListener('click', loadAllDiff);
-init().catch((error) => {
-  renderDiff('Failed to load review: ' + error.message);
-});
-`;

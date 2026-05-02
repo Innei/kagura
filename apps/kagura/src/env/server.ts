@@ -69,6 +69,7 @@ const appConfigSchema = z
     worktreeRootDir: z.string().optional(),
     reviewPanel: z
       .object({
+        assetsDir: z.string().optional(),
         baseUrl: z.string().url().optional(),
         enabled: z.boolean().optional(),
         host: z.string().optional(),
@@ -173,6 +174,7 @@ export const env = createEnv({
     KAGURA_REVIEW_PANEL_HOST: z.string().min(1).default('127.0.0.1'),
     KAGURA_REVIEW_PANEL_PORT: z.coerce.number().int().positive().default(3077),
     KAGURA_REVIEW_PANEL_BASE_URL: z.string().url().default('http://127.0.0.1:3077'),
+    KAGURA_REVIEW_PANEL_ASSETS_DIR: z.string().min(1).default('./apps/web/dist'),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
     A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
     A2A_OUTPUT_MODE: z.enum(['verbose', 'quiet']).default('verbose'),
@@ -241,6 +243,10 @@ export const env = createEnv({
     KAGURA_REVIEW_PANEL_BASE_URL: envOrConfig(
       'KAGURA_REVIEW_PANEL_BASE_URL',
       configString(appConfig.reviewPanel?.baseUrl),
+    ),
+    KAGURA_REVIEW_PANEL_ASSETS_DIR: envOrConfig(
+      'KAGURA_REVIEW_PANEL_ASSETS_DIR',
+      configString(appConfig.reviewPanel?.assetsDir),
     ),
     SESSION_DB_PATH: envOrConfig('SESSION_DB_PATH', configString(appConfig.sessionDbPath)),
     A2A_COORDINATOR_DB_PATH: envOrConfig(

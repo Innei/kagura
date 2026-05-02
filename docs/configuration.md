@@ -99,7 +99,7 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
 
 `WORKTREE_ROOT_DIR` controls the centralized parent directory agents should use for git worktrees. If unset, Kagura defaults it to `REPO_ROOT_DIR/kagura-worktrees`, so a typical setup becomes `~/git/kagura-worktrees`. Override it in `.env` or `config.json` if you want a different shared parent directory.
 
-`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and unified diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser.
+`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. The UI lives in `apps/web`; run `pnpm -F @kagura/web build` before starting Kagura, then point `assetsDir` at that build output.
 
 ```json
 {
@@ -107,7 +107,8 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
     "enabled": true,
     "host": "127.0.0.1",
     "port": 3077,
-    "baseUrl": "http://127.0.0.1:3077"
+    "baseUrl": "http://127.0.0.1:3077",
+    "assetsDir": "./apps/web/dist"
   }
 }
 ```

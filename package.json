@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -F @innei/kagura build",
+    "build": "pnpm -F @kagura/web build && pnpm -F @innei/kagura build",
+    "build:app": "pnpm -F @innei/kagura build",
+    "build:web": "pnpm -F @kagura/web build",
     "cli": "pnpm -F @innei/kagura exec tsx src/cli.ts",
     "cli:dist": "node apps/kagura/dist/cli.js",
     "cli:doctor": "pnpm -F @innei/kagura exec tsx src/cli.ts doctor",
@@ -15,6 +17,7 @@
     "db:migrate": "pnpm -F @innei/kagura db:migrate",
     "db:studio": "pnpm -F @innei/kagura db:studio",
     "dev": "pnpm -F @innei/kagura dev",
+    "dev:web": "pnpm -F @kagura/web dev",
     "e2e": "pnpm -F @innei/kagura e2e",
     "e2e:interactive": "pnpm -F @innei/kagura e2e:interactive",
     "e2e:list": "pnpm -F @innei/kagura e2e:list",

@@ -156,6 +156,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   );
   const reviewPanelServer: ReviewPanelServer | undefined = env.KAGURA_REVIEW_PANEL_ENABLED
     ? createReviewPanelServer({
+        assetsDir: path.resolve(process.cwd(), env.KAGURA_REVIEW_PANEL_ASSETS_DIR),
         baseUrl: env.KAGURA_REVIEW_PANEL_BASE_URL,
         host: env.KAGURA_REVIEW_PANEL_HOST,
         logger: logger.withTag('review:web'),
