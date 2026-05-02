@@ -99,7 +99,7 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
 
 `WORKTREE_ROOT_DIR` controls the centralized parent directory agents should use for git worktrees. If unset, Kagura defaults it to `REPO_ROOT_DIR/kagura-worktrees`, so a typical setup becomes `~/git/kagura-worktrees`. Override it in `.env` or `config.json` if you want a different shared parent directory.
 
-`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. The UI lives in `apps/web`; run `pnpm -F @kagura/web build` before starting Kagura, then point `assetsDir` at that build output.
+`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. A full `pnpm build` copies the Web UI into `apps/kagura/dist/review-panel`, which is the default production assets directory. Override `assetsDir` only when you want to serve a separately built UI.
 
 ```json
 {
@@ -108,7 +108,7 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
     "host": "127.0.0.1",
     "port": 3077,
     "baseUrl": "http://127.0.0.1:3077",
-    "assetsDir": "./apps/web/dist"
+    "assetsDir": "./apps/kagura/dist/review-panel"
   }
 }
 ```
@@ -425,7 +425,7 @@ docker compose up -d --build
 - SQLite data is persisted in the `slack_cc_bot_data` volume at `/app/data`.
 - If you enable `LOG_TO_FILE=true`, add a separate mount if you want log files to survive container replacement.
 - Repositories from `HOST_REPO_ROOT` are mounted read-write into `/workspace`.
-- No inbound port mapping is required because Slack Socket Mode uses outbound connections.
+- No inbound port mapping is required for Slack Socket Mode. Compose still publishes `KAGURA_REVIEW_PANEL_PORT` so the review panel is reachable when `KAGURA_REVIEW_PANEL_ENABLED=true`; set `KAGURA_REVIEW_PANEL_BASE_URL` to the externally reachable URL that Slack users should open.
 
 ## Database setup
 

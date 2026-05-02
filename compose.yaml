@@ -7,6 +7,10 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      KAGURA_REVIEW_PANEL_HOST: 0.0.0.0
+      KAGURA_REVIEW_PANEL_BASE_URL: ${KAGURA_REVIEW_PANEL_BASE_URL:-http://127.0.0.1:3077}
+    ports:
+      - '${KAGURA_REVIEW_PANEL_HOST_PORT:-3077}:${KAGURA_REVIEW_PANEL_PORT:-3077}'
     user: '${HOST_UID_GID:-app}'
     restart: unless-stopped
     volumes:

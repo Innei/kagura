@@ -43,7 +43,9 @@ export function createReviewPanelServer(options: ReviewPanelServerOptions): Revi
         server.once('error', reject);
         server.listen(options.port, options.host, () => {
           server.off('error', reject);
-          options.logger.info('Review panel listening on %s', options.baseUrl);
+          const listenUrl = `http://${options.host}:${options.port}`;
+          options.logger.info('Review panel API listening on %s', listenUrl);
+          options.logger.info('Review panel UI links will use %s', options.baseUrl);
           resolve();
         });
       }),

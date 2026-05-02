@@ -30,6 +30,7 @@ RUN pnpm install --prod --frozen-lockfile
 FROM base AS runtime
 
 ENV NODE_ENV=production
+ENV KAGURA_HOME=/app
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git ripgrep \
@@ -37,12 +38,15 @@ RUN apt-get update \
   && groupadd --system app \
   && useradd --system --gid app --create-home app
 
-COPY --from=build --chown=app:app /app/package.json ./package.json
-COPY --from=prod-deps --chown=app:app /app/node_modules ./node_modules
-COPY --from=build --chown=app:app /app/dist ./dist
+COPY --from=build --chown=app:app /app/node_modules ./node_modules
+COPY --from=build --chown=app:app /app/apps/kagura/package.json ./apps/kagura/package.json
+COPY --from=build --chown=app:app /app/apps/kagura/dist ./apps/kagura/dist
+COPY --from=build --chown=app:app /app/apps/kagura/node_modules ./apps/kagura/node_modules
 
 RUN mkdir -p /app/data && chown -R app:app /app/data /pnpm && chmod 0777 /app/data
 
 USER app
 
-CMD ["pnpm", "start"]
+WORKDIR /app/apps/kagura
+
+CMD ["node", "dist/index.js"]

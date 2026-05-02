@@ -140,6 +140,15 @@ cp .env.example .env # fill in SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_S
 pnpm dev             # or: pnpm build && pnpm start
 ```
 
+### Review panel development
+
+```bash
+pnpm dev:review      # bot API on 3077, Vite UI on 5173, Slack links point to Vite
+pnpm dev:review:mock # Web UI only, served with mock review data
+```
+
+Open `http://127.0.0.1:5173/reviews/mock-review` for the mock panel. When the bot starts with the review panel enabled, its dev log prints both the local API listener and the UI base URL used in Slack review links.
+
 ## Documentation
 
 | Document                                            | Contents                                                                                         |
@@ -157,6 +166,7 @@ pnpm dev             # or: pnpm build && pnpm start
 | ----------------------------- | ----------------------------- |
 | `pnpm dev`                    | Run with nodemon + tsx        |
 | `pnpm build`                  | Compile TypeScript            |
+| `pnpm build:web`              | Build the review Web UI       |
 | `pnpm test`                   | Run Vitest test suite         |
 | `pnpm start`                  | Run compiled output           |
 | `pnpm typecheck`              | Type-check without emitting   |

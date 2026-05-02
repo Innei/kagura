@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { resolveKaguraPaths } from '@kagura/cli/config/paths';
 import { createEnv } from '@t3-oss/env-core';
@@ -136,6 +137,16 @@ function resolveDefaultWorktreeRootDir(): string {
   return path.join(kaguraPaths.configDir, 'kagura-worktrees');
 }
 
+function resolveDefaultReviewPanelAssetsDir(): string {
+  const distDir = path.dirname(fileURLToPath(import.meta.url));
+  const bundledAssetsDir = path.join(distDir, 'review-panel');
+  if (fs.existsSync(bundledAssetsDir)) {
+    return bundledAssetsDir;
+  }
+
+  return './apps/web/dist';
+}
+
 export const env = createEnv({
   server: {
     APP_CONFIG_PATH: z.string().min(1).optional(),
@@ -174,7 +185,7 @@ export const env = createEnv({
     KAGURA_REVIEW_PANEL_HOST: z.string().min(1).default('127.0.0.1'),
     KAGURA_REVIEW_PANEL_PORT: z.coerce.number().int().positive().default(3077),
     KAGURA_REVIEW_PANEL_BASE_URL: z.string().url().default('http://127.0.0.1:3077'),
-    KAGURA_REVIEW_PANEL_ASSETS_DIR: z.string().min(1).default('./apps/web/dist'),
+    KAGURA_REVIEW_PANEL_ASSETS_DIR: z.string().min(1).default(resolveDefaultReviewPanelAssetsDir()),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
     A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
     A2A_OUTPUT_MODE: z.enum(['verbose', 'quiet']).default('verbose'),

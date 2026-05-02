@@ -17,6 +17,8 @@
     "db:migrate": "pnpm -F @innei/kagura db:migrate",
     "db:studio": "pnpm -F @innei/kagura db:studio",
     "dev": "pnpm -F @innei/kagura dev",
+    "dev:review": "KAGURA_REVIEW_PANEL_ENABLED=true KAGURA_REVIEW_PANEL_BASE_URL=http://127.0.0.1:5173 pnpm -r --parallel --filter @innei/kagura --filter @kagura/web dev",
+    "dev:review:mock": "pnpm -F @kagura/web dev:mock",
     "dev:web": "pnpm -F @kagura/web dev",
     "e2e": "pnpm -F @innei/kagura e2e",
     "e2e:interactive": "pnpm -F @innei/kagura e2e:interactive",

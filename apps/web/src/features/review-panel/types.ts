@@ -1,0 +1,31 @@
+export interface ReviewChangedFile {
+  path: string;
+  status: string;
+}
+
+export interface ReviewTreeEntry {
+  path: string;
+  status?: string | undefined;
+  type: 'file';
+}
+
+export interface ReviewSession {
+  baseBranch?: string | undefined;
+  baseHead?: string | undefined;
+  changedFiles: ReviewChangedFile[];
+  executionId: string;
+  head?: string | undefined;
+  status: string;
+  threadTs: string;
+  workspaceLabel?: string | undefined;
+  workspacePath: string;
+  workspaceRepoId?: string | undefined;
+}
+
+export interface ReviewTreeResponse {
+  entries: ReviewTreeEntry[];
+}
+
+export interface ReviewDiffResponse {
+  diff: string;
+}
