@@ -149,6 +149,8 @@ pnpm dev:review:mock # Web UI only, served with mock review data
 
 Open `http://127.0.0.1:5173/reviews/mock-review` for the mock panel. When the bot starts with the review panel enabled, its dev log prints both the local API listener and the UI base URL used in Slack review links.
 
+For multi-instance production on one domain, give each instance a path-prefixed `reviewPanel.baseUrl`, for example `https://kagura.innei.dev/codex` and `https://kagura.innei.dev/claude`, and route those prefixes to separate local ports in nginx or Cloudflare Tunnel. See [docs/configuration.md](docs/configuration.md#single-domain-multi-instance-review-panel).
+
 ## Documentation
 
 | Document                                            | Contents                                                                                         |

@@ -4,9 +4,9 @@ import { loadDiff, loadInitialReviewData } from '../features/review-panel/api/re
 import { ReviewLayout } from '../features/review-panel/components/ReviewLayout';
 import { ShellState } from '../features/review-panel/components/ShellState';
 import type { ReviewSession } from '../features/review-panel/types';
-import { getExecutionId } from './routing';
+import { getReviewPanelRoute } from './routing';
 
-const executionId = getExecutionId();
+const route = getReviewPanelRoute();
 
 export function App() {
   const [session, setSession] = useState<ReviewSession | undefined>();
@@ -16,7 +16,7 @@ export function App() {
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    void loadInitialReviewData(executionId)
+    void loadInitialReviewData(route.executionId, route.apiBasePath)
       .then(({ session: nextSession }) => {
         setSession(nextSession);
         setLoading(false);
@@ -29,7 +29,7 @@ export function App() {
 
   useEffect(() => {
     if (loading || error) return;
-    void loadDiff(executionId, selectedPath)
+    void loadDiff(route.executionId, selectedPath, route.apiBasePath)
       .then((nextDiff) => setDiff(nextDiff))
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));

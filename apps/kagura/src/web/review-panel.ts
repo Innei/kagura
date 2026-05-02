@@ -65,7 +65,8 @@ async function handleRequest(
   options: ReviewPanelServerOptions,
 ): Promise<void> {
   const url = new URL(request.url ?? '/', options.baseUrl);
-  const apiMatch = url.pathname.match(/^\/api\/reviews\/([^/]+)(?:\/([^/]+))?$/);
+  const pathname = stripBasePath(url.pathname, options.baseUrl);
+  const apiMatch = pathname.match(/^\/api\/reviews\/([^/]+)(?:\/([^/]+))?$/);
 
   if (request.method !== 'GET') {
     sendJson(response, 405, { error: 'Method Not Allowed' });
@@ -77,7 +78,15 @@ async function handleRequest(
     return;
   }
 
-  await serveReviewPanelAsset(response, options.assetsDir, url.pathname);
+  await serveReviewPanelAsset(response, options.assetsDir, pathname);
+}
+
+function stripBasePath(pathname: string, baseUrl: string): string {
+  const basePath = new URL(baseUrl).pathname.replace(/\/+$/, '');
+  if (!basePath) return pathname;
+  if (pathname === basePath) return '/';
+  if (pathname.startsWith(`${basePath}/`)) return pathname.slice(basePath.length) || '/';
+  return pathname;
 }
 
 async function handleApiRequest(

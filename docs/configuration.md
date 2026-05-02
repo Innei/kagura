@@ -99,7 +99,7 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
 
 `WORKTREE_ROOT_DIR` controls the centralized parent directory agents should use for git worktrees. If unset, Kagura defaults it to `REPO_ROOT_DIR/kagura-worktrees`, so a typical setup becomes `~/git/kagura-worktrees`. Override it in `.env` or `config.json` if you want a different shared parent directory.
 
-`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. A full `pnpm build` copies the Web UI into `apps/kagura/dist/review-panel`, which is the default production assets directory. Override `assetsDir` only when you want to serve a separately built UI.
+`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. `baseUrl` may include a path prefix, such as `https://kagura.example.com/codex`; the review panel server and Web UI will use that prefix for both page and API routes. A full `pnpm build` copies the Web UI into `apps/kagura/dist/review-panel`, which is the default production assets directory. Override `assetsDir` only when you want to serve a separately built UI.
 
 ```json
 {
@@ -112,6 +112,71 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
   }
 }
 ```
+
+### Single-domain multi-instance review panel
+
+When multiple Kagura production instances run on the same host but only one public or LAN domain is available, allocate one path namespace per instance. For example, a local two-bot setup can use:
+
+```json
+{
+  "reviewPanel": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 3077,
+    "baseUrl": "https://kagura.innei.dev/codex",
+    "assetsDir": "./apps/kagura/dist/review-panel"
+  }
+}
+```
+
+and a second instance:
+
+```json
+{
+  "reviewPanel": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 3078,
+    "baseUrl": "https://kagura.innei.dev/claude",
+    "assetsDir": "./apps/kagura/dist/review-panel"
+  }
+}
+```
+
+The reverse proxy should preserve the path prefix when forwarding to the instance, so `/codex/reviews/{executionId}` and `/codex/api/reviews/{executionId}` both reach the `3077` service, while `/claude/...` reaches `3078`. Static assets are shared and may be served from either instance:
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name kagura.innei.dev;
+
+  location /codex/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://10.0.0.89:3077;
+  }
+
+  location /claude/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://10.0.0.89:3078;
+  }
+
+  location /assets/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://10.0.0.89:3077;
+  }
+}
+```
+
+For LAN access that should bypass a Cloudflare Tunnel, keep the same HTTPS hostname and override DNS locally. With Surge, add this under `[Host]`:
+
+```ini
+kagura.innei.dev = 10.0.0.33
+```
+
+In this setup `10.0.0.33` is the LAN nginx reverse proxy and `10.0.0.89` is the Mac running the Kagura PM2 instances. Reserve those LAN addresses or update the proxy when DHCP changes them.
 
 ## Slack app manifest
 

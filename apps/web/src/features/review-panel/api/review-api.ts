@@ -1,9 +1,9 @@
 import type { ReviewDiffResponse, ReviewSession } from '../types';
 import { getJson } from './http';
 
-export async function loadInitialReviewData(reviewExecutionId: string) {
+export async function loadInitialReviewData(reviewExecutionId: string, apiBasePath = '') {
   const session = await getJson<ReviewSession>(
-    `/api/reviews/${encodeURIComponent(reviewExecutionId)}`,
+    apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}`),
   );
   return { session };
 }
@@ -11,10 +11,15 @@ export async function loadInitialReviewData(reviewExecutionId: string) {
 export async function loadDiff(
   reviewExecutionId: string,
   filePath?: string | undefined,
+  apiBasePath = '',
 ): Promise<string> {
   const suffix = filePath ? `?path=${encodeURIComponent(filePath)}` : '';
   const payload = await getJson<ReviewDiffResponse>(
-    `/api/reviews/${encodeURIComponent(reviewExecutionId)}/diff${suffix}`,
+    apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}/diff${suffix}`),
   );
   return payload.diff;
+}
+
+function apiUrl(apiBasePath: string, path: string): string {
+  return `${apiBasePath}${path}`;
 }
