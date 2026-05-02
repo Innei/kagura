@@ -4,7 +4,6 @@ logs
 .env
 .env.local
 .env.e2e
-.env.e2e.*
 config.json
 config.*.json
 !config.example.json
