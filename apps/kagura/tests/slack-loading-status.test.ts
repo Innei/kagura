@@ -977,7 +977,7 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
-    applyReconcileOps: () => {},
+    applyReconcileOps: () => ({ appliedOps: [] }),
     getDirtyBuckets: () => [],
     countAll: () => 0,
     countByCategory: () => 0,

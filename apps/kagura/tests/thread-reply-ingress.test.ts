@@ -1168,7 +1168,7 @@ function createA2ASession(
 
 function createMemoryStore(): MemoryStore {
   return {
-    applyReconcileOps: vi.fn(),
+    applyReconcileOps: vi.fn(() => ({ appliedOps: [] })),
     getDirtyBuckets: vi.fn().mockReturnValue([]),
     countAll: vi.fn().mockReturnValue(0),
     countByCategory: vi.fn().mockReturnValue(0),

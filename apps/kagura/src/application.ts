@@ -15,6 +15,7 @@ import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileAuditStore } from '~/memory/reconciler/audit-store.js';
 import { MemoryReconciler } from '~/memory/reconciler/index.js';
 import { OpenAICompatibleClient } from '~/memory/reconciler/llm-client.js';
 import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
@@ -80,6 +81,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const a2aCoordinatorStore = new SqliteA2ACoordinatorStore(a2aCoordinatorDbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
   const reconcileStateStore = new SqliteReconcileStateStore(db);
+  const reconcileAuditStore = new SqliteReconcileAuditStore(db);
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'), reconcileStateStore);
   const channelPreferenceStore = new SqliteChannelPreferenceStore(
     db,
@@ -118,6 +120,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     db,
     memoryStore,
     reconcileStore: reconcileStateStore,
+    auditStore: reconcileAuditStore,
     logger: logger.withTag('memory-reconciler'),
     intervalMs: env.KAGURA_MEMORY_RECONCILER_INTERVAL_MS,
     writeThreshold: env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD,

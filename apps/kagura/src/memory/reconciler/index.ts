@@ -2,11 +2,13 @@ import type { AppDatabase } from '~/db/index.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 
+import type { SqliteReconcileAuditStore } from './audit-store.js';
 import type { OpenAICompatibleClient } from './llm-client.js';
 import { reconcileBucket } from './processor.js';
 import type { SqliteReconcileStateStore } from './state-store.js';
 
 export interface MemoryReconcilerOptions {
+  auditStore?: SqliteReconcileAuditStore | undefined;
   batchSize?: number;
   db: AppDatabase;
   intervalMs: number;
@@ -82,6 +84,7 @@ export class MemoryReconciler {
         bucketKey: bucket.bucketKey,
         memoryStore: this.options.memoryStore,
         reconcileStore: this.options.reconcileStore,
+        auditStore: this.options.auditStore,
         llm: this.options.llm,
         logger: this.options.logger,
         batchSize,

@@ -7,7 +7,7 @@ import { memories } from '~/db/schema.js';
 import type { AppLogger } from '~/logger/index.js';
 
 import type { SqliteReconcileStateStore } from './reconciler/state-store.js';
-import type { ReconcileOp } from './reconciler/types.js';
+import type { AppliedReconcileOp, ApplyReconcileResult, ReconcileOp } from './reconciler/types.js';
 import { bucketKeyFor } from './reconciler/types.js';
 import type {
   ContextMemories,
@@ -221,7 +221,8 @@ export class SqliteMemoryStore implements MemoryStore {
     return result.changes;
   }
 
-  applyReconcileOps(ops: ReconcileOp[]): void {
+  applyReconcileOps(ops: ReconcileOp[]): ApplyReconcileResult {
+    const appliedOps: AppliedReconcileOp[] = [];
     this.db.transaction((tx) => {
       for (const op of ops) {
         switch (op.kind) {
@@ -229,6 +230,10 @@ export class SqliteMemoryStore implements MemoryStore {
             for (const id of op.ids) {
               tx.delete(memories).where(eq(memories.id, id)).run();
             }
+            appliedOps.push({
+              kind: op.kind,
+              sourceIds: [...op.ids],
+            });
             break;
           }
           case 'rewrite': {
@@ -239,20 +244,41 @@ export class SqliteMemoryStore implements MemoryStore {
               })
               .where(eq(memories.id, op.id))
               .run();
+            appliedOps.push({
+              kind: op.kind,
+              sourceIds: [op.id],
+              targetId: op.id,
+              payload: {
+                ...(op.expiresAt ? { expiresAt: op.expiresAt } : {}),
+              },
+            });
             break;
           }
           case 'merge': {
             const survivor = randomUUID();
-            const createdAt = new Date().toISOString();
-            const sample = tx.select().from(memories).where(eq(memories.id, op.ids[0]!)).get();
+            const sourceRecords = op.ids
+              .map((id) => tx.select().from(memories).where(eq(memories.id, id)).get())
+              .filter((record): record is NonNullable<typeof record> => Boolean(record));
+            const sample = sourceRecords[0];
+            if (!sample) {
+              break;
+            }
+            const createdAt = sourceRecords.reduce(
+              (latest, record) => (record.createdAt > latest ? record.createdAt : latest),
+              sample.createdAt,
+            );
             tx.insert(memories)
               .values({
                 id: survivor,
-                repoId: sample?.repoId ?? null,
+                repoId: sample.repoId ?? null,
                 threadTs: null,
                 category: op.category,
                 content: op.newContent,
-                metadata: null,
+                metadata: JSON.stringify({
+                  reconciledAt: new Date().toISOString(),
+                  sourceCreatedAts: sourceRecords.map((record) => record.createdAt),
+                  sourceIds: op.ids,
+                }),
                 createdAt,
                 expiresAt: op.expiresAt ?? null,
               })
@@ -260,17 +286,33 @@ export class SqliteMemoryStore implements MemoryStore {
             for (const id of op.ids) {
               tx.delete(memories).where(eq(memories.id, id)).run();
             }
+            appliedOps.push({
+              kind: op.kind,
+              sourceIds: [...op.ids],
+              targetId: survivor,
+              payload: {
+                category: op.category,
+                createdAt,
+                ...(op.expiresAt ? { expiresAt: op.expiresAt } : {}),
+              },
+            });
             break;
           }
           case 'extend_ttl': {
             for (const id of op.ids) {
               tx.update(memories).set({ expiresAt: op.expiresAt }).where(eq(memories.id, id)).run();
             }
+            appliedOps.push({
+              kind: op.kind,
+              sourceIds: [...op.ids],
+              payload: { expiresAt: op.expiresAt },
+            });
             break;
           }
         }
       }
     });
+    return { appliedOps };
   }
 
   getDirtyBuckets(): DirtyBucketSummary[] {

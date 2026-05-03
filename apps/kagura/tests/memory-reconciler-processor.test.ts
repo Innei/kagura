@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { memoryReconcileOps, memoryReconcileRuns } from '~/db/schema.js';
 import { createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileAuditStore } from '~/memory/reconciler/audit-store.js';
 import { reconcileBucket } from '~/memory/reconciler/processor.js';
 import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 
@@ -37,6 +39,39 @@ describe('reconcileBucket', () => {
     const state = reconcileStore.get('global::preference');
     expect(state!.writesSinceReconcile).toBe(0);
     expect(state!.lastReconciledAt).toBeTruthy();
+  });
+
+  it('writes an audit record for applied ops', async () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const auditStore = new SqliteReconcileAuditStore(db);
+    const memoryStore = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    const a = memoryStore.save({ category: 'preference', content: 'old nickname' });
+    memoryStore.save({ category: 'preference', content: 'new nickname' });
+
+    const llm = {
+      chat: vi.fn().mockResolvedValue(JSON.stringify({ ops: [{ kind: 'delete', ids: [a.id] }] })),
+    };
+
+    await reconcileBucket({
+      bucketKey: 'global::preference',
+      memoryStore,
+      reconcileStore,
+      auditStore,
+      llm,
+      logger: createTestLogger(),
+      batchSize: 50,
+    });
+
+    const run = db.select().from(memoryReconcileRuns).get();
+    expect(run).toMatchObject({
+      bucketKey: 'global::preference',
+      status: 'completed',
+      recordCount: 2,
+    });
+    const op = db.select().from(memoryReconcileOps).get();
+    expect(op).toMatchObject({ bucketKey: 'global::preference', kind: 'delete' });
+    expect(JSON.parse(op!.sourceIds)).toEqual([a.id]);
   });
 
   it('updates watermark even when LLM returns empty ops', async () => {

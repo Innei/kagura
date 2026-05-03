@@ -21,6 +21,13 @@
       "when": 1777812922571,
       "tag": "0002_memory_reconcile_state",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1777895400000,
+      "tag": "0003_memory_reconcile_audit",
+      "breakpoints": true
     }
   ],
   "version": "7"

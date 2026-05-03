@@ -110,6 +110,32 @@ export function createDatabase(dbPath: string) {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS memory_reconcile_runs (
+      id TEXT PRIMARY KEY,
+      bucket_key TEXT NOT NULL,
+      status TEXT NOT NULL,
+      record_count INTEGER NOT NULL,
+      raw_response TEXT,
+      error TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS memory_reconcile_ops (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      bucket_key TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      source_ids TEXT NOT NULL,
+      target_id TEXT,
+      payload TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+
   migrateMemoriesRepoIdNullable(sqlite);
 
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');

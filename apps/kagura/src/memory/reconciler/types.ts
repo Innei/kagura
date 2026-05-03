@@ -27,6 +27,17 @@ export type ReconcileOp =
     }
   | { kind: 'extend_ttl'; ids: string[]; expiresAt: string };
 
+export interface AppliedReconcileOp {
+  kind: ReconcileOp['kind'];
+  payload?: Record<string, unknown> | undefined;
+  sourceIds: string[];
+  targetId?: string | undefined;
+}
+
+export interface ApplyReconcileResult {
+  appliedOps: AppliedReconcileOp[];
+}
+
 export function bucketKeyFor(parts: BucketKeyParts): string {
   if (parts.scope === 'global') {
     return `global::${parts.category}`;

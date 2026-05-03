@@ -1,6 +1,7 @@
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 
+import type { SqliteReconcileAuditStore } from './audit-store.js';
 import type { OpenAICompatibleClient } from './llm-client.js';
 import { parseLlmOps } from './op-schema.js';
 import type { SqliteReconcileStateStore } from './state-store.js';
@@ -19,9 +20,14 @@ Each op is one of:
 Rules:
 - Preserve identity preferences (nicknames, name preferences, language) unless explicitly contradicted.
 - Prefer latest timestamps when content disagrees.
-- Empty {"ops":[]} is acceptable when bucket is already clean.`;
+- Prefer merge or rewrite over delete.
+- Only delete records that are exact duplicates, fully superseded by another record in the same batch, or clearly ephemeral/no-action chatter.
+- Preserve actionable facts: repository paths, PR/issue numbers, branch names, commit hashes, channel IDs, user preferences, and operational decisions.
+- Use only the listed operation kinds. Do not invent aliases such as destroy/remove/drop.
+- Empty {"ops":[]} is acceptable when bucket is already clean or when uncertain.`;
 
 export interface ReconcileBucketParams {
+  auditStore?: SqliteReconcileAuditStore | undefined;
   batchSize: number;
   bucketKey: string;
   llm: Pick<OpenAICompatibleClient, 'chat'>;
@@ -62,6 +68,11 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
       2,
     );
 
+    const runId = params.auditStore?.start({
+      bucketKey: params.bucketKey,
+      recordCount: batch.length,
+    });
+
     let raw: string;
     try {
       raw = await params.llm.chat([
@@ -70,6 +81,7 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
       ]);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      if (runId) params.auditStore?.fail(runId, msg);
       params.logger.warn('Reconcile bucket %s LLM call failed: %s', params.bucketKey, msg);
       return;
     }
@@ -79,6 +91,7 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
       ops = parseLlmOps(raw);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      if (runId) params.auditStore?.fail(runId, msg, raw);
       params.logger.warn(
         'Reconcile bucket %s op parse failed: %s; raw=%s',
         params.bucketKey,
@@ -88,8 +101,10 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
       return;
     }
 
+    const result = params.memoryStore.applyReconcileOps(ops);
+    if (runId) params.auditStore?.complete(runId, params.bucketKey, raw, result.appliedOps);
+
     if (ops.length > 0) {
-      params.memoryStore.applyReconcileOps(ops);
       params.logger.info('Reconciled bucket %s with %d op(s)', params.bucketKey, ops.length);
     }
   }

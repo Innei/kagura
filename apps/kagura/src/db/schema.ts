@@ -99,3 +99,25 @@ export const memoryReconcileState = sqliteTable('memory_reconcile_state', {
   lastCount: integer('last_count').notNull().default(0),
   writesSinceReconcile: integer('writes_since_reconcile').notNull().default(0),
 });
+
+export const memoryReconcileRuns = sqliteTable('memory_reconcile_runs', {
+  id: text('id').primaryKey(),
+  bucketKey: text('bucket_key').notNull(),
+  status: text('status', { enum: ['running', 'completed', 'failed'] }).notNull(),
+  recordCount: integer('record_count').notNull(),
+  rawResponse: text('raw_response'),
+  error: text('error'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
+export const memoryReconcileOps = sqliteTable('memory_reconcile_ops', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  bucketKey: text('bucket_key').notNull(),
+  kind: text('kind').notNull(),
+  sourceIds: text('source_ids').notNull(),
+  targetId: text('target_id'),
+  payload: text('payload'),
+  createdAt: text('created_at').notNull(),
+});

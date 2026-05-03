@@ -1,4 +1,8 @@
-import type { ReconcileBucketState, ReconcileOp } from './reconciler/types.js';
+import type {
+  ApplyReconcileResult,
+  ReconcileBucketState,
+  ReconcileOp,
+} from './reconciler/types.js';
 
 export const MEMORY_CATEGORIES = [
   'task_completed',
@@ -35,9 +39,9 @@ export interface SaveMemoryInput {
 
 export interface MemorySearchOptions {
   category?: MemoryCategory | undefined;
-  unbounded?: boolean | undefined;
   limit?: number | undefined;
   query?: string | undefined;
+  unbounded?: boolean | undefined;
 }
 
 export interface ContextMemories {
@@ -54,7 +58,7 @@ export interface DirtyBucketSummary {
 }
 
 export interface MemoryStore {
-  applyReconcileOps: (ops: ReconcileOp[]) => void;
+  applyReconcileOps: (ops: ReconcileOp[]) => ApplyReconcileResult;
   countAll: (repoId?: string) => number;
   countByCategory: (repoId: string | undefined, category: MemoryCategory) => number;
   delete: (id: string) => boolean;
