@@ -25,3 +25,39 @@ describe('bucketKeyFor', () => {
     });
   });
 });
+
+describe('parseBucketKey errors', () => {
+  it('throws when key has wrong segment count', () => {
+    expect(() => parseBucketKey('garbage')).toThrow();
+    expect(() => parseBucketKey('workspace:repo:context:extra')).toThrow();
+  });
+
+  it('throws when scope is unknown', () => {
+    expect(() => parseBucketKey('unknown:foo:bar')).toThrow();
+  });
+
+  it('throws when workspace key lacks repoId', () => {
+    expect(() => parseBucketKey('workspace::context')).toThrow();
+  });
+
+  it('throws when category is not a known MemoryCategory', () => {
+    expect(() => parseBucketKey('global::not_a_category')).toThrow();
+    expect(() => parseBucketKey('workspace:repo-1:bogus')).toThrow();
+  });
+});
+
+describe('round-trip', () => {
+  it('parseBucketKey is the inverse of bucketKeyFor for global', () => {
+    const parts = { scope: 'global' as const, category: 'preference' as const };
+    expect(parseBucketKey(bucketKeyFor(parts))).toEqual(parts);
+  });
+
+  it('parseBucketKey is the inverse of bucketKeyFor for workspace', () => {
+    const parts = {
+      scope: 'workspace' as const,
+      repoId: 'repo-1',
+      category: 'context' as const,
+    };
+    expect(parseBucketKey(bucketKeyFor(parts))).toEqual(parts);
+  });
+});

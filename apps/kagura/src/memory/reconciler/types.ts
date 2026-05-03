@@ -1,4 +1,5 @@
 import type { MemoryCategory, MemoryScope } from '~/memory/types.js';
+import { MEMORY_CATEGORIES } from '~/memory/types.js';
 
 export interface BucketKeyParts {
   category: MemoryCategory;
@@ -37,15 +38,26 @@ export function bucketKeyFor(parts: BucketKeyParts): string {
 }
 
 export function parseBucketKey(key: string): BucketKeyParts {
-  const [scope, repoId, category] = key.split(':');
+  const segments = key.split(':');
+  if (segments.length !== 3) {
+    throw new Error(`invalid bucket key: ${key}`);
+  }
+  const [scope, second, third] = segments;
+  const knownCategories = MEMORY_CATEGORIES as readonly string[];
   if (scope === 'global') {
-    return { scope: 'global', category: category as MemoryCategory };
+    if (second !== '' || !third || !knownCategories.includes(third)) {
+      throw new Error(`invalid bucket key: ${key}`);
+    }
+    return { scope: 'global', category: third as MemoryCategory };
   }
   if (scope === 'workspace') {
+    if (!second || !third || !knownCategories.includes(third)) {
+      throw new Error(`invalid bucket key: ${key}`);
+    }
     return {
       scope: 'workspace',
-      repoId: repoId!,
-      category: category as MemoryCategory,
+      repoId: second,
+      category: third as MemoryCategory,
     };
   }
   throw new Error(`invalid bucket key: ${key}`);
