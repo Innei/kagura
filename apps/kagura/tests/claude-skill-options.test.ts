@@ -16,10 +16,6 @@ vi.mock('~/env/server.js', () => ({
   },
 }));
 
-vi.mock('~/memory/memory-extractor.js', () => ({
-  extractImplicitMemories: vi.fn().mockResolvedValue([]),
-}));
-
 describe('Claude skill permission bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,6 +117,7 @@ function createTestLogger(): AppLogger {
 function createMemoryStore(): MemoryStore {
   return {
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => ({ global: [], preferences: [], workspace: [] }),
@@ -128,7 +125,6 @@ function createMemoryStore(): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: vi.fn(),
-    saveWithDedup: vi.fn(),
     search: () => [],
   } as unknown as MemoryStore;
 }

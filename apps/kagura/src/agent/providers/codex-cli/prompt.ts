@@ -19,6 +19,7 @@ import {
   userMessageProcessor,
 } from '~/agent/prompt/index.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
+import { env } from '~/env/server.js';
 
 const TMP_DIR = '/tmp/kagura';
 const CACHE_IMAGE_DIR = path.resolve(TMP_DIR, 'cache/images');
@@ -29,7 +30,7 @@ const CODEX_RUNTIME_ROOT_DIR = path.join(os.tmpdir(), 'kagura', 'codex-cli');
 export interface CodexRuntimePaths {
   channelOpsPath: string;
   generatedArtifactsDir: string;
-  memoryOpsPath: string;
+  memoryDbPath: string;
   runtimeDir: string;
 }
 
@@ -57,7 +58,7 @@ export function buildCodexPrompt(
   const imageInputSection = buildCodexImageInputSection(prompt.images);
   const sections: Array<string | undefined> = [
     `<system_instructions>\n${prompt.systemPrompt}\n</system_instructions>`,
-    `<codex_runtime_tools>\nThis Codex CLI adapter exposes Kagura host capabilities through files managed outside the current workspace.\n\nMemory operations:\n- To call save_memory, append one JSON object per line to ${runtimePaths.memoryOpsPath}.\n- JSON shape: {"tool":"save_memory","category":"preference|context|decision|observation|task_completed","scope":"global|workspace","content":"memory text","metadata":{...},"expiresAt":"optional ISO datetime"}.\n- If scope is omitted, the host uses workspace scope when a workspace is set, otherwise global scope.\n- Write memory operations only for durable preferences, decisions, project facts, implementation outcomes, task-completed notes, or explicit user memory requests.\n- To recall memory, use the <conversation_memory> section already loaded by the host. If the user says "use recall_memory", answer from that loaded memory context.\n\nChannel workspace operations:\n- To call set_channel_default_workspace, append one JSON object per line to ${runtimePaths.channelOpsPath}.\n- JSON shape: {"tool":"set_channel_default_workspace","workspaceInput":"repo name, repo id, alias, or absolute path"}.\n- Use this when the user explicitly says the current Slack channel should use a default repository/workspace for future conversations, including statements like "this channel's workspace is X".\n- Persist an explicit channel workspace declaration even if the same workspace is already present in <session_context>; session context applies to this turn, while the channel default is needed for future threads.\n</codex_runtime_tools>`,
+    `<codex_runtime_tools>\nThis Codex CLI adapter exposes Kagura host capabilities through files managed outside the current workspace.\n\nMemory operations:\n- Kagura's session database is available at ${runtimePaths.memoryDbPath}; set KAGURA_DB_PATH to this value when running kagura-memory.\n- To save memory, run shell: KAGURA_DB_PATH=${shellQuote(runtimePaths.memoryDbPath)} kagura-memory save --category <preference|context|decision|observation|task_completed> --content "<text>" --scope <global|workspace> [--repo-id <id>] [--expires-at <ISO>].\n- To recall memory, run shell: KAGURA_DB_PATH=${shellQuote(runtimePaths.memoryDbPath)} kagura-memory recall --category <name> --scope <global|workspace> [--repo-id <id>] [--query <substr>] [--limit <n>]. Output is JSON array of records.\n- Save durable preferences, decisions, project facts, implementation outcomes, task-completed notes, or explicit user memory requests. Skip routine status or transcript restatements.\n- The reconciler will dedupe periodically; no need to check existing records before saving.\n\nChannel workspace operations:\n- To call set_channel_default_workspace, append one JSON object per line to ${runtimePaths.channelOpsPath}.\n- JSON shape: {"tool":"set_channel_default_workspace","workspaceInput":"repo name, repo id, alias, or absolute path"}.\n- Use this when the user explicitly says the current Slack channel should use a default repository/workspace for future conversations, including statements like "this channel's workspace is X".\n- Persist an explicit channel workspace declaration even if the same workspace is already present in <session_context>; session context applies to this turn, while the channel default is needed for future threads.\n</codex_runtime_tools>`,
     `<codex_slack_uploads>\nThe direct upload_slack_file tool is not available in this Codex CLI adapter. When you need to send a generated image or file back to Slack, write the final artifact under ${runtimePaths.generatedArtifactsDir}/. The host adapter uploads new or modified files from that directory to the Slack thread after your run. Use normal file extensions such as .png, .jpg, .webp, .gif, .txt, .md, .json, or .csv so the host can classify them.\n</codex_slack_uploads>`,
     buildCodexSkillInstructions(request),
     imageInputSection,
@@ -144,20 +145,18 @@ export function getCodexRuntimePaths(request: AgentExecutionRequest): CodexRunti
   const runtimeRoot = path.join(CODEX_RUNTIME_ROOT_DIR, rootSuffix);
   const runtimeDir = path.join(runtimeRoot, CODEX_RUNTIME_DIRNAME);
   const generatedArtifactsDir = path.join(runtimeRoot, CODEX_GENERATED_ARTIFACTS_DIRNAME);
-  const memoryOpsPath = path.join(runtimeDir, getCodexMemoryOpsFileName(request));
   const channelOpsPath = path.join(runtimeDir, getCodexChannelOpsFileName(request));
 
   return {
     channelOpsPath,
     generatedArtifactsDir,
-    memoryOpsPath,
+    memoryDbPath: env.SESSION_DB_PATH,
     runtimeDir,
   };
 }
 
-function getCodexMemoryOpsFileName(request: AgentExecutionRequest): string {
-  const suffix = sanitizeRuntimePathPart(request.executionId ?? 'memory');
-  return `${suffix}-memory-ops.jsonl`;
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function getCodexChannelOpsFileName(request: AgentExecutionRequest): string {

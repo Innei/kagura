@@ -5,11 +5,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createRootLogger } from '~/logger/index.js';
+import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
+
+import { createTestDatabase } from './fixtures/test-database.js';
 
 function createTestLogger() {
   return createRootLogger();
@@ -19,9 +23,16 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
   const records = [...initial];
 
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: (repoId?: string) => {
       if (repoId) return records.filter((r) => r.repoId === repoId).length;
       return records.length;
+    },
+    countByCategory: (repoId, category) => {
+      return records.filter(
+        (r) => (repoId ? r.repoId === repoId : !r.repoId) && r.category === category,
+      ).length;
     },
     delete: (id) => {
       const idx = records.findIndex((r) => r.id === id);
@@ -85,20 +96,6 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => {
-      const record: MemoryRecord = {
-        ...input,
-        scope: input.repoId ? 'workspace' : 'global',
-        createdAt: new Date().toISOString(),
-        id: `mem-${records.length + 1}`,
-      };
-      records.push(record);
-      return record;
-    },
-    saveWithDedup: (input, supersedesId) => {
-      if (supersedesId) {
-        const idx = records.findIndex((r) => r.id === supersedesId);
-        if (idx >= 0) records.splice(idx, 1);
-      }
       const record: MemoryRecord = {
         ...input,
         scope: input.repoId ? 'workspace' : 'global',
@@ -447,40 +444,21 @@ describe('preference memory - listForContext', () => {
   });
 });
 
-describe('saveWithDedup', () => {
-  it('saves normally when no supersedes id', () => {
-    const store = createMemoryStore();
-    const saved = store.saveWithDedup({
-      category: 'preference',
-      content: 'nickname is 小汐',
-    });
-    expect(saved.content).toBe('nickname is 小汐');
-    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
+describe('SqliteMemoryStore dirty bucket tracking', () => {
+  it('bumps dirty count on save for global preference', () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const store = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    store.save({ category: 'preference', content: 'foo' });
+    store.save({ category: 'preference', content: 'bar' });
+    expect(reconcileStore.get('global::preference')!.writesSinceReconcile).toBe(2);
   });
 
-  it('deletes the superseded memory and saves the new one', () => {
-    const store = createMemoryStore([
-      makeGlobalMemory('nickname is 小汐', { category: 'preference', id: 'old-pref' }),
-    ]);
-
-    const saved = store.saveWithDedup(
-      { category: 'preference', content: 'nickname is 小夕' },
-      'old-pref',
-    );
-    expect(saved.content).toBe('nickname is 小夕');
-
-    const all = store.search(undefined, { category: 'preference' });
-    expect(all).toHaveLength(1);
-    expect(all[0]!.content).toBe('nickname is 小夕');
-  });
-
-  it('handles non-existent supersedes id gracefully', () => {
-    const store = createMemoryStore();
-    const saved = store.saveWithDedup(
-      { category: 'preference', content: 'some pref' },
-      'non-existent-id',
-    );
-    expect(saved.content).toBe('some pref');
-    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
+  it('bumps dirty count on save for workspace context', () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const store = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    store.save({ category: 'context', content: 'x', repoId: 'r1' });
+    expect(reconcileStore.get('workspace:r1:context')!.writesSinceReconcile).toBe(1);
   });
 });

@@ -53,10 +53,6 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   tool: sdkMocks.tool,
 }));
 
-vi.mock('~/memory/memory-extractor.js', () => ({
-  extractImplicitMemories: vi.fn().mockResolvedValue([]),
-}));
-
 describe('Slack loading status test', () => {
   beforeEach(() => {
     sdkMocks.createSdkMcpServer.mockClear();
@@ -981,7 +977,10 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listRecent: () => [],
@@ -989,12 +988,6 @@ function createMemoryStore(): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
-      ...input,
-      scope: input.repoId ? ('workspace' as const) : ('global' as const),
-      createdAt: new Date().toISOString(),
-      id: 'memory-1',
-    }),
-    saveWithDedup: (input) => ({
       ...input,
       scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),

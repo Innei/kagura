@@ -168,7 +168,10 @@ function createMemoryStoreFixture(): MemoryStore {
   };
 
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => emptyContext,
@@ -176,17 +179,6 @@ function createMemoryStoreFixture(): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
-      category: input.category,
-      content: input.content,
-      createdAt: new Date(0).toISOString(),
-      ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
-      id: 'memory-1',
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-      ...(input.repoId ? { repoId: input.repoId } : {}),
-      scope: input.repoId ? 'workspace' : 'global',
-      ...(input.threadTs ? { threadTs: input.threadTs } : {}),
-    }),
-    saveWithDedup: (input) => ({
       category: input.category,
       content: input.content,
       createdAt: new Date(0).toISOString(),

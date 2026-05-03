@@ -62,7 +62,6 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
       },
     };
     handlers = {
-      collectAssistantText: vi.fn(),
       publishUiState: vi.fn().mockResolvedValue(undefined),
       runtimeUi: createRuntimeUiStateTracker(),
       setSessionId: vi.fn(),
@@ -183,7 +182,6 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
 describe('handleClaudeSdkMessage — api_retry', () => {
   it('publishes retry status with attempt, HTTP status, and error kind', async () => {
     const handlers: MessageHandlers = {
-      collectAssistantText: vi.fn(),
       publishUiState: vi.fn().mockResolvedValue(undefined),
       runtimeUi: createRuntimeUiStateTracker(),
       setSessionId: vi.fn(),
@@ -215,7 +213,6 @@ describe('handleClaudeSdkMessage — api_retry', () => {
 
   it('labels retry events without an HTTP response as network failures', async () => {
     const handlers: MessageHandlers = {
-      collectAssistantText: vi.fn(),
       publishUiState: vi.fn().mockResolvedValue(undefined),
       runtimeUi: createRuntimeUiStateTracker(),
       setSessionId: vi.fn(),

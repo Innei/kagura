@@ -39,7 +39,10 @@ function createMockSessionStore(count = 0): SessionStore {
 
 function createMockMemoryStore(count = 0): MemoryStore {
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => count,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => ({ global: [], preferences: [], workspace: [] }),
@@ -47,12 +50,6 @@ function createMockMemoryStore(count = 0): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
-      ...input,
-      id: '1',
-      createdAt: '',
-      scope: input.repoId ? 'workspace' : 'global',
-    }),
-    saveWithDedup: (input) => ({
       ...input,
       id: '1',
       createdAt: '',

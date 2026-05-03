@@ -9,7 +9,6 @@ import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
-import { extractImplicitMemories } from '~/memory/memory-extractor.js';
 import type { MemoryStore } from '~/memory/types.js';
 
 import type { ClaudeExecutionProbe, ClaudeExecutionProbeRecord } from './execution-probe.js';
@@ -310,11 +309,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     let sessionCwd: string | undefined;
     let recordedSessionId: string | undefined;
     const runtimeUi = createRuntimeUiStateTracker();
-    const collectedAssistantTexts: string[] = [];
     const handlers: MessageHandlers = {
-      collectAssistantText: (text) => {
-        collectedAssistantTexts.push(text);
-      },
       getSessionCwd: () => sessionCwd,
       publishUiState: async () => {
         await this.publishRuntimeUiState(request.threadTs, sink, runtimeUi);
@@ -383,7 +378,6 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         probeExecutionId,
         request.threadTs,
       );
-      await this.extractAndSaveImplicitMemories(request, collectedAssistantTexts.join('\n'));
 
       await sink.onEvent({
         type: 'lifecycle',
@@ -601,57 +595,6 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
 
   private get permissionMode(): typeof env.CLAUDE_PERMISSION_MODE {
     return this.options?.permissionMode ?? env.CLAUDE_PERMISSION_MODE;
-  }
-
-  private async extractAndSaveImplicitMemories(
-    request: AgentExecutionRequest,
-    assistantText: string,
-  ): Promise<void> {
-    try {
-      const existingMemories = this.memoryStore.search(undefined, {
-        category: 'preference',
-        limit: 50,
-      });
-      const workspacePrefs = request.workspaceRepoId
-        ? this.memoryStore.search(request.workspaceRepoId, {
-            category: 'preference',
-            limit: 50,
-          })
-        : [];
-
-      const allExisting = [...existingMemories, ...workspacePrefs];
-      const extracted = await extractImplicitMemories({
-        userMessage: request.mentionText,
-        assistantResponse: assistantText,
-        existingMemories: allExisting,
-        logger: this.logger,
-      });
-
-      if (extracted.length === 0) {
-        return;
-      }
-
-      this.logger.info(
-        'Memory extractor found %d implicit memories for thread %s',
-        extracted.length,
-        request.threadTs,
-      );
-
-      for (const memory of extracted) {
-        this.memoryStore.saveWithDedup(
-          {
-            category: memory.category,
-            content: memory.content,
-            threadTs: request.threadTs,
-            ...(memory.expiresAt ? { expiresAt: memory.expiresAt } : {}),
-          },
-          memory.supersedesId,
-        );
-      }
-    } catch (error) {
-      const message = this.describeUnknownError(error);
-      this.logger.warn('Post-conversation memory extraction failed: %s', message);
-    }
   }
 
   private async publishRuntimeUiState(

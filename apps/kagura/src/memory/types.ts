@@ -1,3 +1,5 @@
+import type { ReconcileBucketState, ReconcileOp } from './reconciler/types.js';
+
 export const MEMORY_CATEGORIES = [
   'task_completed',
   'decision',
@@ -33,6 +35,7 @@ export interface SaveMemoryInput {
 
 export interface MemorySearchOptions {
   category?: MemoryCategory | undefined;
+  unbounded?: boolean | undefined;
   limit?: number | undefined;
   query?: string | undefined;
 }
@@ -43,10 +46,20 @@ export interface ContextMemories {
   workspace: MemoryRecord[];
 }
 
+export interface DirtyBucketSummary {
+  bucketKey: string;
+  currentCount: number;
+  currentMaxCreatedAt: string | null;
+  state: ReconcileBucketState | null;
+}
+
 export interface MemoryStore {
+  applyReconcileOps: (ops: ReconcileOp[]) => void;
   countAll: (repoId?: string) => number;
+  countByCategory: (repoId: string | undefined, category: MemoryCategory) => number;
   delete: (id: string) => boolean;
   deleteAll: (repoId?: string | null) => number;
+  getDirtyBuckets: () => DirtyBucketSummary[];
   listForContext: (
     repoId: string | undefined,
     limits?: { global?: number; workspace?: number },
@@ -55,6 +68,5 @@ export interface MemoryStore {
   prune: (repoId?: string | null) => number;
   pruneAll: () => number;
   save: (input: SaveMemoryInput) => MemoryRecord;
-  saveWithDedup: (input: SaveMemoryInput, supersedesId?: string) => MemoryRecord;
   search: (repoId: string | undefined, options?: MemorySearchOptions) => MemoryRecord[];
 }

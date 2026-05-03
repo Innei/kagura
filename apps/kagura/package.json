@@ -24,7 +24,8 @@
   "type": "module",
   "bin": {
     "kagura": "./dist/cli.js",
-    "kagura-app": "./dist/index.js"
+    "kagura-app": "./dist/index.js",
+    "kagura-memory": "./dist/memory-cli.js"
   },
   "files": [
     "dist",
@@ -53,7 +54,6 @@
     "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "0.91.1",
     "@clack/prompts": "^0.11.0",
     "@innei/pretty-logger-core": "0.4.2",
     "@kagura/cli": "workspace:*",

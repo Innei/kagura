@@ -1,0 +1,26 @@
+{
+  "name": "@kagura/memory-cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kagura-memory": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "commander": "^13.0.0",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "25.5.2",
+    "tsx": "4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.5"
+  }
+}

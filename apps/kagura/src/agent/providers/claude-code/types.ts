@@ -57,7 +57,6 @@ export interface RuntimeUiStateTracker {
 }
 
 export interface MessageHandlers {
-  collectAssistantText: (text: string) => void;
   getSessionCwd: () => string | undefined;
   publishUiState: () => Promise<void>;
   runtimeUi: RuntimeUiStateTracker;

@@ -36,6 +36,8 @@ Slack message event / Message Action
 
 **Conversation** — Thread-aware multimodal context (text + files + images), session resumption across restarts, layered memory (global / workspace / preferences).
 
+**Memory** — On-demand `save`/`recall` for Claude and Codex through the same SQLite store, plus an optional background reconciler that prunes expired memories and deduplicates dirty buckets with an OpenAI-compatible LLM.
+
 **A2A orchestration** — Mention a configured Slack user group or co-mention multiple agent apps to start a lead-coordinated Agent-to-Agent thread with explicit delegation and final summary.
 
 **Web review panel** — After every workspace-bound run, Kagura posts a Slack button that opens a read-only code review UI: file tree, changed files, GitHub-style split/unified diff with expandable unmodified lines, and a Shiki-highlighted source view.
@@ -122,7 +124,7 @@ npm install -g @innei/kagura
 # or: pnpm add -g @innei/kagura
 ```
 
-Requires Node.js ≥ 24. The package ships two bins: `kagura` (the CLI router + wizard) and `kagura-app` (the bot, bypassing the CLI).
+Requires Node.js ≥ 24. The package ships three bins: `kagura` (the CLI router + wizard), `kagura-app` (the bot, bypassing the CLI), and `kagura-memory` (direct memory `save`/`recall` helper).
 
 ## First run
 
@@ -177,6 +179,17 @@ Example `config.json`:
 
 When agents create git worktrees, the default centralized root is `REPO_ROOT_DIR/kagura-worktrees` unless `WORKTREE_ROOT_DIR` or `worktreeRootDir` overrides it.
 
+## Memory
+
+Kagura stores durable memory in SQLite and exposes it differently per provider:
+
+- Claude uses the in-process MCP tools `save_memory` and `recall_memory`.
+- Codex shells out to `kagura-memory save` and `kagura-memory recall`; the adapter injects the correct `KAGURA_DB_PATH` for the active session database.
+
+The startup prompt only includes identity/preferences by default. Project facts, decisions, observations, and completed-task notes are recalled on demand so the prompt stays small and reconciled memory is visible without restarting the bot.
+
+The optional background reconciler always prunes expired rows. LLM consolidation is enabled separately with `KAGURA_MEMORY_RECONCILER_ENABLED=true` and `KAGURA_MEMORY_RECONCILER_API_KEY`; `BASE_URL` accepts OpenAI-compatible providers. Full settings live in [docs/configuration.md § Memory reconciler](docs/configuration.md#memory-reconciler).
+
 ## Subcommands
 
 | Command                          | What it does                                                        |
@@ -191,6 +204,8 @@ When agents create git worktrees, the default centralized root is `REPO_ROOT_DIR
 | `kagura manifest sync --dry-run` | Show what would change without writing                              |
 | `kagura config path`             | Print `~/.config/kagura/` (useful for `$(kagura config path)/.env`) |
 | `kagura config path --json`      | Emit `{ configDir, envFile, configJsonFile, dbPath, logDir, … }`    |
+| `kagura-memory recall`           | Query global or workspace memory from SQLite                        |
+| `kagura-memory save`             | Persist a memory record from scripts or the Codex provider          |
 | `kagura --version`               | Print version + commit hash + commit date                           |
 | `kagura --help`                  | Show help (works on every subcommand)                               |
 | `kagura-app`                     | Run the bot directly, skipping config detection (systemd/Docker)    |

@@ -188,6 +188,43 @@ kagura.innei.dev = 10.0.0.33
 
 In this setup `10.0.0.33` is the LAN nginx reverse proxy and `10.0.0.89` is the Mac running the Kagura PM2 instances. Reserve those LAN addresses or update the proxy when DHCP changes them.
 
+### Memory reconciler
+
+Background loop that prunes expired memories and consolidates dirty buckets via an OpenAI-compatible LLM. The loop always runs and prunes `expires_at < now` rows; LLM consolidation is gated separately so you can opt in once the key is provisioned.
+
+| Env var                                    | Default                     | Description                                                                                                                                                        |
+| ------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `KAGURA_MEMORY_RECONCILER_ENABLED`         | `false`                     | Enable LLM consolidation. When `false`, the loop still runs and prunes expired memories.                                                                           |
+| `KAGURA_MEMORY_RECONCILER_API_KEY`         | (env-only, optional)        | Bearer token for the OpenAI-compatible API. Required for LLM consolidation; if missing while `ENABLED=true`, falls back to prune-only mode with a startup warning. |
+| `KAGURA_MEMORY_RECONCILER_BASE_URL`        | `https://api.openai.com/v1` | Base URL of the chat completions endpoint. Any OpenAI-compatible provider works (DeepSeek, Together, Groq, Ollama, vLLM, …).                                       |
+| `KAGURA_MEMORY_RECONCILER_MODEL`           | `gpt-4o-mini`               | Model name passed to the API. Adjust based on `BASE_URL`.                                                                                                          |
+| `KAGURA_MEMORY_RECONCILER_INTERVAL_MS`     | `21600000` (6 hours)        | How often the reconcile loop fires.                                                                                                                                |
+| `KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD` | `5`                         | Minimum `writes_since_reconcile` to trigger LLM merge for a bucket. (External CLI saves still trigger via maxCreatedAt drift regardless of this counter.)          |
+| `KAGURA_MEMORY_RECONCILER_BATCH_SIZE`      | `50`                        | Max records per bucket sent to the LLM in one call.                                                                                                                |
+| `KAGURA_MEMORY_RECONCILER_TIMEOUT_MS`      | `30000`                     | Per-LLM-call timeout.                                                                                                                                              |
+| `KAGURA_MEMORY_RECONCILER_MAX_TOKENS`      | `1024`                      | Max tokens for the LLM response.                                                                                                                                   |
+
+`KAGURA_MEMORY_RECONCILER_API_KEY` is the only memory-reconciler key that does **not** fall back to `config.json` — it is env-only for security. The remaining keys can be set via either env or `~/.config/kagura/config.json`:
+
+```json
+{
+  "memory": {
+    "reconciler": {
+      "enabled": true,
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "intervalMs": 21600000,
+      "writeThreshold": 5,
+      "batchSize": 50,
+      "timeoutMs": 30000,
+      "maxTokens": 1024
+    }
+  }
+}
+```
+
+The Codex CLI provider shells out to `kagura-memory` (`packages/memory-cli`) for both `save` and `recall`. The CLI reads `KAGURA_DB_PATH` to locate the SQLite file (defaults to `./data/sessions.db` relative to the working directory); set it explicitly when invoking the CLI from outside the kagura process working dir.
+
 ## Slack app manifest
 
 Create a new Slack app at <https://api.slack.com/apps> -> **From a manifest**, then paste the JSON below. Adjust `name` / `display_name` as needed.
@@ -425,8 +462,11 @@ Then run:
 
 ```bash
 pnpm build
+KAGURA_HOME=/path/to/instance-state pnpm db:migrate
 pm2 start ecosystem.config.cjs
 ```
+
+PM2 does not run Drizzle migrations by itself. If your deployment uses a wrapper or updater script, treat `pnpm db:migrate` as a required deploy step after `pnpm install` and before `pm2 startOrReload` / `pm2 reload`. Run it with the same `KAGURA_HOME` (or custom `SESSION_DB_PATH`) as the PM2 app instance so schema changes are applied to the database that instance will open. Kagura still creates its core SQLite tables on startup as a compatibility guard, but Drizzle migration history is only advanced by `pnpm db:migrate`.
 
 ### Docker Compose
 
@@ -504,7 +544,15 @@ docker compose up -d --build
 
 ## Database setup
 
-No manual database bootstrap is required for normal usage. The app creates the SQLite tables it needs on startup.
+No manual database bootstrap is required for first-time normal usage. The app creates the SQLite tables it needs on startup.
+
+For production upgrades that include files under `apps/kagura/drizzle/`, run migrations before reloading the app. Use the same state directory as the running instance:
+
+```bash
+KAGURA_HOME=/path/to/instance-state pnpm db:migrate
+```
+
+The local PM2 process manager only starts or reloads Node processes; it does not automatically apply Drizzle migrations unless your deployment wrapper explicitly runs this command. For multiple PM2 app instances with separate state directories, run the migration once per state directory before reloading any instance.
 
 If you are developing schema changes, use:
 

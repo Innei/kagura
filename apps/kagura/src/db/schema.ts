@@ -91,3 +91,11 @@ export const reviewSessions = sqliteTable('review_sessions', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const memoryReconcileState = sqliteTable('memory_reconcile_state', {
+  bucketKey: text('bucket_key').primaryKey(),
+  lastReconciledAt: text('last_reconciled_at'),
+  lastSeenMaxCreatedAt: text('last_seen_max_created_at'),
+  lastCount: integer('last_count').notNull().default(0),
+  writesSinceReconcile: integer('writes_since_reconcile').notNull().default(0),
+});

@@ -47,36 +47,17 @@ const sdkMocks = vi.hoisted(() => ({
   ),
 }));
 
-const anthropicMocks = vi.hoisted(() => ({
-  create: vi.fn().mockResolvedValue({
-    content: [{ type: 'text', text: '[]' }],
-  }),
-}));
-
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   createSdkMcpServer: sdkMocks.createSdkMcpServer,
   query: sdkMocks.query,
   tool: sdkMocks.tool,
 }));
 
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: class MockAnthropic {
-    messages = { create: anthropicMocks.create };
-  },
-}));
-
-vi.mock('~/memory/memory-extractor.js', () => ({
-  extractImplicitMemories: vi.fn().mockResolvedValue([]),
-}));
 describe('Workspace message action test', () => {
   beforeEach(() => {
     sdkMocks.createSdkMcpServer.mockClear();
     sdkMocks.query.mockReset();
     sdkMocks.tool.mockClear();
-    anthropicMocks.create.mockClear();
-    anthropicMocks.create.mockResolvedValue({
-      content: [{ type: 'text', text: '[]' }],
-    });
   });
 
   it('opens a modal and starts a new workspace-bound session from message action selection', async () => {
@@ -315,7 +296,10 @@ function createMemorySessionStore(): SessionStore {
 
 function createMemoryStore(): MemoryStore {
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listRecent: () => [],
@@ -323,12 +307,6 @@ function createMemoryStore(): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
-      ...input,
-      scope: input.repoId ? ('workspace' as const) : ('global' as const),
-      createdAt: new Date().toISOString(),
-      id: 'memory-1',
-    }),
-    saveWithDedup: (input) => ({
       ...input,
       scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),

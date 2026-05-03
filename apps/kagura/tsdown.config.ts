@@ -16,7 +16,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 };
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/cli.ts'],
+  entry: ['src/index.ts', 'src/cli.ts', 'src/memory-cli.ts'],
   outDir: 'dist',
   platform: 'node',
   format: 'esm',

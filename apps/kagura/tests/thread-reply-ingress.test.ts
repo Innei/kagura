@@ -1168,7 +1168,10 @@ function createA2ASession(
 
 function createMemoryStore(): MemoryStore {
   return {
+    applyReconcileOps: vi.fn(),
+    getDirtyBuckets: vi.fn().mockReturnValue([]),
     countAll: vi.fn().mockReturnValue(0),
+    countByCategory: vi.fn().mockReturnValue(0),
     delete: vi.fn().mockReturnValue(false),
     deleteAll: vi.fn().mockReturnValue(0),
     listRecent: vi.fn().mockReturnValue([]),
@@ -1176,12 +1179,6 @@ function createMemoryStore(): MemoryStore {
     prune: vi.fn().mockReturnValue(0),
     pruneAll: vi.fn().mockReturnValue(0),
     save: vi.fn().mockImplementation((input) => ({
-      ...input,
-      scope: input.repoId ? 'workspace' : 'global',
-      createdAt: new Date().toISOString(),
-      id: 'memory-1',
-    })),
-    saveWithDedup: vi.fn().mockImplementation((input) => ({
       ...input,
       scope: input.repoId ? 'workspace' : 'global',
       createdAt: new Date().toISOString(),
