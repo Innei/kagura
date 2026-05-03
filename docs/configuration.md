@@ -188,6 +188,43 @@ kagura.innei.dev = 10.0.0.33
 
 In this setup `10.0.0.33` is the LAN nginx reverse proxy and `10.0.0.89` is the Mac running the Kagura PM2 instances. Reserve those LAN addresses or update the proxy when DHCP changes them.
 
+### Memory reconciler
+
+Background loop that prunes expired memories and consolidates dirty buckets via an OpenAI-compatible LLM. The loop always runs and prunes `expires_at < now` rows; LLM consolidation is gated separately so you can opt in once the key is provisioned.
+
+| Env var                                    | Default                     | Description                                                                                                                                                        |
+| ------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `KAGURA_MEMORY_RECONCILER_ENABLED`         | `false`                     | Enable LLM consolidation. When `false`, the loop still runs and prunes expired memories.                                                                           |
+| `KAGURA_MEMORY_RECONCILER_API_KEY`         | (env-only, optional)        | Bearer token for the OpenAI-compatible API. Required for LLM consolidation; if missing while `ENABLED=true`, falls back to prune-only mode with a startup warning. |
+| `KAGURA_MEMORY_RECONCILER_BASE_URL`        | `https://api.openai.com/v1` | Base URL of the chat completions endpoint. Any OpenAI-compatible provider works (DeepSeek, Together, Groq, Ollama, vLLM, …).                                       |
+| `KAGURA_MEMORY_RECONCILER_MODEL`           | `gpt-4o-mini`               | Model name passed to the API. Adjust based on `BASE_URL`.                                                                                                          |
+| `KAGURA_MEMORY_RECONCILER_INTERVAL_MS`     | `21600000` (6 hours)        | How often the reconcile loop fires.                                                                                                                                |
+| `KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD` | `5`                         | Minimum `writes_since_reconcile` to trigger LLM merge for a bucket. (External CLI saves still trigger via maxCreatedAt drift regardless of this counter.)          |
+| `KAGURA_MEMORY_RECONCILER_BATCH_SIZE`      | `50`                        | Max records per bucket sent to the LLM in one call.                                                                                                                |
+| `KAGURA_MEMORY_RECONCILER_TIMEOUT_MS`      | `30000`                     | Per-LLM-call timeout.                                                                                                                                              |
+| `KAGURA_MEMORY_RECONCILER_MAX_TOKENS`      | `1024`                      | Max tokens for the LLM response.                                                                                                                                   |
+
+`KAGURA_MEMORY_RECONCILER_API_KEY` is the only memory-reconciler key that does **not** fall back to `config.json` — it is env-only for security. The remaining keys can be set via either env or `~/.config/kagura/config.json`:
+
+```json
+{
+  "memory": {
+    "reconciler": {
+      "enabled": true,
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "intervalMs": 21600000,
+      "writeThreshold": 5,
+      "batchSize": 50,
+      "timeoutMs": 30000,
+      "maxTokens": 1024
+    }
+  }
+}
+```
+
+The Codex CLI provider shells out to `kagura-memory` (`packages/memory-cli`) for both `save` and `recall`. The CLI reads `KAGURA_DB_PATH` to locate the SQLite file (defaults to `./data/sessions.db` relative to the working directory); set it explicitly when invoking the CLI from outside the kagura process working dir.
+
 ## Slack app manifest
 
 Create a new Slack app at <https://api.slack.com/apps> -> **From a manifest**, then paste the JSON below. Adjust `name` / `display_name` as needed.
