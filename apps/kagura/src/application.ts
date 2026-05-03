@@ -15,6 +15,7 @@ import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { MemoryReconciler } from '~/memory/reconciler/index.js';
 import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import { GitReviewService } from '~/review/git-review-service.js';
 import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
@@ -87,7 +88,28 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const persistentExecutionStore = new SqlitePersistentExecutionStore(sqlite);
   const reviewSessionStore = new SqliteReviewSessionStore(db);
   const reviewService = new GitReviewService(reviewSessionStore);
-  memoryStore.pruneAll();
+
+  const reconcilerLlmEnabled =
+    env.KAGURA_MEMORY_RECONCILER_ENABLED && Boolean(env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim());
+
+  if (env.KAGURA_MEMORY_RECONCILER_ENABLED && !env.KAGURA_MEMORY_RECONCILER_API_KEY) {
+    logger.warn(
+      'KAGURA_MEMORY_RECONCILER_ENABLED=true but KAGURA_MEMORY_RECONCILER_API_KEY missing; LLM consolidation disabled, prune-only mode active',
+    );
+  }
+
+  const memoryReconciler = new MemoryReconciler({
+    db,
+    memoryStore,
+    reconcileStore: reconcileStateStore,
+    logger: logger.withTag('memory-reconciler'),
+    intervalMs: env.KAGURA_MEMORY_RECONCILER_INTERVAL_MS,
+    writeThreshold: env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD,
+    llmEnabled: reconcilerLlmEnabled,
+  });
+
+  memoryReconciler.start();
+
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
     scanDepth: env.REPO_SCAN_DEPTH,
@@ -204,6 +226,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       slackApp.stopA2ASummaryPoller?.();
       await reviewPanelServer?.stop();
       await slackApp.stop();
+      memoryReconciler.stop();
       await providerRegistry.drain();
       a2aCoordinatorStore.close?.();
       sqlite.close();
