@@ -1,3 +1,13 @@
+delete process.env.KAGURA_MEMORY_RECONCILER_ENABLED;
+delete process.env.KAGURA_MEMORY_RECONCILER_BASE_URL;
+delete process.env.KAGURA_MEMORY_RECONCILER_API_KEY;
+delete process.env.KAGURA_MEMORY_RECONCILER_MODEL;
+delete process.env.KAGURA_MEMORY_RECONCILER_INTERVAL_MS;
+delete process.env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD;
+delete process.env.KAGURA_MEMORY_RECONCILER_BATCH_SIZE;
+delete process.env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS;
+delete process.env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS;
+
 Object.assign(process.env, {
   NODE_ENV: 'test',
   SLACK_APP_TOKEN: 'xapp-test',
