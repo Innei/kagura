@@ -17,13 +17,13 @@ export interface ReconcileBucketState {
 
 export type ReconcileOp =
   | { kind: 'delete'; ids: string[] }
-  | { kind: 'rewrite'; id: string; content: string; expiresAt?: string }
+  | { kind: 'rewrite'; id: string; content: string; expiresAt?: string | undefined }
   | {
       kind: 'merge';
       ids: string[];
       newContent: string;
       category: MemoryCategory;
-      expiresAt?: string;
+      expiresAt?: string | undefined;
     }
   | { kind: 'extend_ttl'; ids: string[]; expiresAt: string };
 
