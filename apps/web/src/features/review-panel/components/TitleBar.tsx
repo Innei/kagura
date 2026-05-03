@@ -4,10 +4,11 @@ import type { ReviewSession } from '../types';
 import * as styles from './TitleBar.styles';
 
 interface TitleBarProps {
+  onCommitPush?: (() => void) | undefined;
   session: ReviewSession;
 }
 
-export function TitleBar({ session }: TitleBarProps) {
+export function TitleBar({ onCommitPush, session }: TitleBarProps) {
   const totals = useMemo(() => {
     let additions = 0;
     let deletions = 0;
@@ -42,6 +43,11 @@ export function TitleBar({ session }: TitleBarProps) {
           <span className={styles.additions}>+{totals.additions}</span>
           <span className={styles.deletions}>−{totals.deletions}</span>
         </span>
+        {onCommitPush ? (
+          <button className={styles.commitButton} type="button" onClick={onCommitPush}>
+            Commit & Push
+          </button>
+        ) : null}
       </span>
     </header>
   );

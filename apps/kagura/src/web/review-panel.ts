@@ -4,11 +4,13 @@ import path from 'node:path';
 import { URL } from 'node:url';
 
 import type { AppLogger } from '~/logger/index.js';
+import type { CommitMessageGenerator } from '~/review/commit-message-generator.js';
 import type { GitReviewService } from '~/review/git-review-service.js';
 
 export interface ReviewPanelServerOptions {
   assetsDir: string;
   baseUrl: string;
+  commitMessageGenerator?: CommitMessageGenerator | undefined;
   host: string;
   logger: AppLogger;
   port: number;
@@ -68,12 +70,16 @@ async function handleRequest(
   const pathname = stripBasePath(url.pathname, options.baseUrl);
   const apiMatch = pathname.match(/^\/api\/reviews\/([^/]+)(?:\/([^/]+))?$/);
 
-  if (request.method !== 'GET') {
+  if (request.method !== 'GET' && request.method !== 'POST') {
     sendJson(response, 405, { error: 'Method Not Allowed' });
     return;
   }
 
   if (apiMatch?.[1]) {
+    if (request.method === 'POST') {
+      await handlePostRequest(request, response, options, apiMatch[1], apiMatch[2]);
+      return;
+    }
     await handleApiRequest(response, options.reviewService, apiMatch[1], apiMatch[2], url);
     return;
   }
@@ -159,6 +165,62 @@ async function handleApiRequest(
   }
 
   sendJson(response, 404, { error: 'Not Found' });
+}
+
+async function handlePostRequest(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  options: ReviewPanelServerOptions,
+  executionId: string,
+  resource: string | undefined,
+): Promise<void> {
+  if (resource === 'generate-commit-message') {
+    if (!options.commitMessageGenerator) {
+      sendJson(response, 503, { error: 'Commit message generation not available.' });
+      return;
+    }
+    try {
+      const message = await options.commitMessageGenerator.generateCommitMessage(executionId);
+      sendJson(response, 200, { message });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      sendJson(response, 500, { error: msg });
+    }
+    return;
+  }
+
+  if (resource === 'commit-push') {
+    const body = await readJsonBody<{ message?: string }>(request);
+    if (!body?.message?.trim()) {
+      sendJson(response, 400, { error: 'Missing commit message.' });
+      return;
+    }
+    const result = options.reviewService.commitAndPush(executionId, body.message);
+    if (!result.success) {
+      sendJson(response, 500, { error: result.error ?? 'Commit failed.' });
+      return;
+    }
+    sendJson(response, 200, { success: true, commitSha: result.commitSha });
+    return;
+  }
+
+  sendJson(response, 404, { error: 'Not Found' });
+}
+
+function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        resolve(raw ? (JSON.parse(raw) as T) : ({} as T));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on('error', reject);
+  });
 }
 
 async function serveReviewPanelAsset(

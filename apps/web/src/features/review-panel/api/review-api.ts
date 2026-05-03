@@ -5,7 +5,7 @@ import type {
   ReviewTreeEntry,
   ReviewTreeResponse,
 } from '../types';
-import { getJson } from './http';
+import { getJson, postJson } from './http';
 
 export async function loadInitialReviewData(reviewExecutionId: string, apiBasePath = '') {
   const session = await getJson<ReviewSession>(
@@ -58,4 +58,29 @@ export async function loadFile(
 
 function apiUrl(apiBasePath: string, path: string): string {
   return `${apiBasePath}${path}`;
+}
+
+export async function generateCommitMessage(
+  reviewExecutionId: string,
+  apiBasePath = '',
+): Promise<string> {
+  const payload = await postJson<{ message: string }>(
+    apiUrl(
+      apiBasePath,
+      `/api/reviews/${encodeURIComponent(reviewExecutionId)}/generate-commit-message`,
+    ),
+    {},
+  );
+  return payload.message;
+}
+
+export async function commitAndPush(
+  reviewExecutionId: string,
+  message: string,
+  apiBasePath = '',
+): Promise<{ commitSha: string; success: boolean }> {
+  return postJson<{ commitSha: string; success: boolean }>(
+    apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}/commit-push`),
+    { message },
+  );
 }

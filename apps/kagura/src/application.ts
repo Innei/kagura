@@ -18,6 +18,7 @@ import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { MemoryReconciler } from '~/memory/reconciler/index.js';
 import { OpenAICompatibleClient } from '~/memory/reconciler/llm-client.js';
 import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
+import { createCommitMessageGenerator } from '~/review/commit-message-generator.js';
 import { GitReviewService } from '~/review/git-review-service.js';
 import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
@@ -89,6 +90,11 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const persistentExecutionStore = new SqlitePersistentExecutionStore(sqlite);
   const reviewSessionStore = new SqliteReviewSessionStore(db);
   const reviewService = new GitReviewService(reviewSessionStore);
+  const commitMessageGenerator = createCommitMessageGenerator({
+    reviewService,
+    sessionStore,
+    logger: logger.withTag('review:commit-msg'),
+  });
 
   const reconcilerApiKey = env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim();
   const reconcilerLlmEnabled = env.KAGURA_MEMORY_RECONCILER_ENABLED && Boolean(reconcilerApiKey);
@@ -198,6 +204,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     ? createReviewPanelServer({
         assetsDir: path.resolve(process.cwd(), env.KAGURA_REVIEW_PANEL_ASSETS_DIR),
         baseUrl: env.KAGURA_REVIEW_PANEL_BASE_URL,
+        commitMessageGenerator,
         host: env.KAGURA_REVIEW_PANEL_HOST,
         logger: logger.withTag('review:web'),
         port: env.KAGURA_REVIEW_PANEL_PORT,

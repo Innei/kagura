@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -211,7 +212,38 @@ export function createMockReviewApiPlugin(): Plugin {
         }
 
         const resource = match[2] ?? 'session';
+        const method = request.method?.toUpperCase() ?? 'GET';
 
+        // POST endpoints
+        if (method === 'POST') {
+          if (resource === 'generate-commit-message') {
+            const message = generateMockCommitMessage(baseHead);
+            sendJson(response, 200, { message });
+            return;
+          }
+
+          if (resource === 'commit-push') {
+            const body = await readJsonBody<{ message?: string }>(request);
+            if (!body.message?.trim()) {
+              sendJson(response, 400, { error: 'Commit message is required.' });
+              return;
+            }
+            try {
+              gitTrim(['-c', 'commit.gpgsign=false', 'add', '-A']);
+              gitTrim(['-c', 'commit.gpgsign=false', 'commit', '-m', body.message]);
+              const commitSha = gitTrim(['rev-parse', 'HEAD']);
+              sendJson(response, 200, { commitSha, success: true });
+            } catch (err) {
+              sendJson(response, 500, { error: String(err) });
+            }
+            return;
+          }
+
+          sendJson(response, 404, { error: 'Not Found' });
+          return;
+        }
+
+        // GET endpoints
         if (resource === 'session') {
           sendJson(response, 200, {
             baseBranch: gitTrim(['symbolic-ref', '--quiet', '--short', 'HEAD']) || 'main',
@@ -273,4 +305,40 @@ function sendJson(
     'content-type': 'application/json; charset=utf-8',
   });
   response.end(JSON.stringify(body));
+}
+
+async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
+  return new Promise((resolve) => {
+    let raw = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk: string) => {
+      raw += chunk;
+    });
+    request.on('end', () => {
+      try {
+        resolve(JSON.parse(raw) as T);
+      } catch {
+        resolve({} as T);
+      }
+    });
+  });
+}
+
+function generateMockCommitMessage(baseHead: string): string {
+  const changed = listChangedFiles(baseHead);
+  if (changed.length === 0) return 'chore: no changes detected';
+
+  const diff = gitTrim(['diff', '--stat', '--find-renames', baseHead]);
+  const recentLog = gitTrim(['log', '--oneline', '-5']);
+
+  const prefix = changed.length === 1 ? inferCommitPrefix(changed[0]!.status) : 'chore';
+  const names = changed.map((c) => path.basename(c.path)).join(', ');
+  return `${prefix}: update ${names}\n\nDiff summary:\n${diff}\n\nRecent commits:\n${recentLog}`;
+}
+
+function inferCommitPrefix(status: string): string {
+  if (status === 'A' || status === '??') return 'feat';
+  if (status === 'M') return 'fix';
+  if (status === 'D') return 'remove';
+  return 'chore';
 }

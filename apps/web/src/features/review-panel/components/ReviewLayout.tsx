@@ -4,11 +4,13 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 import { useBreakpoint } from '../../../theme/use-breakpoint';
 import { useColorScheme } from '../../../theme/use-color-scheme';
+import { commitAndPush, generateCommitMessage } from '../api/review-api';
 import { useFileNav } from '../hooks/use-file-nav';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { ReviewChangedFile, ReviewSession, ReviewTreeEntry } from '../types';
 import { compareTreePaths } from '../utils/compare-paths';
 import { BottomSheetFiles } from './BottomSheetFiles';
+import { CommitDialog } from './CommitDialog';
 import { DrawerSidebar } from './DrawerSidebar';
 import * as styles from './ReviewLayout.styles';
 import type { DiffStyle, ViewMode } from './RightPane/DiffToolbar';
@@ -61,6 +63,59 @@ export function ReviewLayout({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'diff');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [commitLoading, setCommitLoading] = useState(false);
+  const [commitError, setCommitError] = useState<string | undefined>();
+
+  const handleOpenCommit = useCallback(async () => {
+    setCommitOpen(true);
+    setCommitLoading(true);
+    setCommitError(undefined);
+    try {
+      const message = await generateCommitMessage(session.executionId);
+      setCommitMessage(message);
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCommitLoading(false);
+    }
+  }, [session.executionId]);
+
+  const handleCloseCommit = useCallback(() => {
+    setCommitOpen(false);
+    setCommitError(undefined);
+  }, []);
+
+  const handleRegenerate = useCallback(async () => {
+    setCommitLoading(true);
+    setCommitError(undefined);
+    try {
+      const message = await generateCommitMessage(session.executionId);
+      setCommitMessage(message);
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCommitLoading(false);
+    }
+  }, [session.executionId]);
+
+  const handleSubmitCommit = useCallback(
+    async (message: string) => {
+      setCommitLoading(true);
+      setCommitError(undefined);
+      try {
+        await commitAndPush(session.executionId, message);
+        setCommitOpen(false);
+      } catch (err) {
+        setCommitError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setCommitLoading(false);
+      }
+    },
+    [session.executionId],
+  );
 
   const orderedChangedFiles = useMemo(() => {
     const arr = [...session.changedFiles];
@@ -191,7 +246,7 @@ export function ReviewLayout({
       <a className={styles.skipLink} href="#review-main">
         Skip to diff
       </a>
-      <TitleBar session={session} />
+      <TitleBar session={session} onCommitPush={handleOpenCommit} />
       {isDesktop ? (
         <PanelGroup
           autoSaveId="kagura-review-panel"
@@ -291,6 +346,15 @@ export function ReviewLayout({
         fileTotal={session.changedFiles.length}
         selectedFile={selectedFile}
         selectedIndex={selectedIndex}
+      />
+      <CommitDialog
+        error={commitError}
+        loading={commitLoading}
+        message={commitMessage}
+        open={commitOpen}
+        onClose={handleCloseCommit}
+        onRegenerate={handleRegenerate}
+        onSubmit={handleSubmitCommit}
       />
     </div>
   );
