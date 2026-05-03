@@ -146,20 +146,6 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
       records.push(record);
       return record;
     },
-    saveWithDedup: (input, supersedesId) => {
-      if (supersedesId) {
-        const idx = records.findIndex((r) => r.id === supersedesId);
-        if (idx >= 0) records.splice(idx, 1);
-      }
-      const record: MemoryRecord = {
-        ...input,
-        scope: input.repoId ? 'workspace' : 'global',
-        createdAt: new Date().toISOString(),
-        id: `mem-${records.length + 1}`,
-      };
-      records.push(record);
-      return record;
-    },
     search: () => [],
   };
 }

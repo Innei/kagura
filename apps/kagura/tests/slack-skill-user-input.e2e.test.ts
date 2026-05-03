@@ -186,17 +186,6 @@ function createMemoryStoreFixture(): MemoryStore {
       scope: input.repoId ? 'workspace' : 'global',
       ...(input.threadTs ? { threadTs: input.threadTs } : {}),
     }),
-    saveWithDedup: (input) => ({
-      category: input.category,
-      content: input.content,
-      createdAt: new Date(0).toISOString(),
-      ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
-      id: 'memory-1',
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-      ...(input.repoId ? { repoId: input.repoId } : {}),
-      scope: input.repoId ? 'workspace' : 'global',
-      ...(input.threadTs ? { threadTs: input.threadTs } : {}),
-    }),
     search: () => [],
   };
 }

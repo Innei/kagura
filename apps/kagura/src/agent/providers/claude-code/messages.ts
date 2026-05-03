@@ -58,7 +58,7 @@ export async function handleClaudeSdkMessage(
     }
 
     case 'assistant': {
-      await handleAssistantMessage(logger, message as SDKAssistantMessage, sink, handlers);
+      await handleAssistantMessage(logger, message as SDKAssistantMessage, sink);
       break;
     }
 
@@ -354,7 +354,6 @@ async function handleAssistantMessage(
   logger: AppLogger,
   message: SDKAssistantMessage,
   sink: AgentExecutionSink,
-  handlers: MessageHandlers,
 ): Promise<void> {
   if (message.error) {
     logger.warn('Assistant message reported error=%s', message.error);
@@ -365,7 +364,6 @@ async function handleAssistantMessage(
     return;
   }
 
-  handlers.collectAssistantText(completedText);
   logger.info(
     'Assistant message completed; emitting Slack reply payload (%d chars)',
     completedText.length,

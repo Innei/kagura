@@ -16,10 +16,6 @@ vi.mock('~/env/server.js', () => ({
   },
 }));
 
-vi.mock('~/memory/memory-extractor.js', () => ({
-  extractImplicitMemories: vi.fn().mockResolvedValue([]),
-}));
-
 describe('Claude skill permission bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -128,7 +124,6 @@ function createMemoryStore(): MemoryStore {
     prune: () => 0,
     pruneAll: () => 0,
     save: vi.fn(),
-    saveWithDedup: vi.fn(),
     search: () => [],
   } as unknown as MemoryStore;
 }

@@ -122,7 +122,6 @@ function createMemoryStore(saved: MemoryRecord[] = []): MemoryStore {
       saved.push(record);
       return record;
     }),
-    saveWithDedup: vi.fn(),
     search: vi.fn(),
   } as unknown as MemoryStore;
 }

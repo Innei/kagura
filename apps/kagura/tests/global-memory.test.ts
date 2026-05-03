@@ -94,20 +94,6 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
       records.push(record);
       return record;
     },
-    saveWithDedup: (input, supersedesId) => {
-      if (supersedesId) {
-        const idx = records.findIndex((r) => r.id === supersedesId);
-        if (idx >= 0) records.splice(idx, 1);
-      }
-      const record: MemoryRecord = {
-        ...input,
-        scope: input.repoId ? 'workspace' : 'global',
-        createdAt: new Date().toISOString(),
-        id: `mem-${records.length + 1}`,
-      };
-      records.push(record);
-      return record;
-    },
     search: (repoId, options = {}) => {
       const limit = options.limit ?? 10;
       return records
@@ -444,43 +430,5 @@ describe('preference memory - listForContext', () => {
     expect(ctx.preferences).toHaveLength(2);
     expect(ctx.workspace).toHaveLength(1);
     expect(ctx.workspace[0]!.content).toBe('workspace note');
-  });
-});
-
-describe('saveWithDedup', () => {
-  it('saves normally when no supersedes id', () => {
-    const store = createMemoryStore();
-    const saved = store.saveWithDedup({
-      category: 'preference',
-      content: 'nickname is 小汐',
-    });
-    expect(saved.content).toBe('nickname is 小汐');
-    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
-  });
-
-  it('deletes the superseded memory and saves the new one', () => {
-    const store = createMemoryStore([
-      makeGlobalMemory('nickname is 小汐', { category: 'preference', id: 'old-pref' }),
-    ]);
-
-    const saved = store.saveWithDedup(
-      { category: 'preference', content: 'nickname is 小夕' },
-      'old-pref',
-    );
-    expect(saved.content).toBe('nickname is 小夕');
-
-    const all = store.search(undefined, { category: 'preference' });
-    expect(all).toHaveLength(1);
-    expect(all[0]!.content).toBe('nickname is 小夕');
-  });
-
-  it('handles non-existent supersedes id gracefully', () => {
-    const store = createMemoryStore();
-    const saved = store.saveWithDedup(
-      { category: 'preference', content: 'some pref' },
-      'non-existent-id',
-    );
-    expect(saved.content).toBe('some pref');
-    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
   });
 });

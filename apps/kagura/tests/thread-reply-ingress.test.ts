@@ -1181,12 +1181,6 @@ function createMemoryStore(): MemoryStore {
       createdAt: new Date().toISOString(),
       id: 'memory-1',
     })),
-    saveWithDedup: vi.fn().mockImplementation((input) => ({
-      ...input,
-      scope: input.repoId ? 'workspace' : 'global',
-      createdAt: new Date().toISOString(),
-      id: 'memory-1',
-    })),
     search: vi.fn().mockReturnValue([]),
   };
 }

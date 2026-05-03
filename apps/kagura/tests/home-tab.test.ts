@@ -52,12 +52,6 @@ function createMockMemoryStore(count = 0): MemoryStore {
       createdAt: '',
       scope: input.repoId ? 'workspace' : 'global',
     }),
-    saveWithDedup: (input) => ({
-      ...input,
-      id: '1',
-      createdAt: '',
-      scope: input.repoId ? 'workspace' : 'global',
-    }),
     search: () => [],
   };
 }

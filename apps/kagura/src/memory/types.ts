@@ -55,6 +55,5 @@ export interface MemoryStore {
   prune: (repoId?: string | null) => number;
   pruneAll: () => number;
   save: (input: SaveMemoryInput) => MemoryRecord;
-  saveWithDedup: (input: SaveMemoryInput, supersedesId?: string) => MemoryRecord;
   search: (repoId: string | undefined, options?: MemorySearchOptions) => MemoryRecord[];
 }

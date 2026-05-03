@@ -72,17 +72,6 @@ export class SqliteMemoryStore implements MemoryStore {
     };
   }
 
-  saveWithDedup(input: SaveMemoryInput, supersedesId?: string): MemoryRecord {
-    if (supersedesId) {
-      const deleted = this.delete(supersedesId);
-      if (deleted) {
-        this.logger.debug('Dedup: deleted superseded memory %s', supersedesId);
-      }
-    }
-
-    return this.save(input);
-  }
-
   search(repoId: string | undefined, options: MemorySearchOptions = {}): MemoryRecord[] {
     const nowIso = new Date().toISOString();
     const safeLimit = normalizeLimit(options.limit);
