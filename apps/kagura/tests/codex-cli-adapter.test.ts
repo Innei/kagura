@@ -14,7 +14,6 @@ import type {
   ChannelPreferenceStore,
 } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
-import type { MemoryRecord, MemoryStore, SaveMemoryInput } from '~/memory/types.js';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -98,33 +97,6 @@ function createSink(events: AgentExecutionEvent[]) {
 
 function writeJson(child: FakeCodexProcess, value: unknown): void {
   child.stdout.write(`${JSON.stringify(value)}\n`);
-}
-
-function createMemoryStore(saved: MemoryRecord[] = []): MemoryStore {
-  return {
-    countAll: vi.fn(),
-    countByCategory: vi.fn(),
-    delete: vi.fn(),
-    deleteAll: vi.fn(),
-    listForContext: vi.fn(),
-    listRecent: vi.fn(),
-    prune: vi.fn(),
-    pruneAll: vi.fn(),
-    save: vi.fn((input: SaveMemoryInput) => {
-      const record: MemoryRecord = {
-        category: input.category,
-        content: input.content,
-        createdAt: '2026-04-24T00:00:00.000Z',
-        id: `memory-${saved.length + 1}`,
-        scope: input.repoId ? 'workspace' : 'global',
-        ...(input.repoId ? { repoId: input.repoId } : {}),
-        ...(input.threadTs ? { threadTs: input.threadTs } : {}),
-      };
-      saved.push(record);
-      return record;
-    }),
-    search: vi.fn(),
-  } as unknown as MemoryStore;
 }
 
 function createChannelPreferenceStore(
@@ -472,54 +444,11 @@ describe('CodexCliExecutor', () => {
     );
   });
 
-  it('applies Codex save_memory JSONL operations after execution', async () => {
-    const workspacePath = mkdtempSync(path.join(tmpdir(), 'codex-memory-'));
-    const request = createRequest({
-      executionId: 'exec-memory',
-      workspacePath,
-      workspaceRepoId: 'repo-a',
-    });
-    const { memoryOpsPath } = getCodexRuntimePaths(request);
-    const saved: MemoryRecord[] = [];
-    const memoryStore = createMemoryStore(saved);
-
-    spawnMock.mockImplementation(
-      () =>
-        new FakeCodexProcess((prompt, child) => {
-          expect(prompt).toContain('kagura-memory save');
-          queueMicrotask(() => {
-            writeFileSync(
-              memoryOpsPath,
-              `${JSON.stringify({
-                tool: 'save_memory',
-                category: 'decision',
-                scope: 'workspace',
-                content: 'remember this decision',
-              })}\n`,
-            );
-            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
-            writeJson(child, {
-              type: 'item.completed',
-              item: { id: 'msg-1', type: 'agent_message', text: 'saved' },
-            });
-            writeJson(child, { type: 'turn.completed', usage: {} });
-            child.stdout.end();
-            child.stderr.end();
-            child.emit('exit', 0, null);
-          });
-        }),
-    );
-
-    await new CodexCliExecutor(createLogger(), memoryStore).execute(request, createSink([]));
-
-    expect(existsSync(path.join(workspacePath, '.kagura'))).toBe(false);
-    expect(memoryStore.save).toHaveBeenCalledWith({
-      category: 'decision',
-      content: 'remember this decision',
-      repoId: 'repo-a',
-      threadTs: request.threadTs,
-    });
-    expect(saved).toHaveLength(1);
+  it('codex prompt mentions kagura-memory CLI for memory ops', () => {
+    const prompt = buildCodexPrompt(createRequest());
+    expect(prompt).toContain('kagura-memory save');
+    expect(prompt).toContain('kagura-memory recall');
+    expect(prompt).not.toContain('memory-ops.jsonl');
   });
 
   it('applies Codex set_channel_default_workspace JSONL operations after execution', async () => {
@@ -562,10 +491,10 @@ describe('CodexCliExecutor', () => {
     expect(saved).toHaveLength(1);
   });
 
-  it('renders Codex memory file writes as a concise memory activity', async () => {
+  it('renders Codex kagura-memory save commands as a concise memory activity', async () => {
     const request = createRequest({ executionId: 'exec-memory' });
-    const { memoryOpsPath } = getCodexRuntimePaths(request);
-    const command = `/bin/zsh -lc "node -e 'const fs=require(\\"fs\\"); const p=\\"${memoryOpsPath}\\"; fs.appendFileSync(p, \\"{}\\\\n\\");'"`;
+    const command =
+      '/bin/zsh -lc \'kagura-memory save --category preference --content "x" --scope global\'';
 
     spawnMock.mockImplementation(
       () =>

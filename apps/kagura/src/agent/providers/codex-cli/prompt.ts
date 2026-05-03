@@ -29,7 +29,6 @@ const CODEX_RUNTIME_ROOT_DIR = path.join(os.tmpdir(), 'kagura', 'codex-cli');
 export interface CodexRuntimePaths {
   channelOpsPath: string;
   generatedArtifactsDir: string;
-  memoryOpsPath: string;
   runtimeDir: string;
 }
 
@@ -144,20 +143,13 @@ export function getCodexRuntimePaths(request: AgentExecutionRequest): CodexRunti
   const runtimeRoot = path.join(CODEX_RUNTIME_ROOT_DIR, rootSuffix);
   const runtimeDir = path.join(runtimeRoot, CODEX_RUNTIME_DIRNAME);
   const generatedArtifactsDir = path.join(runtimeRoot, CODEX_GENERATED_ARTIFACTS_DIRNAME);
-  const memoryOpsPath = path.join(runtimeDir, getCodexMemoryOpsFileName(request));
   const channelOpsPath = path.join(runtimeDir, getCodexChannelOpsFileName(request));
 
   return {
     channelOpsPath,
     generatedArtifactsDir,
-    memoryOpsPath,
     runtimeDir,
   };
-}
-
-function getCodexMemoryOpsFileName(request: AgentExecutionRequest): string {
-  const suffix = sanitizeRuntimePathPart(request.executionId ?? 'memory');
-  return `${suffix}-memory-ops.jsonl`;
 }
 
 function getCodexChannelOpsFileName(request: AgentExecutionRequest): string {

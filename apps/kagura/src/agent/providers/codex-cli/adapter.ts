@@ -15,7 +15,7 @@ import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
-import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryStore } from '~/memory/types.js';
+import type { MemoryStore } from '~/memory/types.js';
 
 import { parseSetChannelDefaultWorkspaceToolInput } from '../claude-code/tools/set-channel-default-workspace.js';
 import { buildCodexPrompt, getCodexRuntimePaths } from './prompt.js';
@@ -23,8 +23,7 @@ import { buildCodexPrompt, getCodexRuntimePaths } from './prompt.js';
 const ABORT_KILL_TIMEOUT_MS = 1_000;
 const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
 const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
-const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
-const CODEX_MEMORY_OPS_COMMAND_PATTERN = /-memory-ops\.jsonl(?:$|[\s"'\\])/;
+const CODEX_MEMORY_COMMAND_PATTERN = /\bkagura-memory\s+save\b/;
 const CODEX_CHANNEL_OPS_COMMAND_PATTERN = /-channel-ops\.jsonl(?:$|[\s"'\\])/;
 
 interface GeneratedArtifactSnapshotEntry {
@@ -188,7 +187,7 @@ export class CodexCliExecutor implements AgentExecutor {
     const runtimePaths = getCodexRuntimePaths(request);
     const cwd = request.workspacePath ?? runtimePaths.runtimeDir;
     const prompt = buildCodexPrompt(request, runtimePaths);
-    const { channelOpsPath, generatedArtifactsDir, memoryOpsPath, runtimeDir } = runtimePaths;
+    const { channelOpsPath, generatedArtifactsDir, runtimeDir } = runtimePaths;
     let child: ChildProcessWithoutNullStreams | undefined;
     let resumeHandle = request.resumeHandle;
     let started = false;
@@ -272,7 +271,6 @@ export class CodexCliExecutor implements AgentExecutor {
       if (!started) {
         await sink.onEvent({ type: 'lifecycle', phase: 'started' });
       }
-      await this.applyMemoryOps(request, memoryOpsPath);
       await this.applyChannelOps(request, channelOpsPath);
       await publishGeneratedArtifacts(sink, generatedArtifactsDir, generatedArtifactsBefore);
       await sink.onEvent({
@@ -335,63 +333,6 @@ export class CodexCliExecutor implements AgentExecutor {
       });
     } finally {
       abortCleanup?.();
-    }
-  }
-
-  private async applyMemoryOps(
-    request: AgentExecutionRequest,
-    memoryOpsPath: string,
-  ): Promise<void> {
-    if (!this.memoryStore) {
-      return;
-    }
-
-    let raw: string;
-    try {
-      raw = await readFile(memoryOpsPath, 'utf8');
-    } catch (error) {
-      if (isNodeErrorCode(error, 'ENOENT')) {
-        return;
-      }
-      throw error;
-    }
-
-    let savedCount = 0;
-    for (const [index, line] of raw.split(/\r?\n/).entries()) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      const op = parseCodexMemoryOp(trimmed);
-      if (!op) {
-        this.logger.warn('Ignoring invalid Codex memory op on line %d', index + 1);
-        continue;
-      }
-
-      const scope = op.scope ?? (request.workspaceRepoId ? 'workspace' : 'global');
-      if (scope === 'workspace' && !request.workspaceRepoId) {
-        this.logger.warn(
-          'Ignoring Codex workspace memory op without workspace on line %d',
-          index + 1,
-        );
-        continue;
-      }
-
-      const saved = this.memoryStore.save({
-        category: op.category,
-        content: op.content,
-        repoId: scope === 'workspace' ? request.workspaceRepoId : undefined,
-        threadTs: request.threadTs,
-        ...(op.metadata ? { metadata: op.metadata } : {}),
-        ...(op.expiresAt ? { expiresAt: op.expiresAt } : {}),
-      });
-      savedCount += 1;
-      this.logger.info('Codex memory op saved %s memory %s', saved.scope, saved.id);
-    }
-
-    if (savedCount > 0) {
-      this.logger.info('Applied %d Codex memory op(s) for thread %s', savedCount, request.threadTs);
     }
   }
 
@@ -723,7 +664,7 @@ export class CodexCliExecutor implements AgentExecutor {
 }
 
 function describeCodexCommand(command: string): string {
-  if (CODEX_MEMORY_OPS_COMMAND_PATTERN.test(command)) {
+  if (CODEX_MEMORY_COMMAND_PATTERN.test(command)) {
     return 'Saving memory...';
   }
   if (CODEX_CHANNEL_OPS_COMMAND_PATTERN.test(command)) {
@@ -866,54 +807,6 @@ async function publishGeneratedArtifacts(
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
-
-interface CodexMemorySaveOp {
-  category: MemoryCategory;
-  content: string;
-  expiresAt?: string | undefined;
-  metadata?: Record<string, unknown> | undefined;
-  scope?: 'global' | 'workspace' | undefined;
-}
-
-function parseCodexMemoryOp(line: string): CodexMemorySaveOp | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(line);
-  } catch {
-    return undefined;
-  }
-
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return undefined;
-  }
-
-  const record = parsed as Record<string, unknown>;
-  if (record.tool !== 'save_memory') {
-    return undefined;
-  }
-  if (typeof record.category !== 'string' || !MEMORY_CATEGORY_SET.has(record.category)) {
-    return undefined;
-  }
-  if (typeof record.content !== 'string' || record.content.trim().length === 0) {
-    return undefined;
-  }
-
-  const scope =
-    record.scope === 'global' || record.scope === 'workspace' ? record.scope : undefined;
-  const metadata =
-    record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata)
-      ? (record.metadata as Record<string, unknown>)
-      : undefined;
-  const expiresAt = typeof record.expiresAt === 'string' ? record.expiresAt : undefined;
-
-  return {
-    category: record.category as MemoryCategory,
-    content: record.content.slice(0, 2000),
-    ...(scope ? { scope } : {}),
-    ...(metadata ? { metadata } : {}),
-    ...(expiresAt ? { expiresAt } : {}),
-  };
 }
 
 interface CodexChannelOp {

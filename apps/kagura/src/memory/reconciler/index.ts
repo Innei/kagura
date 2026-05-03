@@ -58,9 +58,13 @@ export class MemoryReconciler {
     }
 
     const dirty = this.options.memoryStore.getDirtyBuckets();
-    const eligible = dirty.filter(
-      (b) => (b.state?.writesSinceReconcile ?? 0) >= this.options.writeThreshold,
-    );
+    const eligible = dirty.filter((b) => {
+      const state = b.state;
+      if (!state) return true;
+      if (state.lastSeenMaxCreatedAt !== b.currentMaxCreatedAt) return true;
+      if (state.lastCount !== b.currentCount) return true;
+      return state.writesSinceReconcile >= this.options.writeThreshold;
+    });
 
     if (eligible.length === 0) return;
 
