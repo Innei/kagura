@@ -15,9 +15,21 @@ interface ReviewPageProps {
   executionId: string;
 }
 
+function readPathFromUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const value = new URLSearchParams(window.location.search).get('path');
+  return value || undefined;
+}
+
+function readViewFromUrl(): 'diff' | 'source' | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const value = new URLSearchParams(window.location.search).get('view');
+  return value === 'source' || value === 'diff' ? value : undefined;
+}
+
 export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [session, setSession] = useState<ReviewSession | undefined>();
-  const [selectedPath, setSelectedPath] = useState<string | undefined>();
+  const [selectedPath, setSelectedPath] = useState<string | undefined>(() => readPathFromUrl());
   const [diff, setDiff] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
@@ -26,12 +38,13 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [content, setContent] = useState<string | undefined>(undefined);
   const [contentLoading, setContentLoading] = useState(false);
   const [baseContent, setBaseContent] = useState<string | undefined>(undefined);
+  const initialView = readViewFromUrl();
 
   useEffect(() => {
     setLoading(true);
     setError(undefined);
     setSession(undefined);
-    setSelectedPath(undefined);
+    setSelectedPath(readPathFromUrl());
     setDiff('');
     void loadInitialReviewData(executionId, apiBasePath)
       .then(({ session: nextSession }) => {
@@ -111,6 +124,7 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
       content={content}
       contentLoading={contentLoading}
       diff={diff}
+      initialViewMode={initialView}
       selectedPath={selectedPath}
       session={session}
       treeEntries={treeEntries}

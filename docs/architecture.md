@@ -46,6 +46,20 @@ Preference memories are injected ahead of other memories so they take priority i
 
 The bot's green dot is controlled by the `always_online: true` flag in the app manifest's `bot_user` section. The manifest sync ensures this flag is enabled on every startup. For Socket Mode / Events API bots, `users.setPresence` has no effect — Slack accepts the call but ignores it.
 
+## Review panel
+
+A workspace-bound execution that completes successfully is recorded as a `ReviewSession` in SQLite (`apps/kagura/src/review/`). The bot then posts a Slack permalink that opens the local review server, served by the same kagura process:
+
+- `GET /reviews/:executionId` — SPA shell from `apps/kagura/dist/review-panel` (built from `apps/web/`)
+- `GET /api/reviews/:executionId` — session metadata (workspace path, baseHead, branch, changed-file summary)
+- `GET /api/reviews/:executionId/tree` — the workspace's `git ls-files` plus untracked, annotated with status
+- `GET /api/reviews/:executionId/diff?path=…` — single-file or full `git diff <baseHead>` patch
+- `GET /api/reviews/:executionId/file?path=…&ref=base|head` — file content from either revision (`git show <baseHead>:path` for `base`, working-tree read for `head`)
+
+The Web UI loads both sides for a selected file and feeds them into [`@pierre/diffs`](https://www.npmjs.com/package/@pierre/diffs). With full base + head content available, the renderer reports `isPartial = false` and exposes per-hunk **↑ / ↓ expand** controls that materialize collapsed unmodified context on demand — the GitHub interaction model. When base or head is unavailable (untracked, deleted, parse failure), the UI falls back to a `PatchDiff` rendered straight from the patch, without expand support, behind a React error boundary.
+
+The server is read-only by design: it accepts no write verbs and the `file` endpoint refuses absolute or `..`-traversal paths.
+
 ## Project structure
 
 ```
@@ -70,9 +84,14 @@ src/
 │           ├── messages.ts     # Message conversion
 │           ├── multimodal-prompt.ts  # Image content handling
 │           └── tools/          # MCP tool definitions
+├── review/
+│   ├── git-review-service.ts   # Read-only git facade (diff, tree, file at base|head)
+│   ├── sqlite-review-session-store.ts  # ReviewSession persistence
+│   └── types.ts                # Review session types
+├── web/
+│   └── review-panel.ts         # Local HTTP server for the review SPA + JSON API
 ├── slack/
 │   ├── app.ts                  # @slack/bolt initialization
-
 │   ├── commands/               # Slash command handlers + manifest sync
 │   ├── ingress/                # @mention / thread / assistant / home tab
 │   ├── interactions/           # Message Action + modal + stop shortcut
@@ -81,6 +100,8 @@ src/
 │   └── render/                 # Streaming output & UI state rendering
 └── schemas/                    # Zod schemas for Slack events & tools
 ```
+
+The review Web UI lives in `apps/web/` (Vite + React 19, Panda CSS, `@pierre/diffs`, `@pierre/trees`). `pnpm build` compiles it into `apps/kagura/dist/review-panel`.
 
 > [!NOTE]
 > Detailed specifications for each subsystem are available in [`docs/specs/`](specs/).

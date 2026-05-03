@@ -42,11 +42,46 @@ Slack message event / Message Action
 
 **Slack UX** — Rich text rendering (headings, lists, code blocks, auto-splitting), live progress indicators, reaction lifecycle, native assistant typing.
 
+**Web review panel** — After every workspace-bound run, Kagura posts a Slack button that opens a read-only code review UI: file tree, changed-files list, GitHub-style split/unified diff with expandable unmodified lines, and a Shiki-highlighted source view. See [§ Review panel](#review-panel).
+
 **Workspace routing** — Each thread binds to a repo/workdir. Auto-detected from message text, or manually chosen via Message Action.
 
 **Agent control** — Pluggable provider registry, stop via `stop`/`cancel` keyword, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
 
 **Operations** — Auto-provisioned manifest (message events + commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
+
+## Review panel
+
+<div align="center">
+
+<img src="./assets/review-panel/01-overview.png" width="820" alt="All changed files at a glance" />
+
+<sub>All changed files at a glance — every modified file rendered inline with its hunks.</sub>
+
+</div>
+
+Each agent run that touches a workspace is recorded as a review session. Kagura posts a permalink in the thread; opening it loads `/reviews/{executionId}` in your browser:
+
+- **Sidebar** — Changes (`M / A / D / R / ??`) tab plus a full Files tree, filterable, with `j` / `k` / `gg` / `G` navigation and `/` to focus the filter.
+- **Diff** — Split or unified, classic indicators, word-level intra-line diff, per-hunk **↑ / ↓ expand** of collapsed unmodified context — exactly the GitHub muscle memory.
+- **Source** — Shiki-highlighted file at `HEAD`, with gutter markers for added lines. Languages auto-detected from extension and basename (Python, Go, Rust, Java, Kotlin, Ruby, PHP, Swift, C/C++, Shell, JSON/YAML/TOML, Markdown, Vue, Svelte, GraphQL, Dockerfile, Makefile, …).
+- **Read-only** — No edit, no shell, no secrets in URLs. Pure inspection over a local HTTP server.
+
+<div align="center">
+
+<img src="./assets/review-panel/02-split-diff-expand.png" width="820" alt="Split diff with expandable unmodified lines" />
+
+<sub>Split diff with expandable unmodified lines — click ↑ / ↓ on a hunk separator to grow context just like GitHub.</sub>
+
+<br/><br/>
+
+<img src="./assets/review-panel/03-source-python.png" width="820" alt="Source view with Shiki syntax highlighting" />
+
+<sub>Source view — full file at <code>HEAD</code> with Shiki highlighting. Picture shows Python; the same path also handles TS, Go, Rust, Ruby, etc.</sub>
+
+</div>
+
+Configuration for production deploys (host, port, `baseUrl`, single-domain multi-instance routing) lives in [docs/configuration.md § reviewPanel](docs/configuration.md). The dev-time mock binds against the real repo at `HEAD~10..HEAD`, so every status, language, and file-type case is exercised end-to-end without a Slack workspace.
 
 ## Install
 
@@ -144,10 +179,12 @@ pnpm dev             # or: pnpm build && pnpm start
 
 ```bash
 pnpm dev:review      # bot API on 3077, Vite UI on 5173, Slack links point to Vite
-pnpm dev:review:mock # Web UI only, served with mock review data
+pnpm dev:review:mock # Web UI only, backed by the real repo at HEAD~10..HEAD
 ```
 
-Open `http://127.0.0.1:5173/reviews/mock-review` for the mock panel. When the bot starts with the review panel enabled, its dev log prints both the local API listener and the UI base URL used in Slack review links.
+Open <http://127.0.0.1:5173/reviews/mock-review> for the mock panel. The mock plugin uses your current working tree against `HEAD~10` (override with `KAGURA_WEB_MOCK_BASE_REF`) so all status, language, and file-type cases come from real git data. Deep-link directly into a file with `?path=<rel>` and pre-pick a view with `&view=source|diff`.
+
+When the bot starts with the review panel enabled, its dev log prints both the local API listener and the UI base URL used in Slack review links.
 
 For multi-instance production on one domain, give each instance a path-prefixed `reviewPanel.baseUrl`, for example `https://kagura.innei.dev/codex` and `https://kagura.innei.dev/claude`, and route those prefixes to separate local ports in nginx or Cloudflare Tunnel. See [docs/configuration.md](docs/configuration.md#single-domain-multi-instance-review-panel).
 

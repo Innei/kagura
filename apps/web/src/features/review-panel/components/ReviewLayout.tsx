@@ -21,6 +21,7 @@ interface ReviewLayoutProps {
   content?: string | undefined;
   contentLoading?: boolean;
   diff: string;
+  initialViewMode?: ViewMode | undefined;
   onRequestTree?: () => void;
   onSelectPath: (path: string | undefined) => void;
   selectedPath?: string | undefined;
@@ -34,6 +35,7 @@ export function ReviewLayout({
   content,
   contentLoading,
   diff,
+  initialViewMode,
   onRequestTree,
   onSelectPath,
   selectedPath,
@@ -49,7 +51,7 @@ export function ReviewLayout({
   const [view, setView] = useState<FileNavView>('tree');
   const [filter, setFilter] = useState('');
   const [diffStyle, setDiffStyle] = useState<DiffStyle>('split');
-  const [viewMode, setViewMode] = useState<ViewMode>('diff');
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'diff');
 
   const orderedChangedFiles = useMemo(() => {
     const arr = [...session.changedFiles];
@@ -65,7 +67,10 @@ export function ReviewLayout({
     onSelectPath,
   );
 
+  const previousPathRef = useRef(selectedPath);
   useEffect(() => {
+    if (previousPathRef.current === selectedPath) return;
+    previousPathRef.current = selectedPath;
     setViewMode('diff');
   }, [selectedPath]);
 

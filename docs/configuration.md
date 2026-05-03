@@ -99,7 +99,17 @@ The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can r
 
 `WORKTREE_ROOT_DIR` controls the centralized parent directory agents should use for git worktrees. If unset, Kagura defaults it to `REPO_ROOT_DIR/kagura-worktrees`, so a typical setup becomes `~/git/kagura-worktrees`. Override it in `.env` or `config.json` if you want a different shared parent directory.
 
-`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run. The panel exposes file tree, changed files, and diff views; it does not expose any edit APIs. Set `baseUrl` to the domain name or IP address that Slack users can open from their browser. `baseUrl` may include a path prefix, such as `https://kagura.example.com/codex`; the review panel server and Web UI will use that prefix for both page and API routes. A full `pnpm build` copies the Web UI into `apps/kagura/dist/review-panel`, which is the default production assets directory. Override `assetsDir` only when you want to serve a separately built UI.
+`reviewPanel` enables the local read-only code review panel. When enabled, Kagura records a review session for each workspace-bound agent execution and posts a Slack button to `/reviews/{executionId}` after a successful run.
+
+The panel offers:
+
+- a sidebar with **Changes** (`M / A / D / R / ??`) and a full **Files** tree, both filterable;
+- a **Diff** view (split or unified) with classic indicators, word-level intra-line diff, and per-hunk **↑ / ↓ expand** of collapsed unmodified context — the GitHub muscle memory;
+- a **Source** view of the file at `HEAD` with [Shiki](https://shiki.style/) syntax highlighting (TS/JS, Python, Go, Rust, Ruby, Java, Kotlin, Swift, C/C++, PHP, Shell, JSON/YAML/TOML, Markdown, Vue/Svelte, GraphQL, Dockerfile, Makefile, …) and gutter markers for added lines.
+
+It exposes only `GET` endpoints — there is no edit API, no shell, and the `file` endpoint refuses absolute and `..`-traversal paths.
+
+Set `baseUrl` to the domain name or IP address Slack users can reach from their browser. `baseUrl` may include a path prefix such as `https://kagura.example.com/codex`; the review server and Web UI use that prefix for both page and API routes. A full `pnpm build` copies the Web UI into `apps/kagura/dist/review-panel`, the default production assets directory. Override `assetsDir` only when serving a separately built UI.
 
 ```json
 {

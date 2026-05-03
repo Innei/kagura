@@ -38,6 +38,8 @@ Slack message event / Message Action
 
 **A2A orchestration** — Mention a configured Slack user group or co-mention multiple agent apps to start a lead-coordinated Agent-to-Agent thread with explicit delegation and final summary.
 
+**Web review panel** — After every workspace-bound run, Kagura posts a Slack button that opens a read-only code review UI: file tree, changed files, GitHub-style split/unified diff with expandable unmodified lines, and a Shiki-highlighted source view.
+
 **Slack UX** — Rich text rendering (headings, lists, code blocks, auto-splitting), live progress indicators, reaction lifecycle, native assistant typing.
 
 **Workspace routing** — Each thread binds to a repo/workdir. Auto-detected from message text, or manually chosen via Message Action.
