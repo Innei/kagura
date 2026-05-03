@@ -113,13 +113,13 @@ export default defineConfig({
             value: { base: '#ffffff', _dark: '{colors.neutral.900}' },
           },
           hover: {
-            value: { base: '{colors.neutral.200}', _dark: '{colors.neutral.800}' },
+            value: { base: '{colors.neutral.100}', _dark: '{colors.neutral.800}' },
           },
           subtle: {
-            value: { base: '{colors.neutral.200}', _dark: '{colors.neutral.800}' },
+            value: { base: '{colors.neutral.100}', _dark: '{colors.neutral.800}' },
           },
           wash: {
-            value: { base: 'rgba(0,0,0,0.06)', _dark: 'rgba(255,255,255,0.04)' },
+            value: { base: 'rgba(0,0,0,0.04)', _dark: 'rgba(255,255,255,0.04)' },
           },
           selected: {
             value: { base: '{colors.neutral.900}', _dark: '{colors.neutral.50}' },
