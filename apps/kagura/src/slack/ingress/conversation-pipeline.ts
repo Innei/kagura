@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
@@ -326,12 +327,28 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   const quietA2A =
     deps.a2aOutputMode === 'quiet' &&
     Boolean(a2aContext || ctx.options.a2aAssignmentId || ctx.options.a2aSummaryAssignmentId);
+  const workspacePath = workspace?.workspacePath;
+  const initialGitHead = workspacePath ? resolveGitHead(workspacePath) : undefined;
+  let initialGitStatus: string | undefined;
+  if (workspacePath) {
+    try {
+      initialGitStatus =
+        execFileSync('git', ['-C', workspacePath, 'status', '--porcelain'], {
+          encoding: 'utf8',
+          timeout: 5_000,
+        }).trim() || undefined;
+    } catch {
+      // not a git repo or git unavailable
+    }
+  }
   const baseSink = createActivitySink({
     analyticsStore: deps.analyticsStore,
     assistantMessageVisibility: quietA2A ? 'quiet-final' : 'public',
     channel: message.channel,
     client,
     executionId,
+    initialGitHead,
+    initialGitStatus,
     logger: deps.logger,
     logLabel: ctx.options.logLabel,
     permissionBridge: deps.permissionBridge,
