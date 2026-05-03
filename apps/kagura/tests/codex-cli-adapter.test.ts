@@ -486,7 +486,7 @@ describe('CodexCliExecutor', () => {
     spawnMock.mockImplementation(
       () =>
         new FakeCodexProcess((prompt, child) => {
-          expect(prompt).toContain(memoryOpsPath);
+          expect(prompt).toContain('kagura-memory save');
           queueMicrotask(() => {
             writeFileSync(
               memoryOpsPath,
