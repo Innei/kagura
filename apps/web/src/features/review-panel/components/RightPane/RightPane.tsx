@@ -6,6 +6,7 @@ import * as styles from './RightPane.styles';
 import { SourceView } from './SourceView';
 
 interface RightPaneProps {
+  baseContent?: string | undefined;
   colorScheme: 'dark' | 'light';
   content?: string | undefined;
   contentLoading: boolean;
@@ -22,6 +23,7 @@ interface RightPaneProps {
 }
 
 export function RightPane({
+  baseContent,
   colorScheme,
   content,
   contentLoading,
@@ -67,7 +69,14 @@ export function RightPane({
             path={selectedPath}
           />
         ) : (
-          <DiffView colorScheme={colorScheme} diff={diff} diffStyle={diffStyle} />
+          <DiffView
+            baseContent={baseContent}
+            colorScheme={colorScheme}
+            diff={diff}
+            diffStyle={diffStyle}
+            headContent={content}
+            selectedPath={selectedPath}
+          />
         )}
       </div>
     </main>

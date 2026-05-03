@@ -2,31 +2,112 @@ import { useEffect, useState } from 'react';
 import { codeToHtml } from 'shiki';
 
 const LANG_BY_EXT: Record<string, string> = {
+  // JS / TS
   ts: 'typescript',
   tsx: 'tsx',
+  mts: 'typescript',
+  cts: 'typescript',
   js: 'javascript',
   jsx: 'jsx',
   mjs: 'javascript',
   cjs: 'javascript',
+  // Python
+  py: 'python',
+  pyi: 'python',
+  // Go / Rust / Java / Kotlin / Scala / Swift
+  go: 'go',
+  rs: 'rust',
+  java: 'java',
+  kt: 'kotlin',
+  kts: 'kotlin',
+  scala: 'scala',
+  swift: 'swift',
+  // C family
+  c: 'c',
+  h: 'c',
+  cc: 'cpp',
+  cpp: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  hh: 'cpp',
+  m: 'objective-c',
+  mm: 'objective-cpp',
+  cs: 'csharp',
+  // Scripting / shells
+  rb: 'ruby',
+  php: 'php',
+  pl: 'perl',
+  pm: 'perl',
+  lua: 'lua',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  fish: 'fish',
+  ps1: 'powershell',
+  psm1: 'powershell',
+  // Data / config
   json: 'json',
-  md: 'markdown',
-  mdx: 'markdown',
-  css: 'css',
-  scss: 'scss',
-  html: 'html',
+  jsonc: 'jsonc',
+  json5: 'json5',
   yaml: 'yaml',
   yml: 'yaml',
   toml: 'toml',
-  sh: 'bash',
-  bash: 'bash',
+  ini: 'ini',
+  xml: 'xml',
+  // Markup / docs
+  md: 'markdown',
+  mdx: 'mdx',
+  markdown: 'markdown',
+  rst: 'rst',
+  tex: 'latex',
+  // Web
+  html: 'html',
+  htm: 'html',
+  vue: 'vue',
+  svelte: 'svelte',
+  astro: 'astro',
+  css: 'css',
+  scss: 'scss',
+  sass: 'sass',
+  less: 'less',
+  // Query / data
   sql: 'sql',
+  graphql: 'graphql',
+  gql: 'graphql',
+  // Other common
+  dart: 'dart',
+  ex: 'elixir',
+  exs: 'elixir',
+  erl: 'erlang',
+  hs: 'haskell',
+  ml: 'ocaml',
+  r: 'r',
+  zig: 'zig',
+  proto: 'proto',
+  dockerfile: 'docker',
+  makefile: 'make',
+  mk: 'make',
+  nix: 'nix',
+  diff: 'diff',
+  patch: 'diff',
+};
+
+const LANG_BY_BASENAME: Record<string, string> = {
+  Dockerfile: 'docker',
+  Makefile: 'make',
+  GNUmakefile: 'make',
+  CMakeLists: 'cmake',
 };
 
 function langFor(path?: string): string {
   if (!path) return 'text';
-  const dot = path.lastIndexOf('.');
+  const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const basename = slash >= 0 ? path.slice(slash + 1) : path;
+  const exact = LANG_BY_BASENAME[basename];
+  if (exact) return exact;
+  const dot = basename.lastIndexOf('.');
   if (dot < 0) return 'text';
-  return LANG_BY_EXT[path.slice(dot + 1).toLowerCase()] ?? 'text';
+  return LANG_BY_EXT[basename.slice(dot + 1).toLowerCase()] ?? 'text';
 }
 
 export function useShikiHtml(

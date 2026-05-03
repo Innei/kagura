@@ -25,6 +25,7 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [treeLoading, setTreeLoading] = useState(false);
   const [content, setContent] = useState<string | undefined>(undefined);
   const [contentLoading, setContentLoading] = useState(false);
+  const [baseContent, setBaseContent] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     setLoading(true);
@@ -56,19 +57,25 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
     if (loading || error) return;
     if (!selectedPath) {
       setContent(undefined);
+      setBaseContent(undefined);
       return;
     }
     setContentLoading(true);
     let cancelled = false;
-    void loadFile(executionId, selectedPath, apiBasePath)
-      .then((next) => {
+    void Promise.all([
+      loadFile(executionId, selectedPath, apiBasePath, 'head'),
+      loadFile(executionId, selectedPath, apiBasePath, 'base'),
+    ])
+      .then(([head, base]) => {
         if (cancelled) return;
-        setContent(next);
+        setContent(head);
+        setBaseContent(base);
         setContentLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setContent(undefined);
+        setBaseContent(undefined);
         setContentLoading(false);
       });
     return () => {
@@ -100,6 +107,7 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
 
   return (
     <ReviewLayout
+      baseContent={baseContent}
       content={content}
       contentLoading={contentLoading}
       diff={diff}

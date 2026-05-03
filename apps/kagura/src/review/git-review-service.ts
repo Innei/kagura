@@ -85,11 +85,20 @@ export class GitReviewService {
   async getFile(
     executionId: string,
     filePath: string,
+    ref: 'base' | 'head' = 'head',
   ): Promise<{ content: string; path: string } | undefined> {
     const session = this.store.get(executionId);
     if (!session) return undefined;
 
     const relativePath = validateRelativeFilePath(filePath);
+
+    if (ref === 'base') {
+      const base = session.baseHead ?? 'HEAD';
+      const blob = readGitBlob(session.workspacePath, base, relativePath);
+      if (blob === undefined) return undefined;
+      return { content: blob, path: relativePath };
+    }
+
     const absolutePath = path.resolve(session.workspacePath, relativePath);
     const realWorkspace = await fs.realpath(session.workspacePath);
     const realTarget = await fs.realpath(absolutePath).catch(() => undefined);
@@ -240,6 +249,19 @@ function runGit(cwd: string, args: string[]): string {
     }).trimEnd();
   } catch {
     return '';
+  }
+}
+
+function readGitBlob(cwd: string, ref: string, filePath: string): string | undefined {
+  try {
+    return execFileSync('git', ['-C', cwd, 'show', `${ref}:${filePath}`], {
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return undefined;
   }
 }
 

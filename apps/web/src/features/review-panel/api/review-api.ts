@@ -40,14 +40,20 @@ export async function loadFile(
   reviewExecutionId: string,
   filePath: string,
   apiBasePath = '',
-): Promise<string> {
-  const payload = await getJson<ReviewFileResponse>(
-    apiUrl(
-      apiBasePath,
-      `/api/reviews/${encodeURIComponent(reviewExecutionId)}/file?path=${encodeURIComponent(filePath)}`,
-    ),
-  );
-  return payload.content;
+  ref: 'base' | 'head' = 'head',
+): Promise<string | undefined> {
+  const refSuffix = ref === 'base' ? '&ref=base' : '';
+  try {
+    const payload = await getJson<ReviewFileResponse>(
+      apiUrl(
+        apiBasePath,
+        `/api/reviews/${encodeURIComponent(reviewExecutionId)}/file?path=${encodeURIComponent(filePath)}${refSuffix}`,
+      ),
+    );
+    return payload.content;
+  } catch {
+    return undefined;
+  }
 }
 
 function apiUrl(apiBasePath: string, path: string): string {

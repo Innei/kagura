@@ -143,10 +143,12 @@ async function handleApiRequest(
       sendJson(response, 400, { error: 'Missing path.' });
       return;
     }
+    const refParam = url.searchParams.get('ref');
+    const ref: 'base' | 'head' = refParam === 'base' ? 'base' : 'head';
     try {
-      const file = await reviewService.getFile(executionId, filePath);
+      const file = await reviewService.getFile(executionId, filePath, ref);
       if (!file) {
-        sendJson(response, 404, { error: 'Review session not found.' });
+        sendJson(response, 404, { error: 'File not found at requested ref.' });
         return;
       }
       sendJson(response, 200, file);

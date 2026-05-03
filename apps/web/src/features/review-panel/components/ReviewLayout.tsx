@@ -17,6 +17,7 @@ import { StatusBar } from './StatusBar';
 import { TitleBar } from './TitleBar';
 
 interface ReviewLayoutProps {
+  baseContent?: string | undefined;
   content?: string | undefined;
   contentLoading?: boolean;
   diff: string;
@@ -29,6 +30,7 @@ interface ReviewLayoutProps {
 }
 
 export function ReviewLayout({
+  baseContent,
   content,
   contentLoading,
   diff,
@@ -129,7 +131,7 @@ export function ReviewLayout({
         <Panel
           collapsible
           collapsedSize={0}
-          defaultSize={26}
+          defaultSize={16}
           maxSize={45}
           minSize={16}
           order={1}
@@ -159,6 +161,7 @@ export function ReviewLayout({
         <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
         <Panel minSize={40} order={2}>
           <RightPane
+            baseContent={baseContent}
             colorScheme={colorScheme}
             content={content}
             contentLoading={contentLoading ?? false}

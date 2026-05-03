@@ -61,6 +61,40 @@ describe('GitReviewService', () => {
 
     sqlite.close();
   });
+
+  it('returns base file via git show and head from working tree', async () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+
+    fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 2;\n');
+
+    const dbPath = path.join(createTempDir(), 'sessions.db');
+    const { db, sqlite } = createDatabase(dbPath);
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-2',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+    const service = new GitReviewService(store);
+
+    const head = await service.getFile('exec-2', 'src/index.ts', 'head');
+    expect(head?.content).toBe('export const value = 2;\n');
+
+    const base = await service.getFile('exec-2', 'src/index.ts', 'base');
+    expect(base?.content).toBe('export const value = 1;\n');
+
+    const missingBase = await service.getFile('exec-2', 'src/new-untracked.ts', 'base');
+    expect(missingBase).toBeUndefined();
+
+    sqlite.close();
+  });
 });
 
 function createGitFixture(): string {
