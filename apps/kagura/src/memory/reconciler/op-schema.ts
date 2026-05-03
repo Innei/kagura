@@ -40,6 +40,7 @@ export function parseLlmOps(raw: string): ReconcileOp[] {
   } catch (error) {
     throw new Error(`parseLlmOps: invalid JSON. raw=${raw.slice(0, 500)}`, { cause: error });
   }
+  json = normalizeOpAliases(json);
   const result = responseSchema.safeParse(json);
   if (!result.success) {
     throw new Error(`parseLlmOps: schema validation failed. raw=${raw.slice(0, 500)}`, {
@@ -47,4 +48,21 @@ export function parseLlmOps(raw: string): ReconcileOp[] {
     });
   }
   return result.data.ops;
+}
+
+function normalizeOpAliases(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || !Array.isArray((input as { ops?: unknown }).ops)) {
+    return input;
+  }
+  return {
+    ...(input as Record<string, unknown>),
+    ops: (input as { ops: unknown[] }).ops.map((op) => {
+      if (!op || typeof op !== 'object') return op;
+      const record = op as Record<string, unknown>;
+      if (record.kind === 'destroy' || record.kind === 'remove' || record.kind === 'drop') {
+        return { ...record, kind: 'delete' };
+      }
+      return op;
+    }),
+  };
 }

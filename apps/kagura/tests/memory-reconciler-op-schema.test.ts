@@ -41,6 +41,13 @@ describe('parseLlmOps', () => {
     expect(() => parseLlmOps(json)).toThrow();
   });
 
+  it('normalizes common delete aliases from LLM output', () => {
+    const json = JSON.stringify({
+      ops: [{ kind: 'destroy', ids: ['m1', 'm2'] }],
+    });
+    expect(parseLlmOps(json)).toEqual([{ kind: 'delete', ids: ['m1', 'm2'] }]);
+  });
+
   it('accepts rewrite op with optional expiresAt', () => {
     const json = JSON.stringify({
       ops: [
