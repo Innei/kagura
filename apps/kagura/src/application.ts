@@ -56,6 +56,7 @@ export interface RuntimeApplicationOptions {
   defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
   executionProbePath?: string | undefined;
   instanceLabel?: string | undefined;
+  memoryIngestionLlm?: Pick<OpenAICompatibleClient, 'chat'> | undefined;
   sessionDbPath?: string | undefined;
   skipManifestSync?: boolean | undefined;
   slackCredentials?: SlackAppCredentials | undefined;
@@ -119,10 +120,11 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         })
       : undefined;
 
-  const memoryIngestionService = memoryReconcilerLlm
+  const memoryIngestionLlm = options?.memoryIngestionLlm ?? memoryReconcilerLlm;
+  const memoryIngestionService = memoryIngestionLlm
     ? new MemoryIngestionService({
         auditStore: memoryIngestionAuditStore,
-        llm: memoryReconcilerLlm,
+        llm: memoryIngestionLlm,
         logger: logger.withTag('memory-ingestion'),
         memoryStore,
       })

@@ -35,6 +35,7 @@ interface HostMemoryIngestionResult {
 
 async function main(): Promise<void> {
   config({ path: '.env', override: false });
+  config({ path: '../../.env', override: false });
   process.env.KAGURA_MEMORY_RECONCILER_ENABLED = 'true';
   process.env.KAGURA_MEMORY_RECONCILER_BASE_URL ||= 'https://api.deepseek.com';
   process.env.KAGURA_MEMORY_RECONCILER_MODEL ||= 'deepseek-v4-flash';
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
 
   const { createApplication } = await import('~/application.js');
   const { env } = await import('~/env/server.js');
+  const { OpenAICompatibleClient } = await import('~/memory/reconciler/llm-client.js');
 
   if (!env.SLACK_E2E_ENABLED) {
     throw new Error('Set SLACK_E2E_ENABLED=true before running the host memory ingestion E2E.');
@@ -88,6 +90,13 @@ async function main(): Promise<void> {
   const application = createApplication({
     a2aCoordinatorDbPath: a2aDbPath,
     defaultProviderId: 'codex-cli',
+    memoryIngestionLlm: new OpenAICompatibleClient({
+      apiKey: env.KAGURA_MEMORY_RECONCILER_API_KEY,
+      baseUrl: process.env.KAGURA_MEMORY_RECONCILER_BASE_URL ?? 'https://api.deepseek.com',
+      maxTokens: Number(process.env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS ?? 1024),
+      model: process.env.KAGURA_MEMORY_RECONCILER_MODEL ?? 'deepseek-v4-flash',
+      timeoutMs: Number(process.env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS ?? 30_000),
+    }),
     sessionDbPath: dbPath,
   });
   let caughtError: unknown;
@@ -127,7 +136,7 @@ async function main(): Promise<void> {
         result.matched.assistantReplied = true;
       }
 
-      const snapshot = readIngestionSnapshot(dbPath, runId, memoryMarker);
+      const snapshot = readIngestionSnapshot(dbPath, runId);
       if (snapshot.runStatus) {
         result.ingestionRunStatus = snapshot.runStatus;
       } else {
@@ -181,7 +190,6 @@ async function main(): Promise<void> {
 function readIngestionSnapshot(
   dbPath: string,
   runId: string,
-  memoryMarker: string,
 ): {
   appliedCandidateCount: number;
   candidateCount: number;
@@ -193,14 +201,14 @@ function readIngestionSnapshot(
     const run = sqlite
       .prepare(
         `
-          SELECT id, status
+          SELECT execution_id AS executionId, id, status
           FROM memory_ingestion_runs
           WHERE input LIKE ?
           ORDER BY started_at DESC
           LIMIT 1
         `,
       )
-      .get(`%${runId}%`) as { id: string; status: string } | undefined;
+      .get(`%${runId}%`) as { executionId: string; id: string; status: string } | undefined;
 
     if (!run) {
       return { appliedCandidateCount: 0, candidateCount: 0, memoryCount: 0 };
@@ -215,8 +223,8 @@ function readIngestionSnapshot(
       )
       .get(run.id) as { value: number };
     const memoryCount = sqlite
-      .prepare('SELECT COUNT(*) AS value FROM memories WHERE content LIKE ?')
-      .get(`%${memoryMarker}%`) as { value: number };
+      .prepare('SELECT COUNT(*) AS value FROM memories WHERE metadata LIKE ?')
+      .get(`%"executionId":"${run.executionId}"%`) as { value: number };
 
     return {
       appliedCandidateCount: appliedCandidateCount.value,
@@ -258,7 +266,7 @@ function assertResult(result: HostMemoryIngestionResult): void {
     failures.push('memory ingestion did not apply any high-confidence candidate');
   }
   if (!result.matched.memoryPersisted) {
-    failures.push('memory ingestion did not persist a memory containing the final reply marker');
+    failures.push('memory ingestion did not persist a memory linked to the execution metadata');
   }
 
   if (failures.length > 0) {

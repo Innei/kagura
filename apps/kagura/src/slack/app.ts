@@ -6,6 +6,7 @@ import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redactUnknown } from '~/logger/redact.js';
+import type { MemoryIngestionService } from '~/memory/ingestion/service.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionStore } from '~/session/types.js';
@@ -62,6 +63,7 @@ export interface SlackApplicationDependencies {
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
   logger: AppLogger;
+  memoryIngestionService?: MemoryIngestionService | undefined;
   memoryStore: MemoryStore;
   permissionBridge: SlackPermissionBridge;
   persistentExecutionStore?: PersistentExecutionStore | undefined;
@@ -121,6 +123,7 @@ export function createSlackApp(
     agentTeams: deps.agentTeams,
     channelPreferenceStore: deps.channelPreferenceStore,
     logger: deps.logger.withTag('slack:ingress'),
+    memoryIngestionService: deps.memoryIngestionService,
     memoryStore: deps.memoryStore,
     renderer,
     threadContextLoader,
