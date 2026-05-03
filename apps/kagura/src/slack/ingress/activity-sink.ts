@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+
 import type {
   AgentActivityState,
   AgentExecutionEvent,
@@ -35,6 +37,8 @@ export interface ActivitySinkOptions {
   channel: string;
   client: SlackWebClientLike;
   executionId?: string | undefined;
+  initialGitHead?: string | undefined;
+  initialGitStatus?: string | undefined;
   logger: AppLogger;
   logLabel?: string | undefined;
   permissionBridge?: SlackPermissionBridge | undefined;
@@ -79,8 +83,6 @@ export interface ActivitySink {
 const TOOL_VERB_PATTERN =
   /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using|Writing) (.+?)(?:\.{3})?$/;
 
-const FILE_MODIFY_VERBS = new Set(['Editing', 'Generating', 'Applying', 'Writing']);
-
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const {
     analyticsStore,
@@ -114,7 +116,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let lastStateKey: string | undefined;
   let pendingGeneratedFiles: GeneratedOutputFile[] = [];
   let pendingGeneratedImages: GeneratedImageFile[] = [];
-  let hasFileModifications = false;
   let executionCompletedSuccessfully = false;
   let terminalStopReason:
     | Extract<AgentExecutionEvent, { type: 'lifecycle'; phase: 'stopped' }>['reason']
@@ -390,14 +391,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
     if (!state.clear) {
       previousActivities = collectToolActivity(state, toolHistory, previousActivities);
-      if (!hasFileModifications) {
-        for (const verb of toolHistory.keys()) {
-          if (FILE_MODIFY_VERBS.has(verb)) {
-            hasFileModifications = true;
-            break;
-          }
-        }
-      }
     }
 
     if (state.composing && !state.clear) {
@@ -494,6 +487,30 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       );
     }
   };
+
+  function hasWorkspaceChanges(): boolean {
+    const cwd = workspacePath;
+    if (!cwd || !initialGitHead) return true; // no snapshot, assume changed
+    try {
+      const currentHead = execFileSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+        timeout: 5_000,
+      }).trim();
+      if (currentHead !== initialGitHead) return true; // new commits
+    } catch {
+      return true;
+    }
+    try {
+      const status = execFileSync('git', ['-C', cwd, 'status', '--porcelain'], {
+        encoding: 'utf8',
+        timeout: 5_000,
+      }).trim();
+      if (status !== initialGitStatus) return true; // uncommitted changes differ
+    } catch {
+      return true;
+    }
+    return false;
+  }
 
   return {
     toolHistory,
@@ -736,7 +753,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
           logger.warn('Failed to persist session analytics: %s', String(err));
         }
       }
-      if (executionCompletedSuccessfully && reviewUrl && hasFileModifications) {
+      if (executionCompletedSuccessfully && reviewUrl && hasWorkspaceChanges()) {
         await renderer.postReviewPanelLink(client, channel, threadTs, reviewUrl).catch((err) => {
           logger.warn('Failed to post review panel link: %s', String(err));
         });
