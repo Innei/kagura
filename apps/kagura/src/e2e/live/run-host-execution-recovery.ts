@@ -9,6 +9,7 @@ import { createDatabase } from '~/db/index.js';
 import { env } from '~/env/server.js';
 import { SqlitePersistentExecutionStore } from '~/slack/execution/persistent-execution-store.js';
 
+import { applyLiveE2EDatabaseMigrations } from './db-migrations.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
     unfurl_media: false,
   });
   result.rootMessageTs = rootMessage.ts;
+  applyLiveE2EDatabaseMigrations(dbPath);
   seedInterruptedExecution({
     botUserId: botIdentity.user_id,
     channelId: env.SLACK_E2E_CHANNEL_ID,
