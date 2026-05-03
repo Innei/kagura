@@ -214,47 +214,21 @@ export const memoryContextProcessor: PromptProcessor = {
   name: 'memory-context',
   process(ctx) {
     const memories = ctx.request.contextMemories;
-    if (
-      !memories ||
-      (memories.global.length === 0 &&
-        memories.workspace.length === 0 &&
-        memories.preferences.length === 0)
-    ) {
-      ctx.contextParts.push(
-        '<conversation_memory>\nNo memories from previous sessions.\n</conversation_memory>',
-      );
-      return;
-    }
-
+    const preferences = memories?.preferences ?? [];
     const lines: string[] = [];
 
-    if (memories.preferences.length > 0) {
+    if (preferences.length > 0) {
       lines.push('=== YOUR IDENTITY & USER PREFERENCES (ALWAYS FOLLOW THESE) ===');
-      lines.push(...memories.preferences.map((m, i) => `[${i + 1}] (${m.createdAt}) ${m.content}`));
+      lines.push(...preferences.map((m, i) => `[${i + 1}] (${m.createdAt}) ${m.content}`));
       lines.push('=== End Identity & Preferences ===');
-      lines.push('');
+    } else {
+      lines.push('No identity preferences saved yet.');
     }
 
-    if (memories.global.length > 0) {
-      lines.push('--- Global Memory (across all workspaces) ---');
-      lines.push(
-        ...memories.global.map((m, i) => `[${i + 1}] (${m.category}, ${m.createdAt}) ${m.content}`),
-      );
-      lines.push('--- End Global Memory ---');
-      lines.push('');
-    }
-
-    if (memories.workspace.length > 0) {
-      const label = ctx.request.workspaceRepoId ?? 'unknown';
-      lines.push(`--- Workspace Memory: ${label} ---`);
-      lines.push(
-        ...memories.workspace.map(
-          (m, i) => `[${i + 1}] (${m.category}, ${m.createdAt}) ${m.content}`,
-        ),
-      );
-      lines.push(`--- End Workspace Memory ---`);
-      lines.push('');
-    }
+    lines.push(
+      '',
+      'For other memories (global/workspace project facts, decisions, observations), do NOT assume they are loaded. Use the recall tool / kagura-memory CLI to query on demand when needed.',
+    );
 
     ctx.contextParts.push(`<conversation_memory>\n${lines.join('\n')}\n</conversation_memory>`);
   },
