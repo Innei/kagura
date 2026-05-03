@@ -90,10 +90,10 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const reviewSessionStore = new SqliteReviewSessionStore(db);
   const reviewService = new GitReviewService(reviewSessionStore);
 
-  const reconcilerLlmEnabled =
-    env.KAGURA_MEMORY_RECONCILER_ENABLED && Boolean(env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim());
+  const reconcilerApiKey = env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim();
+  const reconcilerLlmEnabled = env.KAGURA_MEMORY_RECONCILER_ENABLED && Boolean(reconcilerApiKey);
 
-  if (env.KAGURA_MEMORY_RECONCILER_ENABLED && !env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim()) {
+  if (env.KAGURA_MEMORY_RECONCILER_ENABLED && !reconcilerApiKey) {
     logger.warn(
       'KAGURA_MEMORY_RECONCILER_ENABLED=true but KAGURA_MEMORY_RECONCILER_API_KEY is missing or empty; LLM consolidation disabled, prune-only mode active. Set KAGURA_MEMORY_RECONCILER_API_KEY in env to enable LLM consolidation.',
     );
@@ -103,15 +103,16 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger.info('Memory reconciler disabled by config; expired-only prune via startup hook');
   }
 
-  const memoryReconcilerLlm = reconcilerLlmEnabled
-    ? new OpenAICompatibleClient({
-        baseUrl: env.KAGURA_MEMORY_RECONCILER_BASE_URL,
-        apiKey: env.KAGURA_MEMORY_RECONCILER_API_KEY!,
-        model: env.KAGURA_MEMORY_RECONCILER_MODEL,
-        timeoutMs: env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS,
-        maxTokens: env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS,
-      })
-    : undefined;
+  const memoryReconcilerLlm =
+    env.KAGURA_MEMORY_RECONCILER_ENABLED && reconcilerApiKey
+      ? new OpenAICompatibleClient({
+          baseUrl: env.KAGURA_MEMORY_RECONCILER_BASE_URL,
+          apiKey: reconcilerApiKey,
+          model: env.KAGURA_MEMORY_RECONCILER_MODEL,
+          timeoutMs: env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS,
+          maxTokens: env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS,
+        })
+      : undefined;
 
   const memoryReconciler = new MemoryReconciler({
     db,

@@ -91,5 +91,9 @@ describe('MemoryReconciler prune-only mode', () => {
     expect(
       memoryStore.search(undefined, { category: 'preference' }).map((r) => r.id),
     ).not.toContain(m.id);
+
+    const state = reconcileStore.get('global::preference');
+    expect(state?.lastReconciledAt).toBeTruthy();
+    expect(state?.writesSinceReconcile).toBe(0);
   });
 });
