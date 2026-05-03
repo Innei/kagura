@@ -65,6 +65,24 @@ const appConfigSchema = z
     logDir: z.string().optional(),
     logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
     logToFile: z.boolean().optional(),
+    memory: z
+      .object({
+        reconciler: z
+          .object({
+            enabled: z.boolean().optional(),
+            baseUrl: z.string().url().optional(),
+            model: z.string().min(1).optional(),
+            intervalMs: z.number().int().positive().optional(),
+            writeThreshold: z.number().int().nonnegative().optional(),
+            batchSize: z.number().int().positive().optional(),
+            timeoutMs: z.number().int().positive().optional(),
+            maxTokens: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
     worktreeRootDir: z.string().optional(),
@@ -181,6 +199,15 @@ export const env = createEnv({
     REPO_ROOT_DIR: z.string().min(1),
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
     WORKTREE_ROOT_DIR: z.string().min(1).default(resolveDefaultWorktreeRootDir()),
+    KAGURA_MEMORY_RECONCILER_ENABLED: booleanStringSchema.default(false),
+    KAGURA_MEMORY_RECONCILER_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    KAGURA_MEMORY_RECONCILER_API_KEY: z.string().min(1).optional(),
+    KAGURA_MEMORY_RECONCILER_MODEL: z.string().min(1).default('gpt-4o-mini'),
+    KAGURA_MEMORY_RECONCILER_INTERVAL_MS: z.coerce.number().int().positive().default(21_600_000),
+    KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD: z.coerce.number().int().nonnegative().default(5),
+    KAGURA_MEMORY_RECONCILER_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    KAGURA_MEMORY_RECONCILER_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+    KAGURA_MEMORY_RECONCILER_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
     KAGURA_REVIEW_PANEL_ENABLED: booleanStringSchema.default(false),
     KAGURA_REVIEW_PANEL_HOST: z.string().min(1).default('127.0.0.1'),
     KAGURA_REVIEW_PANEL_PORT: z.coerce.number().int().positive().default(3077),
@@ -239,6 +266,39 @@ export const env = createEnv({
     REPO_ROOT_DIR: envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir)),
     REPO_SCAN_DEPTH: envOrConfig('REPO_SCAN_DEPTH', configNumber(appConfig.repoScanDepth)),
     WORKTREE_ROOT_DIR: envOrConfig('WORKTREE_ROOT_DIR', configString(appConfig.worktreeRootDir)),
+    KAGURA_MEMORY_RECONCILER_ENABLED: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_ENABLED',
+      configBoolean(appConfig.memory?.reconciler?.enabled),
+    ),
+    KAGURA_MEMORY_RECONCILER_BASE_URL: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_BASE_URL',
+      configString(appConfig.memory?.reconciler?.baseUrl),
+    ),
+    KAGURA_MEMORY_RECONCILER_API_KEY: process.env.KAGURA_MEMORY_RECONCILER_API_KEY,
+    KAGURA_MEMORY_RECONCILER_MODEL: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_MODEL',
+      configString(appConfig.memory?.reconciler?.model),
+    ),
+    KAGURA_MEMORY_RECONCILER_INTERVAL_MS: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_INTERVAL_MS',
+      configNumber(appConfig.memory?.reconciler?.intervalMs),
+    ),
+    KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD',
+      configNumber(appConfig.memory?.reconciler?.writeThreshold),
+    ),
+    KAGURA_MEMORY_RECONCILER_BATCH_SIZE: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_BATCH_SIZE',
+      configNumber(appConfig.memory?.reconciler?.batchSize),
+    ),
+    KAGURA_MEMORY_RECONCILER_TIMEOUT_MS: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_TIMEOUT_MS',
+      configNumber(appConfig.memory?.reconciler?.timeoutMs),
+    ),
+    KAGURA_MEMORY_RECONCILER_MAX_TOKENS: envOrConfig(
+      'KAGURA_MEMORY_RECONCILER_MAX_TOKENS',
+      configNumber(appConfig.memory?.reconciler?.maxTokens),
+    ),
     KAGURA_REVIEW_PANEL_ENABLED: envOrConfig(
       'KAGURA_REVIEW_PANEL_ENABLED',
       configBoolean(appConfig.reviewPanel?.enabled),
