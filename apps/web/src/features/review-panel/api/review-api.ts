@@ -1,4 +1,10 @@
-import type { ReviewDiffResponse, ReviewSession } from '../types';
+import type {
+  ReviewDiffResponse,
+  ReviewFileResponse,
+  ReviewSession,
+  ReviewTreeEntry,
+  ReviewTreeResponse,
+} from '../types';
 import { getJson } from './http';
 
 export async function loadInitialReviewData(reviewExecutionId: string, apiBasePath = '') {
@@ -18,6 +24,30 @@ export async function loadDiff(
     apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}/diff${suffix}`),
   );
   return payload.diff;
+}
+
+export async function loadTree(
+  reviewExecutionId: string,
+  apiBasePath = '',
+): Promise<ReviewTreeEntry[]> {
+  const payload = await getJson<ReviewTreeResponse>(
+    apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}/tree`),
+  );
+  return payload.entries;
+}
+
+export async function loadFile(
+  reviewExecutionId: string,
+  filePath: string,
+  apiBasePath = '',
+): Promise<string> {
+  const payload = await getJson<ReviewFileResponse>(
+    apiUrl(
+      apiBasePath,
+      `/api/reviews/${encodeURIComponent(reviewExecutionId)}/file?path=${encodeURIComponent(filePath)}`,
+    ),
+  );
+  return payload.content;
 }
 
 function apiUrl(apiBasePath: string, path: string): string {

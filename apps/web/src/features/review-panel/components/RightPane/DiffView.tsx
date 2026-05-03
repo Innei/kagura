@@ -24,8 +24,10 @@ export function DiffView({ colorScheme, diff, diffStyle }: DiffViewProps) {
             disableWorkerPool
             patch={patch}
             options={{
+              collapsed: false,
               diffIndicators: 'classic',
               diffStyle,
+              expandUnchanged: true,
               hunkSeparators: 'line-info-basic',
               lineDiffType: 'word',
               theme: { dark: 'github-dark-high-contrast', light: 'github-light-high-contrast' },

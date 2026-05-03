@@ -1,14 +1,18 @@
 import { themeToTreeStyles } from '@pierre/trees';
-import { FileTree, useFileTree } from '@pierre/trees/react';
+import { FileTree as PierreFileTree, useFileTree } from '@pierre/trees/react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { darkTokens, lightTokens } from '../../../../theme/tokens';
 import type { ReviewChangedFile } from '../../types';
 import { mapGitStatus } from '../../utils/git-status';
-import * as styles from './FileNav.styles';
-import type { FileNavView } from './SidebarHeader';
+import * as styles from './FileTree.styles';
+import type { FileNavView } from './SidebarToolbar';
 
 const TREE_DECORATION_CSS = `
+  [data-item-section="decoration"] {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
   [data-item-section="decoration"] span[title*="additions, 0 deletions"] {
     color: var(--review-diff-add);
   }
@@ -66,7 +70,6 @@ function observeDecorations(host: HTMLElement): () => void {
           target.closest('[data-item-section="decoration"]')
         ) {
           target.dataset.reviewSplit = '';
-
           splitDecorationSpan(target);
         }
         continue;
@@ -81,32 +84,41 @@ function observeDecorations(host: HTMLElement): () => void {
   return () => observer.disconnect();
 }
 
-interface FileNavProps {
-  changedFiles: ReviewChangedFile[];
+const FLAT_SEP = '·';
+
+function toDisplayPath(realPath: string, view: FileNavView): string {
+  return view === 'flat' ? realPath.replaceAll('/', FLAT_SEP) : realPath;
+}
+
+function toRealPath(displayPath: string, view: FileNavView): string {
+  return view === 'flat' ? displayPath.replaceAll(FLAT_SEP, '/') : displayPath;
+}
+
+function matchPath(path: string, filter: string): boolean {
+  if (!filter) return true;
+  return path.toLowerCase().includes(filter.toLowerCase());
+}
+
+interface FileTreeProps {
   colorScheme: 'dark' | 'light';
+  files: ReviewChangedFile[];
   filter: string;
   onSelectPath: (path: string) => void;
   selectedPath?: string | undefined;
   view: FileNavView;
 }
 
-function matchPath(path: string, filter: string): boolean {
-  if (!filter) return true;
-  const needle = filter.toLowerCase();
-  return path.toLowerCase().includes(needle);
-}
-
-export function FileNav({
-  changedFiles,
+export function FileTree({
   colorScheme,
+  files,
   filter,
   onSelectPath,
   selectedPath,
   view,
-}: FileNavProps) {
+}: FileTreeProps) {
   const filtered = useMemo(
-    () => changedFiles.filter((file) => matchPath(file.path, filter)),
-    [changedFiles, filter],
+    () => files.filter((file) => matchPath(file.path, filter)),
+    [files, filter],
   );
 
   if (filtered.length === 0) {
@@ -131,16 +143,6 @@ export function FileNav({
       />
     </div>
   );
-}
-
-const FLAT_SEP = '·';
-
-function toDisplayPath(realPath: string, view: FileNavView): string {
-  return view === 'flat' ? realPath.replaceAll('/', FLAT_SEP) : realPath;
-}
-
-function toRealPath(displayPath: string, view: FileNavView): string {
-  return view === 'flat' ? displayPath.replaceAll(FLAT_SEP, '/') : displayPath;
 }
 
 interface TreeViewProps {
@@ -190,8 +192,8 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath, view 
     paths,
     stickyFolders: view === 'tree',
     unsafeCSS: TREE_DECORATION_CSS,
-    onSelectionChange: (paths) => {
-      const next = paths.find((path) => filesByPathRef.current.has(path));
+    onSelectionChange: (selectedPaths) => {
+      const next = selectedPaths.find((path) => filesByPathRef.current.has(path));
       if (!next) return;
       if (next === selectedPathRef.current) return;
       onSelectPathRef.current(toRealPath(next, viewRef.current));
@@ -230,12 +232,29 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath, view 
 
   useEffect(() => {
     let disposed = false;
-    let teardown: (() => void) | undefined;
+    let teardownObserver: (() => void) | undefined;
+    let teardownClick: (() => void) | undefined;
     const tryAttach = () => {
       if (disposed) return;
       const host = model.getFileTreeContainer();
       if (host) {
-        teardown = observeDecorations(host);
+        teardownObserver = observeDecorations(host);
+        const handler = (event: Event) => {
+          const path = event.composedPath();
+          for (const node of path) {
+            if (!(node instanceof HTMLElement)) continue;
+            const itemPath = node.dataset?.itemPath;
+            const itemType = node.dataset?.itemType;
+            if (itemPath && itemType === 'file' && filesByPathRef.current.has(itemPath)) {
+              if (itemPath !== selectedPathRef.current) {
+                onSelectPathRef.current(toRealPath(itemPath, viewRef.current));
+              }
+              return;
+            }
+          }
+        };
+        host.addEventListener('click', handler);
+        teardownClick = () => host.removeEventListener('click', handler);
         return;
       }
       requestAnimationFrame(tryAttach);
@@ -243,26 +262,32 @@ function TreeView({ changedFiles, colorScheme, onSelectPath, selectedPath, view 
     tryAttach();
     return () => {
       disposed = true;
-      teardown?.();
+      teardownObserver?.();
+      teardownClick?.();
     };
   }, [model]);
 
-  const treeStyle = useMemo(
-    () => ({
+  const treeStyle = useMemo(() => {
+    const isDark = colorScheme === 'dark';
+    const selectionBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
+    const hoverBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+    return {
       ...themeToTreeStyles({
         type: colorScheme,
-        bg: tokens.bg.surface,
+        bg: tokens.bg.canvas,
         fg: tokens.fg.default,
       }),
+      ['--trees-theme-list-active-selection-bg' as string]: selectionBg,
+      ['--trees-theme-list-active-selection-fg' as string]: tokens.fg.default,
+      ['--trees-theme-list-hover-bg' as string]: hoverBg,
       ['--review-diff-add' as string]: tokens.diff.add,
       ['--review-diff-del' as string]: tokens.diff.del,
-    }),
-    [colorScheme, tokens],
-  );
+    };
+  }, [colorScheme, tokens]);
 
   return (
     <div className={styles.treeWrap} style={treeStyle}>
-      <FileTree className={styles.tree} model={model} />
+      <PierreFileTree className={styles.tree} model={model} />
     </div>
   );
 }

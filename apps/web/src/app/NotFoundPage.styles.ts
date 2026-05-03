@@ -40,9 +40,10 @@ export const eyebrow = css`
 export const title = css`
   font-size: 32px;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: -0.4px;
   line-height: 1.15;
   margin: 0;
+  text-wrap: balance;
 `;
 
 export const description = css`
@@ -51,6 +52,7 @@ export const description = css`
   line-height: 1.6;
   margin: 0;
   max-width: 440px;
+  text-wrap: pretty;
 `;
 
 export const path = css`

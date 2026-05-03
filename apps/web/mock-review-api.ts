@@ -1,6 +1,12 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import type { Plugin } from 'vite';
 
 const MOCK_EXECUTION_ID = 'mock-review';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, '..', '..');
 
 const changedFiles = [
   {
@@ -485,7 +491,7 @@ Use KAGURA_REVIEW_PANEL_BASE_URL to control links posted to Slack.
 export function createMockReviewApiPlugin(): Plugin {
   return {
     configureServer(server) {
-      server.middlewares.use((request, response, next) => {
+      server.middlewares.use(async (request, response, next) => {
         if (!request.url?.startsWith('/api/reviews/')) {
           next();
           return;
@@ -522,12 +528,17 @@ export function createMockReviewApiPlugin(): Plugin {
         }
 
         if (resource === 'file') {
-          const path = url.searchParams.get('path') ?? '';
+          const filePath = url.searchParams.get('path') ?? '';
+          const real = await readRepoFile(filePath);
+          const explicit = real ?? mockFileContents.get(filePath);
+          const fromDiff =
+            !explicit && filePath && fileDiffs.has(filePath)
+              ? reconstructHeadFromDiff(fileDiffs.get(filePath) ?? '')
+              : undefined;
+          const fallback = `// Mock source for ${filePath || 'unknown file'}\n// File not found in repo working tree.\n`;
           sendJson(response, 200, {
-            content:
-              mockFileContents.get(path) ??
-              `Mock file content for ${path || 'unknown file'}.\n\nUse the diff view for visual review work.`,
-            path,
+            content: explicit ?? fromDiff ?? fallback,
+            path: filePath,
           });
           return;
         }
@@ -537,6 +548,62 @@ export function createMockReviewApiPlugin(): Plugin {
     },
     name: 'kagura-mock-review-api',
   };
+}
+
+async function readRepoFile(rel: string): Promise<string | undefined> {
+  if (!rel || rel.includes('..') || path.isAbsolute(rel)) return undefined;
+  const abs = path.resolve(REPO_ROOT, rel);
+  if (!abs.startsWith(REPO_ROOT + path.sep) && abs !== REPO_ROOT) return undefined;
+  try {
+    return await readFile(abs, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+const HUNK_HEADER_RE = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+function reconstructHeadFromDiff(diff: string): string {
+  if (!diff.trim()) return '';
+  const lines = diff.split('\n');
+  const out = new Map<number, string>();
+  let cursor = 0;
+  for (const line of lines) {
+    if (
+      line.startsWith('diff --git') ||
+      line.startsWith('index ') ||
+      line.startsWith('--- ') ||
+      line.startsWith('+++ ') ||
+      line.startsWith('Binary files')
+    ) {
+      continue;
+    }
+    const match = HUNK_HEADER_RE.exec(line);
+    if (match) {
+      const start = Number.parseInt(match[1] ?? '0', 10);
+      cursor = Number.isFinite(start) ? start : 0;
+      continue;
+    }
+    if (cursor === 0) continue;
+    if (line.startsWith('+')) {
+      out.set(cursor, line.slice(1));
+      cursor += 1;
+    } else if (line.startsWith('-')) {
+      // not in head
+    } else if (line.startsWith('\\')) {
+      // newline marker
+    } else {
+      out.set(cursor, line.startsWith(' ') ? line.slice(1) : line);
+      cursor += 1;
+    }
+  }
+  if (out.size === 0) return '';
+  const max = Math.max(...out.keys());
+  const result: string[] = [];
+  for (let i = 1; i <= max; i++) {
+    result.push(out.get(i) ?? '  // …');
+  }
+  return result.join('\n');
 }
 
 function sendJson(

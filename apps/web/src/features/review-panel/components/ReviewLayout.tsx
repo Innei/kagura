@@ -1,50 +1,91 @@
-import { ChevronRight } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 import { useColorScheme } from '../../../theme/use-color-scheme';
 import { useFileNav } from '../hooks/use-file-nav';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
-import type { ReviewSession } from '../types';
-import { DiffPane } from './DiffPane/DiffPane';
-import type { DiffStyle } from './DiffPane/DiffToolbar';
+import type { ReviewChangedFile, ReviewSession, ReviewTreeEntry } from '../types';
+import { compareTreePaths } from '../utils/compare-paths';
 import * as styles from './ReviewLayout.styles';
-import { FileNav } from './Sidebar/FileNav';
-import type { FileNavView } from './Sidebar/SidebarHeader';
-import { SidebarHeader } from './Sidebar/SidebarHeader';
+import type { DiffStyle, ViewMode } from './RightPane/DiffToolbar';
+import { RightPane } from './RightPane/RightPane';
+import { Sidebar } from './Sidebar/Sidebar';
+import type { SidebarTab } from './Sidebar/SidebarTabs';
+import type { FileNavView } from './Sidebar/SidebarToolbar';
+import { StatusBar } from './StatusBar';
+import { TitleBar } from './TitleBar';
 
 interface ReviewLayoutProps {
+  content?: string | undefined;
+  contentLoading?: boolean;
   diff: string;
+  onRequestTree?: () => void;
   onSelectPath: (path: string | undefined) => void;
   selectedPath?: string | undefined;
   session: ReviewSession;
+  treeEntries?: ReviewTreeEntry[] | undefined;
+  treeLoading?: boolean;
 }
 
-export function ReviewLayout({ diff, onSelectPath, selectedPath, session }: ReviewLayoutProps) {
+export function ReviewLayout({
+  content,
+  contentLoading,
+  diff,
+  onRequestTree,
+  onSelectPath,
+  selectedPath,
+  session,
+  treeEntries,
+  treeLoading,
+}: ReviewLayoutProps) {
   const colorScheme = useColorScheme();
   const sidebarRef = useRef<ImperativePanelHandle>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [tab, setTab] = useState<SidebarTab>('changes');
   const [view, setView] = useState<FileNavView>('tree');
   const [filter, setFilter] = useState('');
   const [diffStyle, setDiffStyle] = useState<DiffStyle>('split');
+  const [viewMode, setViewMode] = useState<ViewMode>('diff');
 
-  const totals = useMemo(() => {
-    let additions = 0;
-    let deletions = 0;
-    for (const file of session.changedFiles) {
-      additions += file.additions ?? 0;
-      deletions += file.deletions ?? 0;
-    }
-    return { additions, deletions };
-  }, [session.changedFiles]);
+  const orderedChangedFiles = useMemo(() => {
+    const arr = [...session.changedFiles];
+    arr.sort((a, b) =>
+      view === 'flat' ? a.path.localeCompare(b.path) : compareTreePaths(a.path, b.path),
+    );
+    return arr;
+  }, [session.changedFiles, view]);
 
   const { goFirst, goLast, goNext, goPrevious, selectedFile, selectedIndex } = useFileNav(
-    session.changedFiles,
+    orderedChangedFiles,
     selectedPath,
     onSelectPath,
   );
+
+  useEffect(() => {
+    setViewMode('diff');
+  }, [selectedPath]);
+
+  useEffect(() => {
+    if (tab === 'files') onRequestTree?.();
+  }, [tab, onRequestTree]);
+
+  const repoFiles = useMemo<ReviewChangedFile[] | undefined>(() => {
+    if (!treeEntries) return undefined;
+    const statusByPath = new Map(session.changedFiles.map((file) => [file.path, file]));
+    return treeEntries
+      .filter((entry) => entry.type === 'file')
+      .map((entry) => {
+        const change = statusByPath.get(entry.path);
+        return {
+          path: entry.path,
+          status: change?.status ?? entry.status ?? '',
+          additions: change?.additions ?? 0,
+          deletions: change?.deletions ?? 0,
+        };
+      });
+  }, [treeEntries, session.changedFiles]);
 
   const handleToggleSidebar = useCallback(() => {
     const panel = sidebarRef.current;
@@ -55,15 +96,14 @@ export function ReviewLayout({ diff, onSelectPath, selectedPath, session }: Revi
 
   const handleFocusFilter = useCallback(() => {
     if (sidebarRef.current?.isCollapsed()) sidebarRef.current.expand();
+    setTab('changes');
     requestAnimationFrame(() => {
       filterInputRef.current?.focus();
       filterInputRef.current?.select();
     });
   }, []);
 
-  const handleClearFilter = useCallback(() => {
-    setFilter('');
-  }, []);
+  const handleClearFilter = useCallback(() => setFilter(''), []);
 
   const handleCopyPath = useCallback(() => {
     if (!selectedFile) return;
@@ -79,22 +119,16 @@ export function ReviewLayout({ diff, onSelectPath, selectedPath, session }: Revi
     onToggleSidebar: handleToggleSidebar,
   });
 
-  const branchLabel = formatBranch(session);
-  const repo = session.workspaceLabel ?? session.workspaceRepoId ?? 'Review';
-
   return (
     <div className={styles.root}>
       <a className={styles.skipLink} href="#review-main">
         Skip to diff
       </a>
-      <PanelGroup
-        autoSaveId="kagura-review-panel"
-        direction="horizontal"
-        style={{ height: '100%', width: '100%' }}
-      >
+      <TitleBar session={session} />
+      <PanelGroup autoSaveId="kagura-review-panel" className={styles.panels} direction="horizontal">
         <Panel
           collapsible
-          collapsedSize={3}
+          collapsedSize={0}
           defaultSize={26}
           maxSize={45}
           minSize={16}
@@ -103,70 +137,49 @@ export function ReviewLayout({ diff, onSelectPath, selectedPath, session }: Revi
           onCollapse={() => setCollapsed(true)}
           onExpand={() => setCollapsed(false)}
         >
-          {collapsed ? (
-            <aside aria-label="Sidebar (collapsed)" className={styles.sidebarCollapsed}>
-              <button
-                aria-label="Expand sidebar"
-                className={styles.expandButton}
-                title="Expand sidebar ([)"
-                type="button"
-                onClick={() => sidebarRef.current?.expand()}
-              >
-                <ChevronRight aria-hidden="true" size={14} />
-              </button>
-            </aside>
-          ) : (
-            <aside aria-label="Changed files" className={styles.sidebar}>
-              <SidebarHeader
-                additions={totals.additions}
-                branchLabel={branchLabel}
-                deletions={totals.deletions}
-                fileCount={session.changedFiles.length}
-                filter={filter}
-                filterInputRef={filterInputRef}
-                repo={repo}
-                view={view}
-                onChangeFilter={setFilter}
-                onChangeView={setView}
-                onClearFilter={handleClearFilter}
-              />
-              <FileNav
-                changedFiles={session.changedFiles}
-                colorScheme={colorScheme}
-                filter={filter}
-                selectedPath={selectedPath}
-                view={view}
-                onSelectPath={onSelectPath}
-              />
-            </aside>
-          )}
+          <Sidebar
+            changedFiles={session.changedFiles}
+            collapsed={collapsed}
+            colorScheme={colorScheme}
+            filter={filter}
+            filterInputRef={filterInputRef}
+            repoFiles={repoFiles}
+            repoLoading={treeLoading ?? false}
+            selectedPath={selectedPath}
+            tab={tab}
+            view={view}
+            onChangeFilter={setFilter}
+            onChangeTab={setTab}
+            onChangeView={setView}
+            onClearFilter={handleClearFilter}
+            onExpand={() => sidebarRef.current?.expand()}
+            onSelectPath={onSelectPath}
+          />
         </Panel>
         <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
         <Panel minSize={40} order={2}>
-          <DiffPane
+          <RightPane
             colorScheme={colorScheme}
+            content={content}
+            contentLoading={contentLoading ?? false}
             diff={diff}
             diffStyle={diffStyle}
-            fileTotal={session.changedFiles.length}
             selectedFile={selectedFile}
-            selectedIndex={selectedIndex}
+            selectedPath={selectedPath}
+            viewMode={viewMode}
             onChangeDiffStyle={setDiffStyle}
+            onChangeViewMode={setViewMode}
             onCopyPath={handleCopyPath}
             onNext={goNext}
             onPrevious={goPrevious}
-            onSelectFullDiff={() => onSelectPath(undefined)}
           />
         </Panel>
       </PanelGroup>
+      <StatusBar
+        fileTotal={session.changedFiles.length}
+        selectedFile={selectedFile}
+        selectedIndex={selectedIndex}
+      />
     </div>
   );
-}
-
-function formatBranch(session: ReviewSession): string | undefined {
-  const base = session.baseBranch;
-  const head = session.head?.slice(0, 7);
-  if (base && head) return `${base} → ${head}`;
-  if (base) return base;
-  if (head) return head;
-  return undefined;
 }

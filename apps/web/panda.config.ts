@@ -47,6 +47,20 @@ export default defineConfig({
           delLight: { value: '#cf222e' },
           delDark: { value: '#f85149' },
         },
+        accent: {
+          light: { value: neutral[900] },
+          dark: { value: neutral[50] },
+        },
+        status: {
+          addedLight: { value: '#1a7f37' },
+          addedDark: { value: '#3fb950' },
+          modifiedLight: { value: '#9a6700' },
+          modifiedDark: { value: '#d29922' },
+          deletedLight: { value: '#cf222e' },
+          deletedDark: { value: '#f85149' },
+          renamedLight: { value: '#8250df' },
+          renamedDark: { value: '#bc8cff' },
+        },
       },
       spacing: {
         1: { value: '4px' },
@@ -71,10 +85,10 @@ export default defineConfig({
         md: { value: '6px' },
       },
       fontSizes: {
-        xs: { value: '11px' },
-        sm: { value: '12px' },
-        md: { value: '13px' },
-        lg: { value: '14px' },
+        xs: { value: '12px' },
+        sm: { value: '13px' },
+        md: { value: '14px' },
+        lg: { value: '15px' },
       },
       fonts: {
         sans: {
@@ -99,10 +113,13 @@ export default defineConfig({
             value: { base: '#ffffff', _dark: '{colors.neutral.900}' },
           },
           hover: {
-            value: { base: '{colors.neutral.100}', _dark: '{colors.neutral.800}' },
+            value: { base: '{colors.neutral.200}', _dark: '{colors.neutral.800}' },
           },
           subtle: {
-            value: { base: '{colors.neutral.100}', _dark: '{colors.neutral.800}' },
+            value: { base: '{colors.neutral.200}', _dark: '{colors.neutral.800}' },
+          },
+          wash: {
+            value: { base: 'rgba(0,0,0,0.06)', _dark: 'rgba(255,255,255,0.04)' },
           },
           selected: {
             value: { base: '{colors.neutral.900}', _dark: '{colors.neutral.50}' },
@@ -115,6 +132,9 @@ export default defineConfig({
           muted: {
             value: { base: '{colors.neutral.500}', _dark: '{colors.neutral.400}' },
           },
+          dim: {
+            value: { base: '{colors.neutral.400}', _dark: '{colors.neutral.600}' },
+          },
           onSelected: {
             value: { base: '{colors.neutral.50}', _dark: '{colors.neutral.950}' },
           },
@@ -122,6 +142,9 @@ export default defineConfig({
         border: {
           default: {
             value: { base: '{colors.neutral.200}', _dark: '{colors.neutral.800}' },
+          },
+          subtle: {
+            value: { base: '{colors.neutral.100}', _dark: '{colors.neutral.900}' },
           },
           strong: {
             value: { base: '{colors.neutral.900}', _dark: '{colors.neutral.50}' },
@@ -140,11 +163,46 @@ export default defineConfig({
             value: { base: '{colors.diff.delLight}', _dark: '{colors.diff.delDark}' },
           },
         },
+        accent: {
+          fg: {
+            value: { base: '{colors.accent.light}', _dark: '{colors.accent.dark}' },
+          },
+          bg: {
+            value: { base: 'rgba(0,0,0,0.06)', _dark: 'rgba(255,255,255,0.08)' },
+          },
+        },
+        status: {
+          added: {
+            value: { base: '{colors.status.addedLight}', _dark: '{colors.status.addedDark}' },
+          },
+          modified: {
+            value: { base: '{colors.status.modifiedLight}', _dark: '{colors.status.modifiedDark}' },
+          },
+          deleted: {
+            value: { base: '{colors.status.deletedLight}', _dark: '{colors.status.deletedDark}' },
+          },
+          renamed: {
+            value: { base: '{colors.status.renamedLight}', _dark: '{colors.status.renamedDark}' },
+          },
+        },
       },
     },
   },
   globalCss: {
-    ':root': { colorScheme: 'light dark' },
+    ':root': {
+      'colorScheme': 'light dark',
+      // Pierre/diffs (shadow DOM)
+      '--diffs-font-family':
+        "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      '--diffs-header-font-family':
+        "'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      '--diffs-font-size': '14px',
+      '--diffs-line-height': '1.55',
+      // Pierre/trees (shadow DOM)
+      '--trees-font-family-override':
+        "'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      '--trees-font-size-override': '14px',
+    },
     'html, body': { margin: 0, padding: 0 },
     'body': {
       background: '{colors.bg.canvas}',

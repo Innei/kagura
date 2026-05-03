@@ -1,27 +1,26 @@
 import { css } from 'styled-system/css';
 
 export const root = css`
-  display: grid;
+  height: 100%;
   min-height: 0;
-  min-width: 0;
   overflow: hidden;
 `;
 
 export const treeWrap = css`
-  display: block;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-width: thin;
 `;
 
 export const tree = css`
-  display: block;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
 `;
 
 export const empty = css`
   color: token(colors.fg.muted);
-  padding: token(spacing.2) token(spacing.4);
+  font-size: token(fontSizes.xs);
+  padding: token(spacing.3);
+  text-align: center;
 `;

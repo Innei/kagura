@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
 
-import { loadDiff, loadInitialReviewData } from '../features/review-panel/api/review-api';
+import {
+  loadDiff,
+  loadFile,
+  loadInitialReviewData,
+  loadTree,
+} from '../features/review-panel/api/review-api';
 import { ReviewLayout } from '../features/review-panel/components/ReviewLayout';
 import { ShellState } from '../features/review-panel/components/ShellState';
-import type { ReviewSession } from '../features/review-panel/types';
+import type { ReviewSession, ReviewTreeEntry } from '../features/review-panel/types';
 
 interface ReviewPageProps {
   apiBasePath: string;
@@ -16,6 +21,10 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [diff, setDiff] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
+  const [treeEntries, setTreeEntries] = useState<ReviewTreeEntry[] | undefined>();
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [content, setContent] = useState<string | undefined>(undefined);
+  const [contentLoading, setContentLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -43,6 +52,30 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
       });
   }, [apiBasePath, error, executionId, loading, selectedPath]);
 
+  useEffect(() => {
+    if (loading || error) return;
+    if (!selectedPath) {
+      setContent(undefined);
+      return;
+    }
+    setContentLoading(true);
+    let cancelled = false;
+    void loadFile(executionId, selectedPath, apiBasePath)
+      .then((next) => {
+        if (cancelled) return;
+        setContent(next);
+        setContentLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setContent(undefined);
+        setContentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBasePath, error, executionId, loading, selectedPath]);
+
   if (loading) {
     return <ShellState text="Loading review..." />;
   }
@@ -51,11 +84,30 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
     return <ShellState text={error ?? 'Review not found.'} />;
   }
 
+  const handleRequestTree = () => {
+    if (treeEntries || treeLoading) return;
+    setTreeLoading(true);
+    void loadTree(executionId, apiBasePath)
+      .then((entries) => {
+        setTreeEntries(entries);
+        setTreeLoading(false);
+      })
+      .catch(() => {
+        setTreeEntries([]);
+        setTreeLoading(false);
+      });
+  };
+
   return (
     <ReviewLayout
+      content={content}
+      contentLoading={contentLoading}
       diff={diff}
       selectedPath={selectedPath}
       session={session}
+      treeEntries={treeEntries}
+      treeLoading={treeLoading}
+      onRequestTree={handleRequestTree}
       onSelectPath={setSelectedPath}
     />
   );

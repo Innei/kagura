@@ -3,46 +3,18 @@ import { css } from 'styled-system/css';
 export const root = css`
   background: token(colors.bg.canvas);
   color: token(colors.fg.default);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   height: 100vh;
-  width: 100%;
+  min-height: 0;
   overflow: hidden;
+  width: 100%;
 `;
 
-export const sidebar = css`
-  background: token(colors.bg.surface);
-  border-right: 1px solid token(colors.border.default);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+export const panels = css`
   height: 100%;
   min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-`;
-
-export const sidebarCollapsed = css`
-  background: token(colors.bg.surface);
-  border-right: 1px solid token(colors.border.default);
-  display: grid;
-  height: 100%;
-  place-items: center;
-  padding: token(spacing.2) 0;
-`;
-
-export const expandButton = css`
-  background: transparent;
-  border: 1px solid token(colors.border.default);
-  border-radius: token(radii.md);
-  color: token(colors.fg.muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: token(fontSizes.xs);
-  height: token(sizes.control.md);
-  padding: 0;
-  width: token(sizes.control.md);
-  &:hover {
-    background: token(colors.bg.hover);
-    color: token(colors.fg.default);
-  }
+  width: 100%;
 `;
 
 export const resizeHandle = css`
@@ -56,12 +28,12 @@ export const resizeHandle = css`
     content: '';
     inset: 0 -1px;
     position: absolute;
-    z-index: 99999;
     transition: background 120ms token(easings.standard);
+    z-index: 99999;
   }
   &:hover::before,
   &[data-resize-handle-active]::before {
-    background: token(colors.border.strong);
+    background: token(colors.accent.fg);
   }
   &:focus-visible::before {
     background: token(colors.focus.ring);

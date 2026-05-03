@@ -21,3 +21,18 @@ export interface ReviewSession {
 export interface ReviewDiffResponse {
   diff: string;
 }
+
+export interface ReviewTreeEntry {
+  path: string;
+  status?: string | undefined;
+  type: 'file' | 'dir';
+}
+
+export interface ReviewTreeResponse {
+  entries: ReviewTreeEntry[];
+}
+
+export interface ReviewFileResponse {
+  content: string;
+  path: string;
+}
