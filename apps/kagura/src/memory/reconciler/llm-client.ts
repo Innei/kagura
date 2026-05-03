@@ -31,6 +31,7 @@ export class OpenAICompatibleClient {
           max_tokens: this.options.maxTokens,
           messages,
           response_format: { type: 'json_object' },
+          ...deepSeekThinkingOverride(this.options),
         }),
       });
       if (!response.ok) {
@@ -54,4 +55,18 @@ export class OpenAICompatibleClient {
       clearTimeout(timer);
     }
   }
+}
+
+function deepSeekThinkingOverride(
+  options: OpenAICompatibleClientOptions,
+): { thinking: { type: 'disabled' } } | Record<string, never> {
+  try {
+    const host = new URL(options.baseUrl).hostname;
+    if (host === 'api.deepseek.com' && options.model.startsWith('deepseek-v4-')) {
+      return { thinking: { type: 'disabled' } };
+    }
+  } catch {
+    /* If baseUrl validation changes, fall back to plain OpenAI-compatible payload. */
+  }
+  return {};
 }

@@ -55,6 +55,24 @@ describe('OpenAICompatibleClient', () => {
     );
   });
 
+  it('disables thinking mode for official DeepSeek V4 models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] }), {
+        status: 200,
+      }),
+    );
+    const client = new OpenAICompatibleClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk',
+      model: 'deepseek-v4-flash',
+      timeoutMs: 1000,
+      maxTokens: 8,
+    });
+    await client.chat([{ role: 'user', content: 'x' }]);
+    const body = JSON.parse(String((fetchSpy.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body).toMatchObject({ thinking: { type: 'disabled' } });
+  });
+
   it('throws with status code on non-2xx', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('quota exceeded', { status: 429 }),
