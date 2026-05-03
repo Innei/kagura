@@ -168,6 +168,8 @@ function createMemoryStoreFixture(): MemoryStore {
   };
 
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => 0,
     delete: () => false,
     deleteAll: () => 0,

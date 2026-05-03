@@ -15,6 +15,7 @@ import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import { GitReviewService } from '~/review/git-review-service.js';
 import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
@@ -76,7 +77,8 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   fs.mkdirSync(path.dirname(a2aCoordinatorDbPath), { recursive: true });
   const a2aCoordinatorStore = new SqliteA2ACoordinatorStore(a2aCoordinatorDbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
-  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  const reconcileStateStore = new SqliteReconcileStateStore(db);
+  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'), reconcileStateStore);
   const channelPreferenceStore = new SqliteChannelPreferenceStore(
     db,
     logger.withTag('channel-preference'),

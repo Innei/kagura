@@ -39,6 +39,8 @@ function createMockSessionStore(count = 0): SessionStore {
 
 function createMockMemoryStore(count = 0): MemoryStore {
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: () => count,
     delete: () => false,
     deleteAll: () => 0,

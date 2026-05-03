@@ -60,6 +60,8 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
   const records = [...initial];
 
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: (repoId?: string) => {
       if (repoId) return records.filter((r) => r.repoId === repoId).length;
       return records.length;

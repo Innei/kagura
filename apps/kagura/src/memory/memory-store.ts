@@ -6,8 +6,12 @@ import type { AppDatabase } from '~/db/index.js';
 import { memories } from '~/db/schema.js';
 import type { AppLogger } from '~/logger/index.js';
 
+import type { SqliteReconcileStateStore } from './reconciler/state-store.js';
+import type { ReconcileOp } from './reconciler/types.js';
+import { bucketKeyFor } from './reconciler/types.js';
 import type {
   ContextMemories,
+  DirtyBucketSummary,
   MemoryRecord,
   MemorySearchOptions,
   MemoryStore,
@@ -23,6 +27,7 @@ export class SqliteMemoryStore implements MemoryStore {
   constructor(
     private readonly db: AppDatabase,
     private readonly logger: AppLogger,
+    private readonly reconcileState: SqliteReconcileStateStore,
   ) {}
 
   countAll(repoId?: string): number {
@@ -58,6 +63,13 @@ export class SqliteMemoryStore implements MemoryStore {
 
     const scope = input.repoId ? 'workspace' : 'global';
     this.logger.debug('Saved %s memory record %s (repo: %s)', scope, id, input.repoId ?? 'global');
+
+    const bucketKey = bucketKeyFor({
+      scope: input.repoId ? 'workspace' : 'global',
+      ...(input.repoId ? { repoId: input.repoId } : {}),
+      category: input.category,
+    });
+    this.reconcileState.bumpWrite(bucketKey);
 
     return {
       id,
@@ -196,6 +208,97 @@ export class SqliteMemoryStore implements MemoryStore {
       this.logger.debug('Pruned %d expired memory records', result.changes);
     }
     return result.changes;
+  }
+
+  applyReconcileOps(ops: ReconcileOp[]): void {
+    this.db.transaction((tx) => {
+      for (const op of ops) {
+        switch (op.kind) {
+          case 'delete': {
+            for (const id of op.ids) {
+              tx.delete(memories).where(eq(memories.id, id)).run();
+            }
+            break;
+          }
+          case 'rewrite': {
+            tx.update(memories)
+              .set({
+                content: op.content,
+                ...(op.expiresAt ? { expiresAt: op.expiresAt } : {}),
+              })
+              .where(eq(memories.id, op.id))
+              .run();
+            break;
+          }
+          case 'merge': {
+            const survivor = randomUUID();
+            const createdAt = new Date().toISOString();
+            const sample = tx.select().from(memories).where(eq(memories.id, op.ids[0]!)).get();
+            tx.insert(memories)
+              .values({
+                id: survivor,
+                repoId: sample?.repoId ?? null,
+                threadTs: null,
+                category: op.category,
+                content: op.newContent,
+                metadata: null,
+                createdAt,
+                expiresAt: op.expiresAt ?? null,
+              })
+              .run();
+            for (const id of op.ids) {
+              tx.delete(memories).where(eq(memories.id, id)).run();
+            }
+            break;
+          }
+          case 'extend_ttl': {
+            for (const id of op.ids) {
+              tx.update(memories).set({ expiresAt: op.expiresAt }).where(eq(memories.id, id)).run();
+            }
+            break;
+          }
+        }
+      }
+    });
+  }
+
+  getDirtyBuckets(): DirtyBucketSummary[] {
+    const rows = this.db
+      .select({
+        bucketKey: sql<string>`
+          CASE
+            WHEN ${memories.repoId} IS NULL
+            THEN 'global::' || ${memories.category}
+            ELSE 'workspace:' || ${memories.repoId} || ':' || ${memories.category}
+          END
+        `,
+        maxCreated: sql<string | null>`MAX(${memories.createdAt})`,
+        n: count(),
+      })
+      .from(memories)
+      .groupBy(sql`1`)
+      .all();
+
+    const states = new Map(this.reconcileState.listAll().map((s) => [s.bucketKey, s]));
+
+    const dirty: DirtyBucketSummary[] = [];
+    for (const row of rows) {
+      const state = states.get(row.bucketKey) ?? null;
+      const changed =
+        !state ||
+        state.lastSeenMaxCreatedAt !== row.maxCreated ||
+        state.lastCount !== row.n ||
+        state.writesSinceReconcile > 0;
+      if (changed) {
+        dirty.push({
+          bucketKey: row.bucketKey,
+          currentCount: row.n,
+          currentMaxCreatedAt: row.maxCreated,
+          state,
+        });
+      }
+    }
+    return dirty;
   }
 }
 

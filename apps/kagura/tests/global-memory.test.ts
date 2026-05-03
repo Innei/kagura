@@ -5,11 +5,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createRootLogger } from '~/logger/index.js';
+import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
+
+import { createTestDatabase } from './fixtures/test-database.js';
 
 function createTestLogger() {
   return createRootLogger();
@@ -19,6 +23,8 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
   const records = [...initial];
 
   return {
+    applyReconcileOps: () => {},
+    getDirtyBuckets: () => [],
     countAll: (repoId?: string) => {
       if (repoId) return records.filter((r) => r.repoId === repoId).length;
       return records.length;
@@ -430,5 +436,24 @@ describe('preference memory - listForContext', () => {
     expect(ctx.preferences).toHaveLength(2);
     expect(ctx.workspace).toHaveLength(1);
     expect(ctx.workspace[0]!.content).toBe('workspace note');
+  });
+});
+
+describe('SqliteMemoryStore dirty bucket tracking', () => {
+  it('bumps dirty count on save for global preference', () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const store = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    store.save({ category: 'preference', content: 'foo' });
+    store.save({ category: 'preference', content: 'bar' });
+    expect(reconcileStore.get('global::preference')!.writesSinceReconcile).toBe(2);
+  });
+
+  it('bumps dirty count on save for workspace context', () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const store = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    store.save({ category: 'context', content: 'x', repoId: 'r1' });
+    expect(reconcileStore.get('workspace:r1:context')!.writesSinceReconcile).toBe(1);
   });
 });

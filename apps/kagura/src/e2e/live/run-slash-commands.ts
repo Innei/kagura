@@ -12,6 +12,7 @@ import { createDatabase } from '~/db/index.js';
 import { env } from '~/env/server.js';
 import { createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
+import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import { handleSessionCommand } from '~/slack/commands/session-command.js';
@@ -99,7 +100,8 @@ function buildCommandDeps(): SlashCommandDependencies {
   const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
   const { db } = createDatabase(dbPath);
   const logger = createRootLogger().withTag('e2e:commands');
-  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  const reconcileStateStore = new SqliteReconcileStateStore(db);
+  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'), reconcileStateStore);
   const channelPreferenceStore = new SqliteChannelPreferenceStore(
     db,
     logger.withTag('channel-preference'),
