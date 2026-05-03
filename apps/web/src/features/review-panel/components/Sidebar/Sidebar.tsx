@@ -37,7 +37,7 @@ export function Sidebar({
   onChangeTab,
   onChangeView,
   onClearFilter,
-  _onExpand,
+  onExpand: _onExpand,
   onSelectPath,
   repoFiles,
   repoLoading,

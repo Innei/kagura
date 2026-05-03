@@ -17,6 +17,14 @@ export const panels = css`
   width: 100%;
 `;
 
+export const flatBody = css`
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+`;
+
 export const resizeHandle = css`
   background: transparent;
   cursor: col-resize;

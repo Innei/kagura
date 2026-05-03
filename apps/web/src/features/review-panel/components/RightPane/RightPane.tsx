@@ -8,14 +8,19 @@ import { SourceView } from './SourceView';
 interface RightPaneProps {
   baseContent?: string | undefined;
   colorScheme: 'dark' | 'light';
+  compactBreadcrumb?: boolean | undefined;
   content?: string | undefined;
   contentLoading: boolean;
   diff: string;
   diffStyle: DiffStyle;
+  hideStylePill?: boolean | undefined;
+  hideViewModePill?: boolean | undefined;
   onChangeDiffStyle: (next: DiffStyle) => void;
   onChangeViewMode: (next: ViewMode) => void;
   onCopyPath: () => void;
   onNext: () => void;
+  onOpenDrawer?: (() => void) | undefined;
+  onOpenSheet?: (() => void) | undefined;
   onPrevious: () => void;
   selectedFile?: ReviewChangedFile | undefined;
   selectedPath?: string | undefined;
@@ -25,14 +30,19 @@ interface RightPaneProps {
 export function RightPane({
   baseContent,
   colorScheme,
+  compactBreadcrumb,
   content,
   contentLoading,
   diff,
   diffStyle,
+  hideStylePill,
+  hideViewModePill,
   onChangeDiffStyle,
   onChangeViewMode,
   onCopyPath,
   onNext,
+  onOpenDrawer,
+  onOpenSheet,
   onPrevious,
   selectedFile,
   selectedPath,
@@ -48,8 +58,11 @@ export function RightPane({
   return (
     <main className={styles.root} id="review-main">
       <DiffToolbar
+        compactBreadcrumb={compactBreadcrumb}
         diffStyle={diffStyle}
         hasDiff={hasDiff}
+        hideStylePill={hideStylePill}
+        hideViewModePill={hideViewModePill}
         selectedPath={selectedFile?.path ?? selectedPath}
         sourceAvailable={sourceAvailable}
         viewMode={finalMode}
@@ -57,6 +70,8 @@ export function RightPane({
         onChangeViewMode={onChangeViewMode}
         onCopyPath={onCopyPath}
         onNext={onNext}
+        onOpenDrawer={onOpenDrawer}
+        onOpenSheet={onOpenSheet}
         onPrevious={onPrevious}
       />
       <div className={styles.body}>

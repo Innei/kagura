@@ -9,6 +9,10 @@ export const root = css`
   gap: token(spacing.3.5);
   height: 40px;
   padding: 0 token(spacing.4);
+  @media (max-width: 640px) {
+    gap: token(spacing.2);
+    padding: 0 token(spacing.3);
+  }
 `;
 
 export const repo = css`
@@ -26,6 +30,9 @@ export const branch = css`
   flex-shrink: 0;
   font: token(fontSizes.xs) token(fonts.mono);
   letter-spacing: -0.1px;
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const branchArrow = css`
@@ -49,6 +56,9 @@ export const deltas = css`
   font: token(fontSizes.xs) token(fonts.mono);
   font-variant-numeric: tabular-nums;
   gap: token(spacing.1.5);
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const additions = css`

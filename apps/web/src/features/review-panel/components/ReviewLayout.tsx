@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
+import { useBreakpoint } from '../../../theme/use-breakpoint';
 import { useColorScheme } from '../../../theme/use-color-scheme';
 import { useFileNav } from '../hooks/use-file-nav';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { ReviewChangedFile, ReviewSession, ReviewTreeEntry } from '../types';
 import { compareTreePaths } from '../utils/compare-paths';
+import { BottomSheetFiles } from './BottomSheetFiles';
+import { DrawerSidebar } from './DrawerSidebar';
 import * as styles from './ReviewLayout.styles';
 import type { DiffStyle, ViewMode } from './RightPane/DiffToolbar';
 import { RightPane } from './RightPane/RightPane';
@@ -44,6 +47,10 @@ export function ReviewLayout({
   treeLoading,
 }: ReviewLayoutProps) {
   const colorScheme = useColorScheme();
+  const breakpoint = useBreakpoint();
+  const isDesktop = breakpoint === 'desktop';
+  const isTablet = breakpoint === 'tablet';
+  const isMobile = breakpoint === 'mobile';
   const sidebarRef = useRef<ImperativePanelHandle>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -52,6 +59,8 @@ export function ReviewLayout({
   const [filter, setFilter] = useState('');
   const [diffStyle, setDiffStyle] = useState<DiffStyle>('split');
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'diff');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const orderedChangedFiles = useMemo(() => {
     const arr = [...session.changedFiles];
@@ -72,6 +81,8 @@ export function ReviewLayout({
     if (previousPathRef.current === selectedPath) return;
     previousPathRef.current = selectedPath;
     setViewMode('diff');
+    setDrawerOpen(false);
+    setSheetOpen(false);
   }, [selectedPath]);
 
   useEffect(() => {
@@ -95,20 +106,32 @@ export function ReviewLayout({
   }, [treeEntries, session.changedFiles]);
 
   const handleToggleSidebar = useCallback(() => {
+    if (isTablet) {
+      setDrawerOpen((current) => !current);
+      return;
+    }
+    if (isMobile) {
+      setSheetOpen((current) => !current);
+      return;
+    }
     const panel = sidebarRef.current;
     if (!panel) return;
     if (panel.isCollapsed()) panel.expand();
     else panel.collapse();
-  }, []);
+  }, [isMobile, isTablet]);
 
   const handleFocusFilter = useCallback(() => {
-    if (sidebarRef.current?.isCollapsed()) sidebarRef.current.expand();
+    if (isTablet) {
+      setDrawerOpen(true);
+    } else if (!isMobile && sidebarRef.current?.isCollapsed()) {
+      sidebarRef.current.expand();
+    }
     setTab('changes');
     requestAnimationFrame(() => {
       filterInputRef.current?.focus();
       filterInputRef.current?.select();
     });
-  }, []);
+  }, [isMobile, isTablet]);
 
   const handleClearFilter = useCallback(() => setFilter(''), []);
 
@@ -116,6 +139,19 @@ export function ReviewLayout({
     if (!selectedFile) return;
     void navigator.clipboard?.writeText(selectedFile.path);
   }, [selectedFile]);
+
+  const handleSheetSelect = useCallback(
+    (path: string) => {
+      onSelectPath(path);
+      setSheetOpen(false);
+    },
+    [onSelectPath],
+  );
+
+  const handleOpenDrawer = useCallback(() => setDrawerOpen(true), []);
+  const handleCloseDrawer = useCallback(() => setDrawerOpen(false), []);
+  const handleOpenSheet = useCallback(() => setSheetOpen(true), []);
+  const handleCloseSheet = useCallback(() => setSheetOpen(false), []);
 
   useKeyboardShortcuts({
     onFirst: goFirst,
@@ -126,63 +162,131 @@ export function ReviewLayout({
     onToggleSidebar: handleToggleSidebar,
   });
 
+  const effectiveDiffStyle: DiffStyle = isMobile ? 'unified' : diffStyle;
+  const effectiveViewMode: ViewMode = isMobile ? 'diff' : viewMode;
+
+  const sidebar = (
+    <Sidebar
+      changedFiles={session.changedFiles}
+      collapsed={false}
+      colorScheme={colorScheme}
+      filter={filter}
+      filterInputRef={filterInputRef}
+      repoFiles={repoFiles}
+      repoLoading={treeLoading ?? false}
+      selectedPath={selectedPath}
+      tab={tab}
+      view={view}
+      onChangeFilter={setFilter}
+      onChangeTab={setTab}
+      onChangeView={setView}
+      onClearFilter={handleClearFilter}
+      onExpand={() => undefined}
+      onSelectPath={onSelectPath}
+    />
+  );
+
   return (
     <div className={styles.root}>
       <a className={styles.skipLink} href="#review-main">
         Skip to diff
       </a>
       <TitleBar session={session} />
-      <PanelGroup autoSaveId="kagura-review-panel" className={styles.panels} direction="horizontal">
-        <Panel
-          collapsible
-          collapsedSize={0}
-          defaultSize={16}
-          maxSize={45}
-          minSize={16}
-          order={1}
-          ref={sidebarRef}
-          onCollapse={() => setCollapsed(true)}
-          onExpand={() => setCollapsed(false)}
+      {isDesktop ? (
+        <PanelGroup
+          autoSaveId="kagura-review-panel"
+          className={styles.panels}
+          direction="horizontal"
         >
-          <Sidebar
-            changedFiles={session.changedFiles}
-            collapsed={collapsed}
-            colorScheme={colorScheme}
-            filter={filter}
-            filterInputRef={filterInputRef}
-            repoFiles={repoFiles}
-            repoLoading={treeLoading ?? false}
-            selectedPath={selectedPath}
-            tab={tab}
-            view={view}
-            onChangeFilter={setFilter}
-            onChangeTab={setTab}
-            onChangeView={setView}
-            onClearFilter={handleClearFilter}
-            onExpand={() => sidebarRef.current?.expand()}
-            onSelectPath={onSelectPath}
-          />
-        </Panel>
-        <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
-        <Panel minSize={40} order={2}>
+          <Panel
+            collapsible
+            collapsedSize={0}
+            defaultSize={16}
+            maxSize={45}
+            minSize={16}
+            order={1}
+            ref={sidebarRef}
+            onCollapse={() => setCollapsed(true)}
+            onExpand={() => setCollapsed(false)}
+          >
+            <Sidebar
+              changedFiles={session.changedFiles}
+              collapsed={collapsed}
+              colorScheme={colorScheme}
+              filter={filter}
+              filterInputRef={filterInputRef}
+              repoFiles={repoFiles}
+              repoLoading={treeLoading ?? false}
+              selectedPath={selectedPath}
+              tab={tab}
+              view={view}
+              onChangeFilter={setFilter}
+              onChangeTab={setTab}
+              onChangeView={setView}
+              onClearFilter={handleClearFilter}
+              onExpand={() => sidebarRef.current?.expand()}
+              onSelectPath={onSelectPath}
+            />
+          </Panel>
+          <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
+          <Panel minSize={40} order={2}>
+            <RightPane
+              baseContent={baseContent}
+              colorScheme={colorScheme}
+              content={content}
+              contentLoading={contentLoading ?? false}
+              diff={diff}
+              diffStyle={diffStyle}
+              selectedFile={selectedFile}
+              selectedPath={selectedPath}
+              viewMode={viewMode}
+              onChangeDiffStyle={setDiffStyle}
+              onChangeViewMode={setViewMode}
+              onCopyPath={handleCopyPath}
+              onNext={goNext}
+              onPrevious={goPrevious}
+            />
+          </Panel>
+        </PanelGroup>
+      ) : (
+        <div className={styles.flatBody}>
           <RightPane
             baseContent={baseContent}
             colorScheme={colorScheme}
+            compactBreadcrumb={isMobile}
             content={content}
             contentLoading={contentLoading ?? false}
             diff={diff}
-            diffStyle={diffStyle}
+            diffStyle={effectiveDiffStyle}
+            hideStylePill={isMobile}
+            hideViewModePill={isMobile}
             selectedFile={selectedFile}
             selectedPath={selectedPath}
-            viewMode={viewMode}
+            viewMode={effectiveViewMode}
             onChangeDiffStyle={setDiffStyle}
             onChangeViewMode={setViewMode}
             onCopyPath={handleCopyPath}
             onNext={goNext}
+            onOpenDrawer={isTablet ? handleOpenDrawer : undefined}
+            onOpenSheet={isMobile ? handleOpenSheet : undefined}
             onPrevious={goPrevious}
           />
-        </Panel>
-      </PanelGroup>
+        </div>
+      )}
+      {isTablet ? (
+        <DrawerSidebar open={drawerOpen} onClose={handleCloseDrawer}>
+          {sidebar}
+        </DrawerSidebar>
+      ) : null}
+      {isMobile ? (
+        <BottomSheetFiles
+          files={orderedChangedFiles}
+          open={sheetOpen}
+          selectedPath={selectedPath}
+          onClose={handleCloseSheet}
+          onSelect={handleSheetSelect}
+        />
+      ) : null}
       <StatusBar
         fileTotal={session.changedFiles.length}
         selectedFile={selectedFile}

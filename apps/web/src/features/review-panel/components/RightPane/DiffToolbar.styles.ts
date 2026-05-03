@@ -93,3 +93,31 @@ export const divider = css`
   margin: 0 token(spacing.1);
   width: 1px;
 `;
+
+export const filenameTrigger = css`
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: token(radii.sm);
+  color: token(colors.fg.default);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 1;
+  font: 500 token(fontSizes.md) token(fonts.mono);
+  gap: token(spacing.1);
+  letter-spacing: -0.1px;
+  min-width: 0;
+  padding: token(spacing.1) token(spacing.1.5);
+  text-align: left;
+  &:hover {
+    background: token(colors.bg.wash);
+  }
+`;
+
+export const filenameTriggerText = css`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;

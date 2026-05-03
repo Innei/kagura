@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Menu } from 'lucide-react';
 import { Fragment } from 'react';
 
 import { Pill } from '../Pill';
@@ -8,12 +8,17 @@ export type DiffStyle = 'split' | 'unified';
 export type ViewMode = 'diff' | 'source';
 
 interface DiffToolbarProps {
+  compactBreadcrumb?: boolean | undefined;
   diffStyle: DiffStyle;
   hasDiff: boolean;
+  hideStylePill?: boolean | undefined;
+  hideViewModePill?: boolean | undefined;
   onChangeDiffStyle: (next: DiffStyle) => void;
   onChangeViewMode: (next: ViewMode) => void;
   onCopyPath: () => void;
   onNext: () => void;
+  onOpenDrawer?: (() => void) | undefined;
+  onOpenSheet?: (() => void) | undefined;
   onPrevious: () => void;
   selectedPath?: string | undefined;
   sourceAvailable: boolean;
@@ -28,12 +33,17 @@ const STYLE_OPTIONS = [
 const ICON_SIZE = 12;
 
 export function DiffToolbar({
+  compactBreadcrumb,
   diffStyle,
   hasDiff,
+  hideStylePill,
+  hideViewModePill,
   onChangeDiffStyle,
   onChangeViewMode,
   onCopyPath,
   onNext,
+  onOpenDrawer,
+  onOpenSheet,
   onPrevious,
   selectedPath,
   sourceAvailable,
@@ -48,11 +58,25 @@ export function DiffToolbar({
     { value: 'source' as const, label: 'Source', disabled: !sourceAvailable },
   ];
 
-  const showPills = Boolean(selectedPath) && hasDiff;
-  const showStyle = showPills && viewMode === 'diff';
+  const hasPath = Boolean(selectedPath);
+  const showStyle = hasPath && hasDiff && viewMode === 'diff' && !hideStylePill;
+  const showViewMode = hasPath && hasDiff && !hideViewModePill;
+  const showDivider = showStyle || showViewMode;
+  const useFilenameTrigger = Boolean(onOpenSheet) && hasPath;
 
   return (
     <div aria-label="Diff actions" className={styles.root} role="toolbar">
+      {onOpenDrawer ? (
+        <button
+          aria-label="Open file list"
+          className={styles.iconButton}
+          title="Open file list"
+          type="button"
+          onClick={onOpenDrawer}
+        >
+          <Menu aria-hidden="true" size={ICON_SIZE} />
+        </button>
+      ) : null}
       <div className={styles.navGroup}>
         <button
           aria-label="Previous file"
@@ -73,21 +97,36 @@ export function DiffToolbar({
           <ChevronDown aria-hidden="true" size={ICON_SIZE} />
         </button>
       </div>
-      <div aria-live="polite" className={styles.breadcrumb} title={selectedPath}>
-        {selectedPath ? (
-          <>
-            {folderSegments.map((segment, index) => (
-              <Fragment key={`${index}:${segment}`}>
-                {segment}
-                <span className={styles.breadcrumbSep}>/</span>
-              </Fragment>
-            ))}
-            <span className={styles.breadcrumbStrong}>{fileName}</span>
-          </>
-        ) : (
-          <span className={styles.allBadge}>All changed files</span>
-        )}
-      </div>
+      {useFilenameTrigger ? (
+        <button
+          aria-label="Switch file"
+          className={styles.filenameTrigger}
+          title={selectedPath}
+          type="button"
+          onClick={onOpenSheet}
+        >
+          <span className={styles.filenameTriggerText}>{fileName}</span>
+          <ChevronDown aria-hidden="true" size={10} />
+        </button>
+      ) : (
+        <div aria-live="polite" className={styles.breadcrumb} title={selectedPath}>
+          {selectedPath ? (
+            <>
+              {!compactBreadcrumb
+                ? folderSegments.map((segment, index) => (
+                    <Fragment key={`${index}:${segment}`}>
+                      {segment}
+                      <span className={styles.breadcrumbSep}>/</span>
+                    </Fragment>
+                  ))
+                : null}
+              <span className={styles.breadcrumbStrong}>{fileName}</span>
+            </>
+          ) : (
+            <span className={styles.allBadge}>All changed files</span>
+          )}
+        </div>
+      )}
       {showStyle ? (
         <Pill
           ariaLabel="Diff layout"
@@ -96,7 +135,7 @@ export function DiffToolbar({
           onChange={onChangeDiffStyle}
         />
       ) : null}
-      {showPills ? (
+      {showViewMode ? (
         <Pill
           ariaLabel="View mode"
           options={viewOptions}
@@ -105,7 +144,7 @@ export function DiffToolbar({
         />
       ) : null}
 
-      {showPills ? <span aria-hidden="true" className={styles.divider} /> : null}
+      {showDivider ? <span aria-hidden="true" className={styles.divider} /> : null}
       <button
         aria-label="Copy file path"
         className={styles.iconButton}

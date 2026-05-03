@@ -12,6 +12,10 @@ export const root = css`
   gap: token(spacing.3);
   height: 28px;
   padding: 0 token(spacing.4);
+  @media (max-width: 640px) {
+    gap: token(spacing.2);
+    padding: 0 token(spacing.3);
+  }
 `;
 
 export const status = css`
@@ -34,11 +38,17 @@ export const deltas = css`
   display: inline-flex;
   font: token(fontSizes.xs) / 1 token(fonts.mono);
   gap: token(spacing.1.5);
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const position = css`
   color: token(colors.fg.dim);
   font: token(fontSizes.xs) / 1 token(fonts.mono);
+  @media (max-width: 640px) {
+    margin-left: auto;
+  }
 `;
 
 export const divider = css`
@@ -46,6 +56,9 @@ export const divider = css`
   flex-shrink: 0;
   height: 12px;
   width: 1px;
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const additions = css`
@@ -62,6 +75,9 @@ export const hint = css`
   font-size: token(fontSizes.xs);
   gap: token(spacing.3.5);
   margin-left: auto;
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const hintItem = css`
