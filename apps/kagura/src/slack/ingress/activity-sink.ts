@@ -77,7 +77,9 @@ export interface ActivitySink {
 }
 
 const TOOL_VERB_PATTERN =
-  /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) (.+?)(?:\.{3})?$/;
+  /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using|Writing) (.+?)(?:\.{3})?$/;
+
+const FILE_MODIFY_VERBS = new Set(['Editing', 'Generating', 'Applying', 'Writing']);
 
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const {
@@ -112,6 +114,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let lastStateKey: string | undefined;
   let pendingGeneratedFiles: GeneratedOutputFile[] = [];
   let pendingGeneratedImages: GeneratedImageFile[] = [];
+  let hasFileModifications = false;
   let executionCompletedSuccessfully = false;
   let terminalStopReason:
     | Extract<AgentExecutionEvent, { type: 'lifecycle'; phase: 'stopped' }>['reason']
@@ -387,6 +390,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
     if (!state.clear) {
       previousActivities = collectToolActivity(state, toolHistory, previousActivities);
+      if (!hasFileModifications) {
+        for (const verb of toolHistory.keys()) {
+          if (FILE_MODIFY_VERBS.has(verb)) {
+            hasFileModifications = true;
+            break;
+          }
+        }
+      }
     }
 
     if (state.composing && !state.clear) {
@@ -725,7 +736,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
           logger.warn('Failed to persist session analytics: %s', String(err));
         }
       }
-      if (executionCompletedSuccessfully && reviewUrl) {
+      if (executionCompletedSuccessfully && reviewUrl && hasFileModifications) {
         await renderer.postReviewPanelLink(client, channel, threadTs, reviewUrl).catch((err) => {
           logger.warn('Failed to post review panel link: %s', String(err));
         });

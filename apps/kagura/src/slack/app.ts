@@ -192,6 +192,9 @@ export function createSlackApp(
     PERMISSION_DENY_ACTION_ID,
     createPermissionActionHandler(deps.permissionBridge, false) as any,
   );
+  app.action('open_review_panel', async ({ ack }) => {
+    await ack();
+  });
   app.assistant(assistant);
 
   app.error(async (error) => {
