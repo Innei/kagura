@@ -100,6 +100,16 @@ export function createDatabase(dbPath: string) {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS memory_reconcile_state (
+      bucket_key TEXT PRIMARY KEY NOT NULL,
+      last_reconciled_at TEXT,
+      last_seen_max_created_at TEXT,
+      last_count INTEGER NOT NULL DEFAULT 0,
+      writes_since_reconcile INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
   migrateMemoriesRepoIdNullable(sqlite);
 
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');
