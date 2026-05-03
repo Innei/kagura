@@ -35,7 +35,7 @@ export class OpenAICompatibleClient {
       });
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        throw new Error(`LLM API ${response.status}: ${body.slice(0, 200)}`);
+        throw new Error(`LLM API ${response.status}: ${body.slice(0, 500)}`);
       }
       const data = (await response.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
