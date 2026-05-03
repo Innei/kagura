@@ -92,10 +92,14 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const reconcilerLlmEnabled =
     env.KAGURA_MEMORY_RECONCILER_ENABLED && Boolean(env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim());
 
-  if (env.KAGURA_MEMORY_RECONCILER_ENABLED && !env.KAGURA_MEMORY_RECONCILER_API_KEY) {
+  if (env.KAGURA_MEMORY_RECONCILER_ENABLED && !env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim()) {
     logger.warn(
-      'KAGURA_MEMORY_RECONCILER_ENABLED=true but KAGURA_MEMORY_RECONCILER_API_KEY missing; LLM consolidation disabled, prune-only mode active',
+      'KAGURA_MEMORY_RECONCILER_ENABLED=true but KAGURA_MEMORY_RECONCILER_API_KEY is missing or empty; LLM consolidation disabled, prune-only mode active. Set KAGURA_MEMORY_RECONCILER_API_KEY in env to enable LLM consolidation.',
     );
+  }
+
+  if (!env.KAGURA_MEMORY_RECONCILER_ENABLED) {
+    logger.info('Memory reconciler disabled by config; expired-only prune via startup hook');
   }
 
   const memoryReconciler = new MemoryReconciler({
@@ -107,8 +111,6 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     writeThreshold: env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD,
     llmEnabled: reconcilerLlmEnabled,
   });
-
-  memoryReconciler.start();
 
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
@@ -213,6 +215,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       }
       await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
       await reviewPanelServer?.start();
+      memoryReconciler.start();
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
       void slackApp.recoverPendingExecutions?.().catch((error) => {
