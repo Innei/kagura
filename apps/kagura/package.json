@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.119",
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "@clack/prompts": "^0.11.0",
@@ -60,7 +60,7 @@
     "@slack/bolt": "4.7.1",
     "@t3-oss/env-core": "0.13.11",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "25.5.2",
+    "@types/node": "25.6.0",
     "commander": "^13.0.0",
     "dotenv": "17.4.0",
     "drizzle-kit": "^0.31.10",
@@ -73,7 +73,7 @@
     "tsx": "4.21.0",
     "typescript": "^6.0.2",
     "vitest": "4.1.5",
-    "zod": "4.3.6"
+    "zod": "4.4.1"
   },
   "engines": {
     "node": ">=24.0.0"

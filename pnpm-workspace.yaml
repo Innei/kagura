@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
 overrides:
-  '@esbuild-kit/core-utils>esbuild': 0.25.12
+  '@esbuild-kit/core-utils>esbuild': 0.28.0
   '@anthropic-ai/sdk': 0.91.1
   vite: 8.0.10
 allowBuilds:
