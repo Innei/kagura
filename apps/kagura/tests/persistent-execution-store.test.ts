@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDatabase } from '~/db/index.js';
 import { SqlitePersistentExecutionStore } from '~/slack/execution/persistent-execution-store.js';
+
+import { createTestDatabase } from './fixtures/test-database.js';
 
 describe('SqlitePersistentExecutionStore', () => {
   it('claims stale running executions and enforces the attempt limit', () => {
-    const { sqlite } = createDatabase(':memory:');
+    const { sqlite } = createTestDatabase();
     const store = new SqlitePersistentExecutionStore(sqlite);
 
     store.start({
@@ -42,7 +43,7 @@ describe('SqlitePersistentExecutionStore', () => {
   });
 
   it('does not recover terminal executions', () => {
-    const { sqlite } = createDatabase(':memory:');
+    const { sqlite } = createTestDatabase();
     const store = new SqlitePersistentExecutionStore(sqlite);
 
     store.start({

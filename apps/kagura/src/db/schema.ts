@@ -121,3 +121,38 @@ export const memoryReconcileOps = sqliteTable('memory_reconcile_ops', {
   payload: text('payload'),
   createdAt: text('created_at').notNull(),
 });
+
+export const memoryIngestionRuns = sqliteTable('memory_ingestion_runs', {
+  id: text('id').primaryKey(),
+  executionId: text('execution_id').notNull(),
+  finalTextHash: text('final_text_hash').notNull(),
+  status: text('status', { enum: ['running', 'completed', 'failed', 'skipped'] }).notNull(),
+  providerId: text('provider_id'),
+  channelId: text('channel_id').notNull(),
+  threadTs: text('thread_ts').notNull(),
+  messageTs: text('message_ts').notNull(),
+  repoId: text('repo_id'),
+  workspaceLabel: text('workspace_label'),
+  input: text('input').notNull(),
+  rawResponse: text('raw_response'),
+  error: text('error'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
+export const memoryIngestionCandidates = sqliteTable('memory_ingestion_candidates', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  action: text('action', { enum: ['save', 'skip'] }).notNull(),
+  status: text('status', { enum: ['applied', 'skipped', 'invalid'] }).notNull(),
+  category: text('category', {
+    enum: ['task_completed', 'decision', 'context', 'observation', 'preference'],
+  }),
+  scope: text('scope', { enum: ['global', 'workspace'] }),
+  content: text('content'),
+  confidence: real('confidence'),
+  reason: text('reason'),
+  memoryId: text('memory_id'),
+  payload: text('payload'),
+  createdAt: text('created_at').notNull(),
+});

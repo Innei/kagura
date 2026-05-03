@@ -14,6 +14,8 @@ import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
+import { SqliteMemoryIngestionAuditStore } from '~/memory/ingestion/audit-store.js';
+import { MemoryIngestionService } from '~/memory/ingestion/service.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteReconcileAuditStore } from '~/memory/reconciler/audit-store.js';
 import { MemoryReconciler } from '~/memory/reconciler/index.js';
@@ -82,6 +84,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
   const reconcileStateStore = new SqliteReconcileStateStore(db);
   const reconcileAuditStore = new SqliteReconcileAuditStore(db);
+  const memoryIngestionAuditStore = new SqliteMemoryIngestionAuditStore(db);
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'), reconcileStateStore);
   const channelPreferenceStore = new SqliteChannelPreferenceStore(
     db,
@@ -115,6 +118,15 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
           maxTokens: env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS,
         })
       : undefined;
+
+  const memoryIngestionService = memoryReconcilerLlm
+    ? new MemoryIngestionService({
+        auditStore: memoryIngestionAuditStore,
+        llm: memoryReconcilerLlm,
+        logger: logger.withTag('memory-ingestion'),
+        memoryStore,
+      })
+    : undefined;
 
   const memoryReconciler = new MemoryReconciler({
     db,
@@ -181,6 +193,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       agentTeams: options?.agentTeams ?? appConfigAgentTeams,
       channelPreferenceStore,
       logger,
+      ...(memoryIngestionService ? { memoryIngestionService } : {}),
       memoryStore,
       permissionBridge,
       persistentExecutionStore,

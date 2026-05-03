@@ -547,6 +547,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       normalizeTerminalPhase(sink.terminalPhase),
       workspace ? resolveGitHead(workspace.workspacePath) : undefined,
     );
+    triggerMemoryIngestion(ctx, executionId, executor.providerId, sink);
     resolveExecutionDone!();
     runtimeInfo(
       deps.logger,
@@ -581,10 +582,54 @@ function createPersistentExecutionSink(
     get terminalPhase() {
       return baseSink.terminalPhase;
     },
+    get finalAssistantText() {
+      return baseSink.finalAssistantText;
+    },
     get toolHistory() {
       return baseSink.toolHistory;
     },
   };
+}
+
+function triggerMemoryIngestion(
+  ctx: ConversationPipelineContext,
+  executionId: string,
+  providerId: string,
+  sink: ActivitySink,
+): void {
+  if (sink.terminalPhase !== 'completed') {
+    return;
+  }
+  const finalAssistantText = sink.finalAssistantText?.trim();
+  if (!finalAssistantText || !ctx.deps.memoryIngestionService) {
+    return;
+  }
+  void ctx.deps.memoryIngestionService
+    .ingest({
+      channelId: ctx.message.channel,
+      executionId,
+      finalAssistantText,
+      messageTs: ctx.message.ts,
+      providerId,
+      threadTs: ctx.threadTs,
+      userText: ctx.message.text,
+      ...(ctx.workspace
+        ? {
+            workspace: {
+              label: ctx.workspace.workspaceLabel,
+              path: ctx.workspace.workspacePath,
+              repoId: ctx.workspace.repo.id,
+            },
+          }
+        : {}),
+    })
+    .catch((error) => {
+      ctx.deps.logger.warn(
+        'Memory ingestion failed for execution %s: %s',
+        executionId,
+        error instanceof Error ? error.message : String(error),
+      );
+    });
 }
 
 function normalizeTerminalPhase(

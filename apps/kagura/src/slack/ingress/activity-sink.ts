@@ -58,6 +58,7 @@ export interface ActivitySinkOptions {
 }
 
 export interface ActivitySink {
+  readonly finalAssistantText: string | undefined;
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
   requestPermission?: (
@@ -90,6 +91,8 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     channel,
     client,
     executionId,
+    initialGitHead,
+    initialGitStatus,
     logger,
     logLabel,
     permissionBridge,
@@ -123,6 +126,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let hasSentToolbarInTurn = false;
   let sessionUsageInfo: SessionUsageInfo | undefined;
   let lastAssistantReply: PostedThreadReply | undefined;
+  let lastAssistantText: string | undefined;
   let toolbarReply: PostedThreadReply | undefined;
   const quietAssistantMessages: string[] = [];
   let currentWorkspaceBranch = workspaceBranch;
@@ -287,6 +291,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   };
 
   const postAssistantMessage = async (text: string): Promise<void> => {
+    lastAssistantText = text;
     // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
     const includeToolbar = !hasSentToolbarInTurn;
     await maybeRefreshWorkspaceContext();
@@ -608,6 +613,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
     get terminalPhase() {
       return terminalPhase;
+    },
+
+    get finalAssistantText() {
+      return lastAssistantText;
     },
 
     async onEvent(event: AgentExecutionEvent): Promise<void> {

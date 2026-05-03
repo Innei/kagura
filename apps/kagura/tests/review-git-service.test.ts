@@ -5,9 +5,10 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createDatabase } from '~/db/index.js';
 import { GitReviewService, resolveGitHead } from '~/review/git-review-service.js';
 import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
+
+import { createTestDatabase } from './fixtures/test-database.js';
 
 const tempDirs: string[] = [];
 
@@ -26,8 +27,7 @@ describe('GitReviewService', () => {
     fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 2;\n');
     fs.writeFileSync(path.join(workspacePath, 'src/new.ts'), 'export const added = true;\n');
 
-    const dbPath = path.join(createTempDir(), 'sessions.db');
-    const { db, sqlite } = createDatabase(dbPath);
+    const { db, sqlite } = createTestDatabase();
     const store = new SqliteReviewSessionStore(db);
     store.start({
       baseBranch: 'main',
@@ -68,8 +68,7 @@ describe('GitReviewService', () => {
 
     fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 2;\n');
 
-    const dbPath = path.join(createTempDir(), 'sessions.db');
-    const { db, sqlite } = createDatabase(dbPath);
+    const { db, sqlite } = createTestDatabase();
     const store = new SqliteReviewSessionStore(db);
     store.start({
       baseBranch: 'main',

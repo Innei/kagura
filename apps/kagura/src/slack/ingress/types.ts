@@ -3,6 +3,7 @@ import type { AgentExecutor } from '~/agent/types.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
+import type { MemoryIngestionService } from '~/memory/ingestion/service.js';
 import type { ContextMemories, MemoryStore } from '~/memory/types.js';
 import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -33,6 +34,7 @@ export interface SlackIngressDependencies {
   channelPreferenceStore: ChannelPreferenceStore;
   claudeExecutor: AgentExecutor;
   logger: AppLogger;
+  memoryIngestionService?: MemoryIngestionService | undefined;
   memoryStore: MemoryStore;
   permissionBridge?: SlackPermissionBridge;
   persistentExecutionStore?: PersistentExecutionStore | undefined;

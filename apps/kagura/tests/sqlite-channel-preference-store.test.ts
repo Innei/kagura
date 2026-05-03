@@ -1,19 +1,18 @@
-import type Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
-import { type AppDatabase,createDatabase } from '~/db/index.js';
+import type { AppDatabase } from '~/db/index.js';
 import { createRootLogger } from '~/logger/index.js';
 
+import { createTestDatabase } from './fixtures/test-database.js';
+
 describe('SqliteChannelPreferenceStore', () => {
-  let sqlite: Database.Database;
   let db: AppDatabase;
   let store: SqliteChannelPreferenceStore;
 
   beforeEach(() => {
-    const database = createDatabase(':memory:');
+    const database = createTestDatabase();
     db = database.db;
-    sqlite = database.sqlite;
     store = new SqliteChannelPreferenceStore(db, createRootLogger().withTag('test'));
   });
 

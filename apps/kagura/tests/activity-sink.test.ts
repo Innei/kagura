@@ -115,6 +115,49 @@ describe('createActivitySink', () => {
     );
   });
 
+  it('exposes the final assistant text for host memory ingestion', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'First reply' });
+    await sink.onEvent({ type: 'assistant-message', text: 'Final reply' });
+
+    expect(sink.finalAssistantText).toBe('Final reply');
+  });
+
+  it('uses the flushed quiet-final assistant text as the final assistant text', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      assistantMessageVisibility: 'quiet-final',
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'Buffered quiet reply' });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(sink.finalAssistantText).toBe('Buffered quiet reply');
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Buffered quiet reply',
+      expect.any(Object),
+    );
+  });
+
   it('clears UI state after assistant-message', async () => {
     const renderer = createRendererStub();
     const sink = createActivitySink({

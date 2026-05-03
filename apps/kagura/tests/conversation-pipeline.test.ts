@@ -738,4 +738,46 @@ describe('executeAgent step', () => {
 
     expect(unregister).toHaveBeenCalledTimes(1);
   });
+
+  it('triggers host memory ingestion after a completed assistant reply', async () => {
+    const ctx = createMinimalPipelineContext({ addAcknowledgementReaction: true });
+    ctx.options.executionId = 'exec-memory-1';
+    const ingest = vi.fn().mockResolvedValue(undefined);
+    ctx.deps.memoryIngestionService = { ingest } as never;
+    await prepareThreadContext(ctx);
+
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async (_req, sink) => {
+      await sink.onEvent({ type: 'assistant-message', text: 'Implemented the memory flow.' });
+      await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    });
+
+    await executeAgent(ctx);
+
+    expect(ingest).toHaveBeenCalledWith({
+      channelId: 'C123',
+      executionId: 'exec-memory-1',
+      finalAssistantText: 'Implemented the memory flow.',
+      messageTs: 'ts1',
+      providerId: 'claude',
+      threadTs: 'ts1',
+      userText: 'hello',
+    });
+  });
+
+  it('does not trigger host memory ingestion for failed executions', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.options.executionId = 'exec-memory-failed';
+    const ingest = vi.fn().mockResolvedValue(undefined);
+    ctx.deps.memoryIngestionService = { ingest } as never;
+    await prepareThreadContext(ctx);
+
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async (_req, sink) => {
+      await sink.onEvent({ type: 'assistant-message', text: 'Partial reply.' });
+      await sink.onEvent({ type: 'lifecycle', phase: 'failed', error: 'boom' });
+    });
+
+    await executeAgent(ctx);
+
+    expect(ingest).not.toHaveBeenCalled();
+  });
 });
