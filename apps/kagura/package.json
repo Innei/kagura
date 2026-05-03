@@ -24,7 +24,8 @@
   "type": "module",
   "bin": {
     "kagura": "./dist/cli.js",
-    "kagura-app": "./dist/index.js"
+    "kagura-app": "./dist/index.js",
+    "kagura-memory": "./dist/memory-cli.js"
   },
   "files": [
     "dist",

@@ -35,6 +35,7 @@ export interface SaveMemoryInput {
 
 export interface MemorySearchOptions {
   category?: MemoryCategory | undefined;
+  unbounded?: boolean | undefined;
   limit?: number | undefined;
   query?: string | undefined;
 }

@@ -33,62 +33,68 @@ export interface ReconcileBucketParams {
 export async function reconcileBucket(params: ReconcileBucketParams): Promise<void> {
   const parts = parseBucketKey(params.bucketKey);
   const repoId = parts.scope === 'workspace' ? parts.repoId : undefined;
+  const totalBefore = params.memoryStore.countByCategory(repoId, parts.category);
   const records = params.memoryStore.search(repoId, {
     category: parts.category,
-    limit: params.batchSize,
+    limit: totalBefore,
+    unbounded: true,
   });
+  const batchSize = Math.max(1, Math.trunc(params.batchSize));
 
   if (records.length === 0) {
     return;
   }
 
-  const userPrompt = JSON.stringify(
-    {
-      bucket: params.bucketKey,
-      records: records.map((r) => ({
-        id: r.id,
-        createdAt: r.createdAt,
-        content: r.content,
-        category: r.category,
-        ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
-      })),
-    },
-    null,
-    2,
-  );
-
-  let raw: string;
-  try {
-    raw = await params.llm.chat([
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ]);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    params.logger.warn('Reconcile bucket %s LLM call failed: %s', params.bucketKey, msg);
-    return;
-  }
-
-  let ops;
-  try {
-    ops = parseLlmOps(raw);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    params.logger.warn(
-      'Reconcile bucket %s op parse failed: %s; raw=%s',
-      params.bucketKey,
-      msg,
-      raw.slice(0, 500),
+  for (let index = 0; index < records.length; index += batchSize) {
+    const batch = records.slice(index, index + batchSize);
+    const userPrompt = JSON.stringify(
+      {
+        bucket: params.bucketKey,
+        records: batch.map((r) => ({
+          id: r.id,
+          createdAt: r.createdAt,
+          content: r.content,
+          category: r.category,
+          ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+        })),
+      },
+      null,
+      2,
     );
-    return;
+
+    let raw: string;
+    try {
+      raw = await params.llm.chat([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ]);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      params.logger.warn('Reconcile bucket %s LLM call failed: %s', params.bucketKey, msg);
+      return;
+    }
+
+    let ops;
+    try {
+      ops = parseLlmOps(raw);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      params.logger.warn(
+        'Reconcile bucket %s op parse failed: %s; raw=%s',
+        params.bucketKey,
+        msg,
+        raw.slice(0, 500),
+      );
+      return;
+    }
+
+    if (ops.length > 0) {
+      params.memoryStore.applyReconcileOps(ops);
+      params.logger.info('Reconciled bucket %s with %d op(s)', params.bucketKey, ops.length);
+    }
   }
 
-  if (ops.length > 0) {
-    params.memoryStore.applyReconcileOps(ops);
-    params.logger.info('Reconciled bucket %s with %d op(s)', params.bucketKey, ops.length);
-  }
-
-  // Update watermark (clear writesSinceReconcile) even if 0 ops; otherwise next cycle reruns
+  // Clear writesSinceReconcile only after every active record in the bucket has been examined.
   const now = new Date().toISOString();
   const latest = params.memoryStore.search(repoId, { category: parts.category, limit: 1 });
   const totalCount = params.memoryStore.countByCategory(repoId, parts.category);

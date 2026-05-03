@@ -1,8 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import type { Dirent } from 'node:fs';
-import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
 import type {
   AgentExecutionRequest,
@@ -25,6 +26,7 @@ const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
 const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
 const CODEX_MEMORY_COMMAND_PATTERN = /\bkagura-memory\s+save\b/;
 const CODEX_CHANNEL_OPS_COMMAND_PATTERN = /-channel-ops\.jsonl(?:$|[\s"'\\])/;
+const KAGURA_MEMORY_SHIM_NAME = 'kagura-memory';
 
 interface GeneratedArtifactSnapshotEntry {
   mtimeMs: number;
@@ -107,6 +109,35 @@ function cleanCodexErrorLine(line: string): string {
   return line
     .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+ERROR\s+codex_core::tools::router:\s+error=/, '')
     .trim();
+}
+
+async function writeKaguraMemoryShim(runtimeDir: string): Promise<void> {
+  const cliPath = resolveKaguraMemoryCliPath();
+  const loaderArgs = cliPath.endsWith('.ts') ? ' --import tsx' : '';
+  const shimPath = path.join(runtimeDir, KAGURA_MEMORY_SHIM_NAME);
+  const script = [
+    '#!/bin/sh',
+    `exec ${shellQuote(process.execPath)}${loaderArgs} ${shellQuote(cliPath)} "$@"`,
+    '',
+  ].join('\n');
+  await writeFile(shimPath, script, 'utf8');
+  await chmod(shimPath, 0o755);
+}
+
+function resolveKaguraMemoryCliPath(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  if (path.extname(fileURLToPath(import.meta.url)) === '.js') {
+    return path.join(here, 'memory-cli.js');
+  }
+  return path.resolve(here, '../../../memory-cli.ts');
+}
+
+function prependPath(entry: string, current: string | undefined): string {
+  return current ? `${entry}${path.delimiter}${current}` : entry;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function extractCodexEventError(event: CodexJsonEvent): string | undefined {
@@ -208,11 +239,16 @@ export class CodexCliExecutor implements AgentExecutor {
     try {
       await mkdir(generatedArtifactsDir, { recursive: true });
       await mkdir(runtimeDir, { recursive: true });
+      await writeKaguraMemoryShim(runtimeDir);
       const generatedArtifactsBefore = await snapshotGeneratedArtifacts(generatedArtifactsDir);
 
       child = spawn('codex', args, {
         cwd,
-        env: process.env,
+        env: {
+          ...process.env,
+          KAGURA_DB_PATH: env.SESSION_DB_PATH,
+          PATH: prependPath(runtimeDir, process.env.PATH),
+        },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 

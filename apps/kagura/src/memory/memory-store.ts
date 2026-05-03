@@ -97,7 +97,7 @@ export class SqliteMemoryStore implements MemoryStore {
 
   search(repoId: string | undefined, options: MemorySearchOptions = {}): MemoryRecord[] {
     const nowIso = new Date().toISOString();
-    const safeLimit = normalizeLimit(options.limit);
+    const safeLimit = normalizeLimit(options.limit, options.unbounded === true);
     const query = options.query?.trim();
     const escapedQuery = query ? escapeLike(query.toLowerCase()) : undefined;
 
@@ -313,11 +313,12 @@ export class SqliteMemoryStore implements MemoryStore {
   }
 }
 
-function normalizeLimit(limit?: number): number {
+function normalizeLimit(limit?: number, unbounded = false): number {
   if (!limit || !Number.isFinite(limit)) {
     return DEFAULT_LIMIT;
   }
-  return Math.max(1, Math.min(MAX_LIMIT, Math.trunc(limit)));
+  const normalized = Math.max(1, Math.trunc(limit));
+  return unbounded ? normalized : Math.min(MAX_LIMIT, normalized);
 }
 
 function escapeLike(value: string): string {

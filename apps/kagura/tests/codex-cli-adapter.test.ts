@@ -123,6 +123,9 @@ describe('CodexCliExecutor', () => {
   });
 
   it('maps Codex JSONL events to agent execution events', async () => {
+    const request = createRequest();
+    const runtimePaths = getCodexRuntimePaths(request);
+
     spawnMock.mockImplementation(
       () =>
         new FakeCodexProcess((_prompt, child) => {
@@ -169,12 +172,18 @@ describe('CodexCliExecutor', () => {
     );
 
     const events: AgentExecutionEvent[] = [];
-    await new CodexCliExecutor(createLogger()).execute(createRequest(), createSink(events));
+    await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
 
     expect(spawnMock).toHaveBeenCalledWith(
       'codex',
       expect.arrayContaining(['exec', '--json', '--sandbox', 'danger-full-access']),
-      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          KAGURA_DB_PATH: './data/test-sessions.db',
+          PATH: expect.stringContaining(runtimePaths.runtimeDir),
+        }),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }),
     );
     expect(events).toContainEqual({
       type: 'lifecycle',
@@ -446,8 +455,8 @@ describe('CodexCliExecutor', () => {
 
   it('codex prompt mentions kagura-memory CLI for memory ops', () => {
     const prompt = buildCodexPrompt(createRequest());
-    expect(prompt).toContain('kagura-memory save');
-    expect(prompt).toContain('kagura-memory recall');
+    expect(prompt).toContain("KAGURA_DB_PATH='./data/test-sessions.db' kagura-memory save");
+    expect(prompt).toContain("KAGURA_DB_PATH='./data/test-sessions.db' kagura-memory recall");
     expect(prompt).not.toContain('memory-ops.jsonl');
   });
 

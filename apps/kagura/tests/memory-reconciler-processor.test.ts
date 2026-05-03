@@ -129,7 +129,7 @@ describe('reconcileBucket', () => {
     expect(reconcileStore.get('global::preference')?.lastReconciledAt).toBeFalsy();
   });
 
-  it('records correct lastCount even when bucket exceeds search MAX_LIMIT (50)', async () => {
+  it('processes every batch before clearing the bucket watermark', async () => {
     const { db } = createTestDatabase();
     const reconcileStore = new SqliteReconcileStateStore(db);
     const memoryStore = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
@@ -148,6 +148,12 @@ describe('reconcileBucket', () => {
       batchSize: 50,
     });
 
+    expect(llm.chat).toHaveBeenCalledTimes(2);
+    const firstPayload = JSON.parse(llm.chat.mock.calls[0]![0][1].content);
+    const secondPayload = JSON.parse(llm.chat.mock.calls[1]![0][1].content);
+    expect(firstPayload.records).toHaveLength(50);
+    expect(secondPayload.records).toHaveLength(10);
     expect(reconcileStore.get('global::context')!.lastCount).toBe(60);
+    expect(reconcileStore.get('global::context')!.writesSinceReconcile).toBe(0);
   });
 });
