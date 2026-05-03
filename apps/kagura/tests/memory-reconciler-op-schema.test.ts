@@ -65,6 +65,19 @@ describe('parseLlmOps', () => {
     expect(parseLlmOps(json)).toHaveLength(1);
   });
 
+  it('accepts expiresAt with offset (not just Z)', () => {
+    const json = JSON.stringify({
+      ops: [
+        {
+          kind: 'extend_ttl',
+          ids: ['m1'],
+          expiresAt: '2026-12-31T00:00:00+08:00',
+        },
+      ],
+    });
+    expect(parseLlmOps(json)).toHaveLength(1);
+  });
+
   it('rejects merge op with unknown category', () => {
     const json = JSON.stringify({
       ops: [
