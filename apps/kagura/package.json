@@ -67,7 +67,7 @@
     "drizzle-orm": "^0.45.2",
     "markdown-to-slack-blocks": "1.5.0",
     "nodemon": "3.1.14",
-    "open": "^10.1.0",
+    "open": "^11.0.0",
     "picocolors": "^1.1.0",
     "tsdown": "0.21.7",
     "tsx": "4.21.0",
