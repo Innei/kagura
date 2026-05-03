@@ -116,6 +116,27 @@ export class GitReviewService {
       .catch(() => '[binary or unreadable file]');
     return { content, path: relativePath };
   }
+
+  commitAndPush(
+    executionId: string,
+    message: string,
+  ): { commitSha?: string; error?: string; success: boolean } {
+    const session = this.store.get(executionId);
+    if (!session) {
+      return { success: false, error: 'Review session not found.' };
+    }
+
+    try {
+      runGitOrThrow(session.workspacePath, ['add', '-A']);
+      runGitOrThrow(session.workspacePath, ['commit', '-m', message]);
+      runGitOrThrow(session.workspacePath, ['push']);
+      const commitSha = runGitOrThrow(session.workspacePath, ['rev-parse', 'HEAD']);
+      return { success: true, commitSha };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: msg };
+    }
+  }
 }
 
 export function resolveGitHead(workspacePath: string): string | undefined {
@@ -250,6 +271,15 @@ function runGit(cwd: string, args: string[]): string {
   } catch {
     return '';
   }
+}
+
+function runGitOrThrow(cwd: string, args: string[]): string {
+  return execFileSync('git', ['-c', 'commit.gpgsign=false', '-C', cwd, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+    timeout: 30_000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trimEnd();
 }
 
 function readGitBlob(cwd: string, ref: string, filePath: string): string | undefined {

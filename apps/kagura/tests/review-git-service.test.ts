@@ -95,9 +95,70 @@ describe('GitReviewService', () => {
 
     sqlite.close();
   });
+
+  it('commits and pushes changes', () => {
+    const workspacePath = createGitFixture({ withRemote: true });
+    const baseHead = resolveGitHead(workspacePath);
+
+    fs.writeFileSync(path.join(workspacePath, 'src/new-file.ts'), 'export const x = 1;\n');
+
+    const dbPath = path.join(createTempDir(), 'sessions.db');
+    const { db, sqlite } = createDatabase(dbPath);
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-cp',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+    const service = new GitReviewService(store);
+
+    const result = service.commitAndPush('exec-cp', 'feat: add new file');
+    expect(result.success).toBe(true);
+    expect(result.commitSha).toMatch(/^[\da-f]{40}$/);
+
+    const log = execFileSync('git', ['-C', workspacePath, 'log', '--oneline', '-1'], {
+      encoding: 'utf8',
+    });
+    expect(log).toContain('feat: add new file');
+
+    sqlite.close();
+  });
+
+  it('returns failure when commitAndPush has nothing to commit', () => {
+    const workspacePath = createGitFixture({ withRemote: true });
+    const baseHead = resolveGitHead(workspacePath);
+
+    const dbPath = path.join(createTempDir(), 'sessions.db');
+    const { db, sqlite } = createDatabase(dbPath);
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-empty',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+    const service = new GitReviewService(store);
+
+    const result = service.commitAndPush('exec-empty', 'chore: empty');
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+
+    sqlite.close();
+  });
 });
 
-function createGitFixture(): string {
+function createGitFixture(opts?: { withRemote?: boolean }): string {
   const dir = createTempDir();
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'src/index.ts'), 'export const value = 1;\n');
@@ -106,6 +167,14 @@ function createGitFixture(): string {
   git(dir, ['config', 'user.name', 'Test User']);
   git(dir, ['add', '.']);
   git(dir, ['commit', '-m', 'initial']);
+
+  if (opts?.withRemote) {
+    const bareDir = createTempDir();
+    execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'ignore' });
+    git(dir, ['remote', 'add', 'origin', bareDir]);
+    git(dir, ['push', '-u', 'origin', 'main']);
+  }
+
   return dir;
 }
 

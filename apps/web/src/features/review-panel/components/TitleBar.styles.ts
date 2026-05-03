@@ -68,3 +68,25 @@ export const additions = css`
 export const deletions = css`
   color: token(colors.diff.del);
 `;
+
+export const commitButton = css`
+  align-items: center;
+  background: token(colors.accent.bg);
+  border: 1px solid token(colors.accent.fg);
+  border-radius: token(radii.sm);
+  color: token(colors.accent.fg);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: token(fontSizes.xs);
+  font-weight: 500;
+  gap: token(spacing.1);
+  height: token(sizes.control.sm);
+  margin-left: token(spacing.2);
+  padding: 0 token(spacing.3);
+  transition: opacity 140ms token(easings.standard);
+  white-space: nowrap;
+
+  &:hover {
+    opacity: 0.85;
+  }
+`;
