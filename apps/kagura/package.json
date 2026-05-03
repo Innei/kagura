@@ -50,7 +50,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.119",
+    "@anthropic-ai/claude-agent-sdk": "0.2.124",
     "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
@@ -61,17 +61,17 @@
     "@t3-oss/env-core": "0.13.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "25.5.2",
-    "commander": "^13.0.0",
-    "dotenv": "17.4.0",
+    "commander": "^13.1.0",
+    "dotenv": "17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "markdown-to-slack-blocks": "1.5.0",
     "nodemon": "3.1.14",
-    "open": "^10.1.0",
-    "picocolors": "^1.1.0",
-    "tsdown": "0.21.7",
+    "open": "^10.1.2",
+    "picocolors": "^1.1.1",
+    "tsdown": "0.21.10",
     "tsx": "4.21.0",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "4.1.5",
     "zod": "4.3.6"
   },
