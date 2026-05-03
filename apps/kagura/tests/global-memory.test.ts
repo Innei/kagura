@@ -29,6 +29,11 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
       if (repoId) return records.filter((r) => r.repoId === repoId).length;
       return records.length;
     },
+    countByCategory: (repoId, category) => {
+      return records.filter(
+        (r) => (repoId ? r.repoId === repoId : !r.repoId) && r.category === category,
+      ).length;
+    },
     delete: (id) => {
       const idx = records.findIndex((r) => r.id === id);
       if (idx >= 0) {

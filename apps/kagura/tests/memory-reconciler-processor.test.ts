@@ -81,6 +81,7 @@ describe('reconcileBucket', () => {
     });
 
     expect(llm.chat).not.toHaveBeenCalled();
+    expect(reconcileStore.get('global::preference')).toBeNull();
   });
 
   it('logs warn and skips applyReconcileOps when LLM throws', async () => {
@@ -102,6 +103,8 @@ describe('reconcileBucket', () => {
     });
 
     expect(memoryStore.search(undefined, { category: 'preference' }).length).toBe(before);
+    expect(reconcileStore.get('global::preference')?.writesSinceReconcile ?? 0).toBeGreaterThan(0);
+    expect(reconcileStore.get('global::preference')?.lastReconciledAt).toBeFalsy();
   });
 
   it('logs warn and skips applyReconcileOps when LLM returns malformed json', async () => {
@@ -122,5 +125,29 @@ describe('reconcileBucket', () => {
     });
 
     expect(memoryStore.search(undefined, { category: 'preference' })).toHaveLength(1);
+    expect(reconcileStore.get('global::preference')?.writesSinceReconcile ?? 0).toBeGreaterThan(0);
+    expect(reconcileStore.get('global::preference')?.lastReconciledAt).toBeFalsy();
+  });
+
+  it('records correct lastCount even when bucket exceeds search MAX_LIMIT (50)', async () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const memoryStore = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    for (let i = 0; i < 60; i += 1) {
+      memoryStore.save({ category: 'context', content: `m-${i}` });
+    }
+
+    const llm = { chat: vi.fn().mockResolvedValue(JSON.stringify({ ops: [] })) };
+
+    await reconcileBucket({
+      bucketKey: 'global::context',
+      memoryStore,
+      reconcileStore,
+      llm,
+      logger: createTestLogger(),
+      batchSize: 50,
+    });
+
+    expect(reconcileStore.get('global::context')!.lastCount).toBe(60);
   });
 });

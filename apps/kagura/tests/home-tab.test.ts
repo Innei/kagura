@@ -42,6 +42,7 @@ function createMockMemoryStore(count = 0): MemoryStore {
     applyReconcileOps: () => {},
     getDirtyBuckets: () => [],
     countAll: () => count,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => ({ global: [], preferences: [], workspace: [] }),

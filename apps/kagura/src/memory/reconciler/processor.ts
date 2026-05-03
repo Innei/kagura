@@ -78,7 +78,7 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
       'Reconcile bucket %s op parse failed: %s; raw=%s',
       params.bucketKey,
       msg,
-      raw.slice(0, 200),
+      raw.slice(0, 500),
     );
     return;
   }
@@ -90,11 +90,12 @@ export async function reconcileBucket(params: ReconcileBucketParams): Promise<vo
 
   // Update watermark (clear writesSinceReconcile) even if 0 ops; otherwise next cycle reruns
   const now = new Date().toISOString();
-  const remaining = params.memoryStore.search(repoId, { category: parts.category, limit: 200 });
+  const latest = params.memoryStore.search(repoId, { category: parts.category, limit: 1 });
+  const totalCount = params.memoryStore.countByCategory(repoId, parts.category);
   params.reconcileStore.upsert(params.bucketKey, {
     lastReconciledAt: now,
-    lastSeenMaxCreatedAt: remaining[0]?.createdAt ?? null,
-    lastCount: remaining.length,
+    lastSeenMaxCreatedAt: latest[0]?.createdAt ?? null,
+    lastCount: totalCount,
     writesSinceReconcile: 0,
   });
 }

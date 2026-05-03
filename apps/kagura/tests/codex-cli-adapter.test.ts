@@ -103,6 +103,7 @@ function writeJson(child: FakeCodexProcess, value: unknown): void {
 function createMemoryStore(saved: MemoryRecord[] = []): MemoryStore {
   return {
     countAll: vi.fn(),
+    countByCategory: vi.fn(),
     delete: vi.fn(),
     deleteAll: vi.fn(),
     listForContext: vi.fn(),

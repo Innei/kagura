@@ -171,6 +171,7 @@ function createMemoryStoreFixture(): MemoryStore {
     applyReconcileOps: () => {},
     getDirtyBuckets: () => [],
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => emptyContext,

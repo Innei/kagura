@@ -55,6 +55,7 @@ export interface DirtyBucketSummary {
 export interface MemoryStore {
   applyReconcileOps: (ops: ReconcileOp[]) => void;
   countAll: (repoId?: string) => number;
+  countByCategory: (repoId: string | undefined, category: MemoryCategory) => number;
   delete: (id: string) => boolean;
   deleteAll: (repoId?: string | null) => number;
   getDirtyBuckets: () => DirtyBucketSummary[];

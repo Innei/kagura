@@ -117,6 +117,7 @@ function createTestLogger(): AppLogger {
 function createMemoryStore(): MemoryStore {
   return {
     countAll: () => 0,
+    countByCategory: () => 0,
     delete: () => false,
     deleteAll: () => 0,
     listForContext: () => ({ global: [], preferences: [], workspace: [] }),

@@ -12,6 +12,7 @@ import { bucketKeyFor } from './reconciler/types.js';
 import type {
   ContextMemories,
   DirtyBucketSummary,
+  MemoryCategory,
   MemoryRecord,
   MemorySearchOptions,
   MemoryStore,
@@ -40,6 +41,16 @@ export class SqliteMemoryStore implements MemoryStore {
       return row?.value ?? 0;
     }
     const row = this.db.select({ value: count() }).from(memories).get();
+    return row?.value ?? 0;
+  }
+
+  countByCategory(repoId: string | undefined, category: MemoryCategory): number {
+    const repoCondition = repoId ? eq(memories.repoId, repoId) : isNull(memories.repoId);
+    const row = this.db
+      .select({ value: count() })
+      .from(memories)
+      .where(and(repoCondition, eq(memories.category, category)))
+      .get();
     return row?.value ?? 0;
   }
 
