@@ -16,6 +16,7 @@ import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { MemoryReconciler } from '~/memory/reconciler/index.js';
+import { OpenAICompatibleClient } from '~/memory/reconciler/llm-client.js';
 import { SqliteReconcileStateStore } from '~/memory/reconciler/state-store.js';
 import { GitReviewService } from '~/review/git-review-service.js';
 import { SqliteReviewSessionStore } from '~/review/sqlite-review-session-store.js';
@@ -102,6 +103,16 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger.info('Memory reconciler disabled by config; expired-only prune via startup hook');
   }
 
+  const memoryReconcilerLlm = reconcilerLlmEnabled
+    ? new OpenAICompatibleClient({
+        baseUrl: env.KAGURA_MEMORY_RECONCILER_BASE_URL,
+        apiKey: env.KAGURA_MEMORY_RECONCILER_API_KEY!,
+        model: env.KAGURA_MEMORY_RECONCILER_MODEL,
+        timeoutMs: env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS,
+        maxTokens: env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS,
+      })
+    : undefined;
+
   const memoryReconciler = new MemoryReconciler({
     db,
     memoryStore,
@@ -110,6 +121,8 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     intervalMs: env.KAGURA_MEMORY_RECONCILER_INTERVAL_MS,
     writeThreshold: env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD,
     llmEnabled: reconcilerLlmEnabled,
+    ...(memoryReconcilerLlm ? { llm: memoryReconcilerLlm } : {}),
+    batchSize: env.KAGURA_MEMORY_RECONCILER_BATCH_SIZE,
   });
 
   const workspaceResolver = new WorkspaceResolver({

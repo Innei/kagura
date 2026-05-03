@@ -2,11 +2,15 @@ import type { AppDatabase } from '~/db/index.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 
+import type { OpenAICompatibleClient } from './llm-client.js';
+import { reconcileBucket } from './processor.js';
 import type { SqliteReconcileStateStore } from './state-store.js';
 
 export interface MemoryReconcilerOptions {
+  batchSize?: number;
   db: AppDatabase;
   intervalMs: number;
+  llm?: Pick<OpenAICompatibleClient, 'chat'>;
   llmEnabled: boolean;
   logger: AppLogger;
   memoryStore: MemoryStore;
@@ -60,7 +64,7 @@ export class MemoryReconciler {
 
     if (eligible.length === 0) return;
 
-    if (!this.options.llmEnabled) {
+    if (!this.options.llmEnabled || !this.options.llm) {
       this.options.logger.debug(
         'Memory reconciler found %d dirty bucket(s); LLM disabled, skipping consolidation',
         eligible.length,
@@ -68,10 +72,16 @@ export class MemoryReconciler {
       return;
     }
 
-    // Task 11 will implement LLM segment here. For now, just log dirty buckets.
-    this.options.logger.debug(
-      'Memory reconciler dirty buckets: %s',
-      eligible.map((b) => b.bucketKey).join(', '),
-    );
+    const batchSize = this.options.batchSize ?? 50;
+    for (const bucket of eligible) {
+      await reconcileBucket({
+        bucketKey: bucket.bucketKey,
+        memoryStore: this.options.memoryStore,
+        reconcileStore: this.options.reconcileStore,
+        llm: this.options.llm,
+        logger: this.options.logger,
+        batchSize,
+      });
+    }
   }
 }

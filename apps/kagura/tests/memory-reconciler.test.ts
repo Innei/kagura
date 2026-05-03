@@ -58,4 +58,38 @@ describe('MemoryReconciler prune-only mode', () => {
     await reconciler.runOnce();
     expect(memoryStore.search(undefined, { category: 'preference' })).toHaveLength(1);
   });
+
+  it('runs reconcile on dirty bucket when LLM enabled and write threshold met', async () => {
+    const { db } = createTestDatabase();
+    const reconcileStore = new SqliteReconcileStateStore(db);
+    const memoryStore = new SqliteMemoryStore(db, createTestLogger(), reconcileStore);
+    const m = memoryStore.save({ category: 'preference', content: 'a' });
+    memoryStore.save({ category: 'preference', content: 'b' });
+    memoryStore.save({ category: 'preference', content: 'c' });
+    memoryStore.save({ category: 'preference', content: 'd' });
+    memoryStore.save({ category: 'preference', content: 'e' });
+
+    const llm = {
+      chat: vi.fn().mockResolvedValue(JSON.stringify({ ops: [{ kind: 'delete', ids: [m.id] }] })),
+    };
+
+    const reconciler = new MemoryReconciler({
+      db,
+      memoryStore,
+      reconcileStore,
+      logger: createTestLogger(),
+      intervalMs: 1000,
+      writeThreshold: 5,
+      llmEnabled: true,
+      llm,
+      batchSize: 50,
+    });
+
+    await reconciler.runOnce();
+
+    expect(llm.chat).toHaveBeenCalled();
+    expect(
+      memoryStore.search(undefined, { category: 'preference' }).map((r) => r.id),
+    ).not.toContain(m.id);
+  });
 });
