@@ -462,8 +462,11 @@ Then run:
 
 ```bash
 pnpm build
+pnpm db:migrate
 pm2 start ecosystem.config.cjs
 ```
+
+PM2 does not run Drizzle migrations by itself. If your deployment uses a wrapper or updater script, run `pnpm db:migrate` after `pnpm install` and before `pm2 startOrReload` / `pm2 reload` so schema changes are applied before the new process starts. Kagura still creates its core SQLite tables on startup as a compatibility guard, but Drizzle migration history is only advanced by `pnpm db:migrate`.
 
 ### Docker Compose
 
@@ -541,7 +544,15 @@ docker compose up -d --build
 
 ## Database setup
 
-No manual database bootstrap is required for normal usage. The app creates the SQLite tables it needs on startup.
+No manual database bootstrap is required for first-time normal usage. The app creates the SQLite tables it needs on startup.
+
+For production upgrades that include files under `apps/kagura/drizzle/`, run migrations before reloading the app:
+
+```bash
+pnpm db:migrate
+```
+
+The local PM2 process manager only starts or reloads Node processes; it does not automatically apply Drizzle migrations unless your deployment wrapper explicitly runs this command.
 
 If you are developing schema changes, use:
 
